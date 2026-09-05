@@ -1,0 +1,186 @@
+'use strict';
+
+const path = require('path');
+const { app, BrowserWindow, globalShortcut, screen, protocol, net } = require('electron');
+const url = require('url');
+
+const store = require('./store');
+const metrics = require('./metrics');
+const { registerIpc } = require('./ipc');
+
+const IS_DEV = process.argv.includes('--dev');
+const IS_WIN = process.platform === 'win32';
+const RENDERER_ROOT = path.join(__dirname, '..', 'renderer');
+
+let mainWindow = null;
+
+// The renderer is served over a custom scheme instead of file://, so ES module
+// imports, fetch and a strict CSP all behave like they would on the web.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'hub',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+  }
+]);
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2'
+};
+
+function registerRendererProtocol() {
+  protocol.handle('hub', async (request) => {
+    const parsed = new URL(request.url);
+    const rel = decodeURIComponent(parsed.pathname).replace(/^\/+/, '') || 'index.html';
+    const resolved = path.resolve(RENDERER_ROOT, rel);
+    // Refuse anything that escapes the renderer directory.
+    if (resolved !== RENDERER_ROOT && !resolved.startsWith(RENDERER_ROOT + path.sep)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    const response = await net.fetch(url.pathToFileURL(resolved).toString());
+    // Chromium refuses module scripts without a JavaScript MIME type, and
+    // file:// responses do not reliably carry one.
+    const mime = MIME_TYPES[path.extname(resolved).toLowerCase()];
+    if (!mime) return response;
+    const headers = new Headers(response.headers);
+    headers.set('Content-Type', mime);
+    return new Response(response.body, { status: response.status, headers });
+  });
+}
+
+// A hub that starts with Windows must never end up with two instances
+// fighting over fullscreen.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
+function createWindow() {
+  const settings = store.getSettings();
+  const display = screen.getPrimaryDisplay();
+  const { width, height } = display.workAreaSize;
+
+  mainWindow = new BrowserWindow({
+    width: Math.min(1600, width),
+    height: Math.min(950, height),
+    minWidth: 1024,
+    minHeight: 640,
+    show: false,
+    frame: false,
+    backgroundColor: '#05070a',
+    autoHideMenuBar: true,
+    title: 'Windows Hub',
+    icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: false,
+      backgroundThrottling: false
+    }
+  });
+
+  mainWindow.removeMenu();
+  mainWindow.loadURL('hub://app/index.html');
+
+  mainWindow.once('ready-to-show', () => {
+    if (settings.kiosk) mainWindow.setKiosk(true);
+    else if (settings.startFullscreen) mainWindow.setFullScreen(true);
+    mainWindow.show();
+    mainWindow.focus();
+    if (IS_DEV) mainWindow.webContents.openDevTools({ mode: 'detach' });
+  });
+
+  mainWindow.on('closed', () => { mainWindow = null; });
+
+  // Never let the renderer navigate away or spawn extra windows.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+
+  return mainWindow;
+}
+
+function applyAutostart(enabled) {
+  if (!IS_WIN) return { ok: false, reason: 'Autostart is Windows-only' };
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!enabled,
+      path: process.execPath,
+      args: ['--autostart']
+    });
+    return { ok: true, enabled: !!enabled };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+}
+
+function registerShortcuts() {
+  // F11 fullscreen, Ctrl+Shift+Q hard exit, F5 reload in dev.
+  globalShortcut.register('F11', () => {
+    if (!mainWindow) return;
+    mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  });
+  globalShortcut.register('CommandOrControl+Shift+Q', () => {
+    app.exit(0);
+  });
+}
+
+app.on('ready', () => {
+  if (!gotLock) return;
+
+  store.load();
+  const settings = store.getSettings();
+
+  registerRendererProtocol();
+  createWindow();
+  registerShortcuts();
+  registerIpc({ getWindow: () => mainWindow, applyAutostart });
+
+  metrics.start((sample) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('metrics:sample', sample);
+    }
+  }, {
+    fastMs: settings.metricsIntervalMs,
+    slowMs: settings.slowMetricsIntervalMs,
+    includeGpu: settings.showGpu
+  });
+
+  // Keep the stored autostart flag and the real login item in sync on boot.
+  if (IS_WIN) {
+    const current = app.getLoginItemSettings({ path: process.execPath, args: ['--autostart'] });
+    if (current.openAtLogin !== settings.autostart) applyAutostart(settings.autostart);
+  }
+});
+
+app.on('window-all-closed', () => {
+  metrics.stop();
+  app.quit();
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  metrics.stop();
+  store.save();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});

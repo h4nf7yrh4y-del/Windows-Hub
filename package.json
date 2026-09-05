@@ -1,0 +1,49 @@
+{
+  "name": "windows-hub",
+  "productName": "Windows Hub",
+  "version": "0.1.0",
+  "description": "Cyberpunk fullscreen launcher hub for Windows: profiles, app orchestration and a built-in task manager.",
+  "main": "src/main/main.js",
+  "author": "Alexander",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "lint": "node --check src/main/main.js && node scripts/syntax-check.js",
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --win --dir"
+  },
+  "dependencies": {
+    "systeminformation": "^5.33.8"
+  },
+  "devDependencies": {
+    "electron": "^44.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "cc.dreamland.windowshub",
+    "productName": "Windows Hub",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "artifactName": "WindowsHub-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Windows Hub"
+    }
+  }
+}
