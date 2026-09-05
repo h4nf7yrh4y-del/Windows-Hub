@@ -101,32 +101,78 @@ Remove-ItemProperty -LiteralPath '${RUN_KEY}' -Name '${"O'Brien Updater".replace
 
 const winfeatures = require('../src/main/winfeatures');
 
-// The registry read is assembled from the catalogue, so a badly quoted entry
-// would only surface as an empty result at runtime.
+// Both the state read and every write are assembled from the catalogue, so a
+// badly quoted entry would only surface as an empty result at runtime.
 {
-  const lines = winfeatures.CATALOGUE
-    .filter((e) => e.toggle || e.read)
-    .map((e) => {
-      const spec = e.toggle || e.read;
-      const regPath = spec.path.replace(/'/g, "''");
-      const name = spec.name.replace(/'/g, "''");
-      return `  [PSCustomObject]@{ id = '${e.id}'; value = (Get-ItemProperty -LiteralPath '${regPath}' -Name '${name}' -ErrorAction SilentlyContinue).'${name}' }`;
-    });
+  const readable = winfeatures.CATALOGUE
+    .filter((e) => e.control && (e.control.kind === 'toggle' || e.control.kind === 'choice'));
+
+  const lines = readable.map((e) => {
+    const c = e.control;
+    return `  [PSCustomObject]@{ id = '${winfeatures.esc(e.id)}'; value = (Get-ItemProperty -LiteralPath '${winfeatures.esc(c.path)}' -Name '${winfeatures.esc(c.name)}' -ErrorAction SilentlyContinue).'${winfeatures.esc(c.name)}' }`;
+  });
+
   SCRIPTS['feature state read'] = `
 $ErrorActionPreference = "SilentlyContinue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-@(
+
+$values = @(
 ${lines.join('\n')}
-) | ConvertTo-Json -Compress
+)
+
+$plans = @(Get-CimInstance -Namespace root\\cimv2\\power -ClassName Win32_PowerPlan |
+  Select-Object ElementName, InstanceID, IsActive)
+
+$classic = Test-Path -LiteralPath '${winfeatures.esc(winfeatures.CLASSIC_MENU_PATH)}'
+
+[PSCustomObject]@{ values = $values; plans = $plans; classic = $classic } | ConvertTo-Json -Compress -Depth 4
 `;
 
-  const toggle = winfeatures.CATALOGUE.find((e) => e.toggle && !e.readOnly).toggle;
-  SCRIPTS['feature toggle write'] = `
+  // Every writable entry produces its own script; a single bad path or an
+  // unescaped quote anywhere in the catalogue fails the parse.
+  for (const entry of readable) {
+    const c = entry.control;
+    const value = c.kind === 'choice' ? c.options[0].value : c.on;
+    SCRIPTS[`feature write: ${entry.id}`] = `
 $ErrorActionPreference = "Stop"
-if (-not (Test-Path -LiteralPath '${toggle.path}')) { New-Item -Path '${toggle.path}' -Force | Out-Null }
-Set-ItemProperty -LiteralPath '${toggle.path}' -Name '${toggle.name}' -Value 1 -Type DWord -Force
+if (-not (Test-Path -LiteralPath '${winfeatures.esc(c.path)}')) { New-Item -Path '${winfeatures.esc(c.path)}' -Force | Out-Null }
+Set-ItemProperty -LiteralPath '${winfeatures.esc(c.path)}' -Name '${winfeatures.esc(c.name)}' -Value ${winfeatures.regValue(c, value)} -Type ${winfeatures.regType(c)} -Force
 `;
+  }
+
+  // Standalone actions carry raw scripts of their own.
+  for (const [name, action] of Object.entries(winfeatures.ACTIONS)) {
+    SCRIPTS[`feature action: ${name}`] = action.script;
+  }
 }
+
+test('every writable entry stays inside HKCU unless it asks for elevation', () => {
+  for (const entry of winfeatures.CATALOGUE) {
+    const c = entry.control;
+    if (!c || !c.path) continue;
+    if (c.elevated) continue;
+    assert.ok(/^HKCU:/i.test(c.path), `${entry.id} writes to ${c.path} without elevation`);
+  }
+});
+
+test('elevated entries are the only ones outside HKCU', () => {
+  const outside = winfeatures.CATALOGUE
+    .filter((e) => e.control && e.control.path && !/^HKCU:/i.test(e.control.path));
+  assert.ok(outside.length > 0, 'expected at least one system-wide entry');
+  for (const entry of outside) {
+    assert.ok(entry.control.elevated, `${entry.id} is outside HKCU but not marked elevated`);
+  }
+});
+
+test('choice options are unique and non-empty', () => {
+  for (const entry of winfeatures.CATALOGUE) {
+    const c = entry.control;
+    if (!c || c.kind !== 'choice') continue;
+    assert.ok(c.options.length >= 2, `${entry.id} has fewer than two options`);
+    const values = c.options.map((o) => String(o.value));
+    assert.strictEqual(new Set(values).size, values.length, `${entry.id} has duplicate option values`);
+  }
+});
 
 // The display helper is loaded by a preamble that compiles C# on first use.
 SCRIPTS['display helper preamble'] = `

@@ -1252,3 +1252,20 @@
   .rail-btn { padding: 7px 0; gap: 3px; }
   .rail-btn svg { width: 19px; height: 19px; }
 }
+
+/* Feature cards: controls sit on a common baseline at the bottom. */
+.feature-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  flex-wrap: wrap;
+}
+
+.feature-card.is-tool { border-style: dashed; }
+.feature-card.is-tool:hover { border-style: solid; }
+
+.feature-hint.warn { color: var(--warn); border-left-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+
+.badge svg { flex: 0 0 auto; }

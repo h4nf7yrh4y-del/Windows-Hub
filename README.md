@@ -27,10 +27,13 @@ Monitor, dazu die Anzeigemodi hinter Windows-Taste und P. Eine Auflösungsänder
 wird nach fünfzehn Sekunden automatisch zurückgenommen, wenn du sie nicht bestätigst,
 damit ein schwarzer Bildschirm kein Problem bleibt.
 
-**Windows-Funktionen.** Ein Katalog aus 28 Einstellungen und Werkzeugen, die nützlich
-und schwer zu finden sind, von Spielmodus über Zwischenablage-Verlauf bis zum
-Zuverlässigkeitsverlauf. Wo es gefahrlos möglich ist, lässt sich direkt umschalten,
-sonst öffnet ein Klick die zuständige Windows-Seite.
+**Windows-Funktionen.** Ein Katalog aus 39 Einstellungen und Werkzeugen, die nützlich
+und schwer zu finden sind, von Spielmodus über Zeigerbeschleunigung und das klassische
+Kontextmenü bis zum Zuverlässigkeitsverlauf. 24 davon lassen sich direkt im Hub
+umstellen: als Schalter, als Auswahlliste dort wo an und aus nicht reicht, und mit
+Administrator-Abfrage bei den drei Einträgen, die den ganzen Rechner betreffen.
+Die restlichen elf sind Werkzeuge wie der Geräte-Manager, die man nicht einschalten,
+sondern nur starten kann.
 
 **Globale Tastenkürzel.** Ein Kürzel holt den Hub aus jedem Programm heraus nach
 vorne, ein zweites blendet alle Overlays ein und aus. Beide sind frei belegbar.
@@ -277,11 +280,18 @@ letzten beiden sind reine Win32-Aufrufe ohne PowerShell-Entsprechung, deshalb li
 DLL zwischengespeichert wird. Bei jedem Aufruf neu zu übersetzen würde einem Regler
 ein bis zwei Sekunden Verzögerung geben.
 
-**Schalter im Funktionskatalog schreiben ausschließlich unter HKCU.** Diese Werte
-gelten nur für den angemeldeten Benutzer, brauchen keine erhöhten Rechte und lassen
-sich mit einem Klick zurücknehmen. Alles unter HKLM, alles was den Startvorgang
-verändert und alles was einen Treiber neu lädt ist hier bewusst nur ablesbar, mit
-einem Knopf zur zuständigen Windows-Seite.
+**Der Funktionskatalog kennt vier Arten von Steuerung.** Ein Schalter für einen
+An-Aus-Wert, eine Auswahlliste wo es mehr als zwei sinnvolle Zustände gibt, eine
+Sonderbehandlung für Einstellungen die kein einzelner Wert sind wie das klassische
+Kontextmenü unter Windows 11, und den Energieplan über `powercfg`.
+
+Schreibzugriffe gehen ausschließlich unter HKCU, mit genau drei ausgenommenen
+Einträgen: GPU-Planung, Aktivitätsverlauf und Diagnosedaten wirken systemweit. Die
+sind als solche gekennzeichnet, fragen vorher nach und laufen dann als einzelner
+erhöhter Befehl hinter einer Windows-Abfrage. **Der Hub selbst läuft nie mit
+Administratorrechten.** Ein Programm, das mit Windows startet und den ganzen Tag
+erhöhte Rechte hält, ist ein deutlich schlechterer Tausch als eine Rückfrage pro
+Aktion.
 
 **Der Laufstatus fragt nur Prozessnamen ab, nicht die volle Prozessliste.** Die
 Liste im Task-Manager holt Arbeitsspeicher, Prozessorzeit und Fenstertitel für jeden
@@ -368,6 +378,20 @@ gestrichelt dargestellt und als unbekannt behandelt, nicht als gestoppt.
 normale Fenster und über Spiele im randlosen Fenstermodus nach vorne. Im exklusiven
 Vollbildmodus verweigert Windows das, dieselbe Grenze wie bei den Overlays. Das
 Kürzel selbst wird trotzdem ausgelöst, du siehst nur nichts davon.
+
+**Werkzeuge haben keinen Schalter, und das ist kein Versäumnis.** Geräte-Manager,
+Ereignisanzeige, Datenträgerbereinigung und die anderen elf sind Programme, keine
+Einstellungen. Sie sind im Katalog als Werkzeug gekennzeichnet, damit die fehlende
+Schaltfläche als Absicht lesbar ist.
+
+**Manche Änderungen greifen nicht sofort.** Alles was den Explorer betrifft braucht
+dessen Neustart, den der Hub auf Wunsch übernimmt. Die Zeigerbeschleunigung greift
+erst nach der nächsten Anmeldung, die GPU-Planung erst nach einem Neustart. Jeder
+betroffene Eintrag sagt das direkt auf der Karte.
+
+**Diagnosedaten lassen sich nicht ganz abschalten.** In Windows Home und Pro ist
+„Erforderlich" die niedrigste Stufe, die Windows tatsächlich anwendet. Die Stufe 0
+greift nur in Enterprise-Ausgaben, deshalb steht sie hier gar nicht erst zur Auswahl.
 
 **Helligkeit externer Monitore hängt an DDC/CI.** Das ist ein Steuerkanal über das
 Bildkabel, den viele Monitore beherrschen, aber längst nicht alle. Manche haben ihn

@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('hub', {
   },
   features: {
     list: () => invoke('features:list'),
-    toggle: (id, enabled) => invoke('features:toggle', id, enabled),
+    set: (id, value) => invoke('features:set', id, value),
     open: (id) => invoke('features:open', id),
     action: (id) => invoke('features:action', id),
     restartExplorer: () => invoke('features:restartExplorer')

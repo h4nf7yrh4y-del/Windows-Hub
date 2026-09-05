@@ -43,7 +43,7 @@ export const api = {
   },
   features: {
     list: call(bridge.features.list),
-    toggle: call(bridge.features.toggle),
+    set: call(bridge.features.set),
     open: call(bridge.features.open),
     action: call(bridge.features.action),
     restartExplorer: call(bridge.features.restartExplorer)

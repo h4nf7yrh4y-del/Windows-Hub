@@ -356,8 +356,8 @@ function registerIpc({ getWindow, applyAutostart, revealWindow }) {
   /* -------------------------------------------------------------- features */
 
   ipcMain.handle('features:list', wrap(async () => winfeatures.list()));
-  ipcMain.handle('features:toggle', wrap(async (id, enabled) =>
-    winfeatures.setToggle(requireString(id, 'Eintrag'), !!enabled)));
+  ipcMain.handle('features:set', wrap(async (id, value) =>
+    winfeatures.setControl(requireString(id, 'Eintrag'), value)));
   ipcMain.handle('features:open', wrap(async (id) => winfeatures.open(requireString(id, 'Eintrag'))));
   ipcMain.handle('features:action', wrap(async (id) => winfeatures.runAction(requireString(id, 'Eintrag'))));
   ipcMain.handle('features:restartExplorer', wrap(async () => winfeatures.restartExplorer()));
