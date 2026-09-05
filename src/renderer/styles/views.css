@@ -1062,3 +1062,119 @@
   line-height: 1.55;
   color: var(--text-faint);
 }
+
+/* =============================================================
+   Running state of profiles
+   ============================================================= */
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-faint);
+}
+
+.status-tag .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.status-tag.running {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.status-tag.running .status-dot {
+  box-shadow: 0 0 8px var(--ok);
+  animation: pulse 1.9s var(--ease-in-out) infinite;
+}
+
+.status-tag.partial {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.status-tag.partial .status-dot { box-shadow: 0 0 8px var(--warn); }
+
+.status-tag.idle { color: var(--text-faint); }
+
+/* Per-entry chips echo the same state at a glance. */
+.chip .chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: 0 0 auto;
+}
+
+.chip.live {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 38%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.chip.live .chip-dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+
+.chip.untracked {
+  border-style: dashed;
+  opacity: 0.62;
+}
+
+.icon-btn.active {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+}
+
+/* ------------------------------------------------- process field in editor */
+
+.proc-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+}
+
+.proc-row .label { flex: 0 0 auto; }
+
+.input.proc-input {
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  max-width: 190px;
+}
+
+.btn.xs {
+  padding: 3px 9px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+/* --------------------------------------------------------------- hotkeys */
+
+.key-display {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--accent-line);
+  min-width: 132px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.key-display.empty {
+  color: var(--text-faint);
+  border-color: rgba(255, 255, 255, 0.08);
+  border-style: dashed;
+}

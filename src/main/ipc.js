@@ -12,6 +12,7 @@ const power = require('./power');
 const files = require('./files');
 const startup = require('./startup');
 const overlays = require('./overlays');
+const hotkeys = require('./hotkeys');
 
 /**
  * Single place where the renderer is allowed to reach the OS.
@@ -57,7 +58,9 @@ function sanitizeApp(raw) {
     delayMs: Number.isFinite(Number(raw.delayMs)) ? Math.max(0, Math.min(120000, Number(raw.delayMs))) : 0,
     enabled: raw.enabled !== false,
     required: !!raw.required,
-    processName: typeof raw.processName === 'string' ? raw.processName.trim() : null,
+    processName: typeof raw.processName === 'string' && raw.processName.trim()
+      ? raw.processName.trim()
+      : null,
     icon: typeof raw.icon === 'string' ? raw.icon : null
   };
 }
@@ -80,7 +83,7 @@ function sanitizeProfile(raw) {
   };
 }
 
-function registerIpc({ getWindow, applyAutostart }) {
+function registerIpc({ getWindow, applyAutostart, revealWindow }) {
   const send = (channel, payload) => {
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -230,6 +233,8 @@ function registerIpc({ getWindow, applyAutostart }) {
 
   ipcMain.handle('library:scan', wrap(async (opts) => scanner.scan({ force: !!(opts && opts.force) })));
   ipcMain.handle('library:icon', wrap(async (target) => scanner.getIcon(requireString(target, 'Icon target'))));
+  ipcMain.handle('library:guessExecutable', wrap(async (installDir) =>
+    scanner.guessExecutable(requireString(installDir, 'Installationsverzeichnis'))));
 
   ipcMain.handle('library:pickExecutable', wrap(async () => {
     const win = getWindow();
@@ -276,6 +281,10 @@ function registerIpc({ getWindow, applyAutostart }) {
   /* ------------------------------------------------------------- processes */
 
   ipcMain.handle('processes:list', wrap(async () => processes.list()));
+  ipcMain.handle('processes:running', wrap(async () => ({
+    ts: Date.now(),
+    names: await processes.runningNames()
+  })));
   ipcMain.handle('processes:kill', wrap(async (pid) => processes.kill(pid)));
   ipcMain.handle('processes:killByName', wrap(async (name) => processes.killByName(name)));
   ipcMain.handle('processes:priority', wrap(async (pid, priority) => processes.setPriority(pid, priority)));
@@ -315,6 +324,17 @@ function registerIpc({ getWindow, applyAutostart }) {
       return fail(err);
     }
   });
+
+  /* --------------------------------------------------------------- hotkeys */
+
+  ipcMain.handle('hotkeys:list', wrap(async () => hotkeys.list()));
+  ipcMain.handle('hotkeys:set', wrap(async (action, accelerator) =>
+    hotkeys.set(requireString(action, 'Aktion'), typeof accelerator === 'string' ? accelerator : '')));
+
+  ipcMain.handle('window:reveal', wrap(async () => {
+    if (typeof revealWindow === 'function') revealWindow();
+    return true;
+  }));
 
   /* ----------------------------------------------------------------- files */
 

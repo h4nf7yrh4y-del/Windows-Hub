@@ -8,6 +8,7 @@ const store = require('./store');
 const metrics = require('./metrics');
 const { registerIpc } = require('./ipc');
 const overlays = require('./overlays');
+const hotkeys = require('./hotkeys');
 
 const IS_DEV = process.argv.includes('--dev');
 const IS_WIN = process.platform === 'win32';
@@ -132,15 +133,68 @@ function applyAutostart(enabled) {
   }
 }
 
+/**
+ * Pulls the window in front of whatever is running.
+ *
+ * Windows does not reliably raise a window just because it was asked to, so
+ * always-on-top is forced for a moment and then put back. This still cannot
+ * beat a game in exclusive fullscreen, which the compositor draws directly.
+ */
+function revealWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+
+  const wasOnTop = mainWindow.isAlwaysOnTop();
+  mainWindow.setAlwaysOnTop(true);
+  mainWindow.show();
+  mainWindow.focus();
+  try { app.focus({ steal: true }); } catch (_) { /* not supported everywhere */ }
+
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setAlwaysOnTop(wasOnTop);
+  }, 250);
+}
+
+function toggleWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const onScreen = mainWindow.isVisible() && !mainWindow.isMinimized();
+  if (onScreen && mainWindow.isFocused()) mainWindow.minimize();
+  else revealWindow();
+}
+
+function toggleOverlays() {
+  if (overlays.count() > 0) {
+    // Keeps the enabled flags, so the same set comes back on the next press.
+    overlays.closeAll();
+  } else {
+    overlays.restore();
+    // Nothing was ever enabled: give the key something to do rather than
+    // leaving the user wondering whether it worked.
+    if (overlays.count() === 0) {
+      try { overlays.setEnabled('combo', true); } catch (err) { console.error('[hotkeys]', err.message); }
+    }
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('overlays:changed', { open: overlays.count() });
+  }
+}
+
 function registerShortcuts() {
-  // F11 fullscreen, Ctrl+Shift+Q hard exit, F5 reload in dev.
-  globalShortcut.register('F11', () => {
-    if (!mainWindow) return;
-    mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  // Deliberately the only global binding outside the user's own hotkeys:
+  // it is the documented way out of kiosk mode. Fullscreen toggling is
+  // handled inside the window instead, so F11 is not stolen from every
+  // other application on the system.
+  const emergencyExit = globalShortcut.register('CommandOrControl+Shift+Q', () => app.exit(0));
+  if (!emergencyExit) console.warn('[main] Ctrl+Shift+Q konnte nicht registriert werden');
+
+  const results = hotkeys.init({
+    toggleHub: toggleWindow,
+    toggleOverlays
   });
-  globalShortcut.register('CommandOrControl+Shift+Q', () => {
-    app.exit(0);
-  });
+  for (const result of results) {
+    if (!result.ok) console.warn(`[hotkeys] ${result.action}: ${result.reason}`);
+  }
 }
 
 app.on('ready', () => {
@@ -151,8 +205,7 @@ app.on('ready', () => {
 
   registerRendererProtocol();
   createWindow();
-  registerShortcuts();
-  registerIpc({ getWindow: () => mainWindow, applyAutostart });
+  registerIpc({ getWindow: () => mainWindow, applyAutostart, revealWindow });
 
   overlays.init({
     preload: path.join(__dirname, '..', 'preload', 'preload.js'),
@@ -173,6 +226,7 @@ app.on('ready', () => {
   });
 
   overlays.restore();
+  registerShortcuts();
 
   // Keep the stored autostart flag and the real login item in sync on boot.
   if (IS_WIN) {
@@ -191,6 +245,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  hotkeys.dispose();
   globalShortcut.unregisterAll();
   metrics.stop();
   store.save();

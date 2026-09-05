@@ -281,6 +281,37 @@ async function scan({ force = false } = {}) {
   try { return await scanning; } finally { scanning = null; }
 }
 
+const EXE_NOISE = /(unins|uninstall|vcredist|dxsetup|directx|dotnet|redist|crashpad|crashreport|setup|installer|helper|updater|eac|anticheat|battleye|touchup|dxwebsetup|oalinst)/i;
+
+/**
+ * Guesses the main executable inside a game directory.
+ *
+ * Titles launched through steam:// have no executable path of their own, so
+ * the profile has nothing to watch for a running state. The largest binary in
+ * the install root is the game itself often enough to be a useful default,
+ * and the user can always correct it in the editor.
+ */
+async function guessExecutable(installDir) {
+  if (!installDir) return null;
+  let entries = [];
+  try { entries = await fsp.readdir(installDir, { withFileTypes: true }); } catch (_) { return null; }
+
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !/\.exe$/i.test(entry.name)) continue;
+    if (EXE_NOISE.test(entry.name)) continue;
+    const full = path.join(installDir, entry.name);
+    try {
+      const stats = await fsp.stat(full);
+      candidates.push({ name: entry.name, path: full, size: stats.size });
+    } catch (_) { /* unreadable, skip */ }
+  }
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.size - a.size);
+  return candidates[0];
+}
+
 const iconCache = new Map();
 
 async function getIcon(target) {
@@ -298,4 +329,4 @@ async function getIcon(target) {
   }
 }
 
-module.exports = { scan, getIcon, scanSteam, scanEpic, scanStartMenu, scanStartApps };
+module.exports = { scan, getIcon, guessExecutable, scanSteam, scanEpic, scanStartMenu, scanStartApps };

@@ -154,6 +154,52 @@ async function list() {
   }
 }
 
+/**
+ * Just the distinct names of running processes.
+ *
+ * The full list() call fetches working set, CPU time and window titles for
+ * every process, which costs a few hundred milliseconds. Profile status only
+ * needs to know whether a name is alive, so this asks for nothing else and
+ * stays cheap enough to poll every few seconds.
+ */
+const NAMES_SCRIPT = `
+$ErrorActionPreference = "SilentlyContinue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+@(Get-Process | Select-Object -ExpandProperty ProcessName -Unique) | ConvertTo-Json -Compress
+`;
+
+let namesInFlight = null;
+
+async function runningNames() {
+  if (namesInFlight) return namesInFlight;
+
+  namesInFlight = (async () => {
+    if (!IS_WIN) {
+      const out = await runCommand('ps', ['-eo', 'comm=', '--no-headers']);
+      return [...new Set(out.split('\n').map((l) => l.trim()).filter(Boolean))];
+    }
+    const out = await runPowerShell(NAMES_SCRIPT, 15000);
+    const trimmed = (out || '').trim();
+    if (!trimmed) return [];
+    let parsed;
+    try { parsed = JSON.parse(trimmed); } catch (_) { return []; }
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    return list.filter((n) => typeof n === 'string' && n);
+  })();
+
+  try {
+    return await namesInFlight;
+  } finally {
+    namesInFlight = null;
+  }
+}
+
+/** Normalises "Game.exe", "GAME" and "game" to one comparable key. */
+function normalizeName(name) {
+  if (typeof name !== 'string') return '';
+  return name.trim().replace(/\.(exe|com|bat|cmd)$/i, '').toLowerCase();
+}
+
 async function kill(pid, { tree = true, force = true } = {}) {
   const id = Number(pid);
   if (!Number.isInteger(id) || id <= 0) throw new Error('Invalid PID');
@@ -203,4 +249,7 @@ function reset() {
   lastPoll = 0;
 }
 
-module.exports = { list, kill, killByName, setPriority, reset, runPowerShell, PS_SCRIPT };
+module.exports = {
+  list, runningNames, normalizeName, kill, killByName, setPriority, reset,
+  runPowerShell, PS_SCRIPT
+};

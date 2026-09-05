@@ -17,6 +17,14 @@ seines Splash-Screens von Discord überlagert wird. Jedes Profil hat eine eigene
 Akzentfarbe und optional ein Hintergrundbild; beim Start färbt sich die gesamte
 Oberfläche in dieser Farbe ein.
 
+**Laufstatus.** Jede Profilkarte zeigt, ob ihre Programme gerade laufen: grün für
+alles, gelb für teilweise, grau für gestoppt. Die einzelnen Einträge sind ebenso
+markiert, sodass du siehst, ob nur Discord fehlt oder das Spiel selbst. Der Hub prüft
+dafür alle vier Sekunden, welche Prozessnamen aktiv sind.
+
+**Globale Tastenkürzel.** Ein Kürzel holt den Hub aus jedem Programm heraus nach
+vorne, ein zweites blendet alle Overlays ein und aus. Beide sind frei belegbar.
+
 **Bibliothek.** Der Hub findet installierte Programme selbst, statt dass du Pfade
 tippst. Gescannt werden Steam-Bibliotheken (auch auf mehreren Laufwerken), Epic-Games-
 Manifeste, Startmenü-Verknüpfungen und alle über `Get-StartApps` registrierten Apps,
@@ -117,11 +125,23 @@ Die Reihenfolge in der Startsequenz lässt sich per Drag-and-drop ändern.
 
 ## Tastenkürzel
 
+Systemweit, also auch während ein Spiel läuft:
+
+| Taste | Wirkung |
+|---|---|
+| `Alt` + `Umschalt` + `H` | Hub nach vorne holen oder ausblenden |
+| `Strg` + `Umschalt` + `Q` | Hub sofort beenden, auch im Kiosk-Modus |
+
+Die erste Kombination ist unter **Setup → Tastenkürzel** frei belegbar, ebenso ein
+optionales Kürzel für die Overlays. Jede Belegung braucht mindestens Strg, Alt oder
+Umschalt, sonst würde die Taste in allen anderen Programmen verschluckt.
+
+Innerhalb des Hub-Fensters:
+
 | Taste | Wirkung |
 |---|---|
 | `F11` | Vollbild umschalten |
 | `Alt` + `1` … `7` | Direkt zu Hub, System, Tasks, Files, Overlay, Library, Setup |
-| `Strg` + `Umschalt` + `Q` | Hub sofort beenden, auch im Kiosk-Modus |
 | `F5` | Oberfläche neu laden |
 | `Esc` | Offenen Dialog schließen |
 
@@ -186,6 +206,7 @@ src/main/        Hauptprozess: Fenster, IPC, OS-Zugriffe
   scanner.js     Erkennung installierter Programme und Spiele
   launcher.js    Startsequenzen für Profile
   gpu.js         Herstellerneutrale GPU-Telemetrie über die Windows-Zähler
+  hotkeys.js     Globale Tastenkürzel mit Prüfung und Rückfall
   files.js       Dateioperationen mit Papierkorb und Schutzregeln
   startup.js     Autostart-Einträge aus Registry und Startordnern
   overlays.js    Lebenszyklus der Floating-Fenster
@@ -233,6 +254,12 @@ einzelnen Prozesse dagegen sehr wohl addiert.
 Base64-kodiertes UTF-16LE übergeben, wodurch Anführungszeichen, Zeilenumbrüche und
 Umlaute unverändert ankommen und nichts für den Kommandozeilen-Parser von Windows
 maskiert werden muss.
+
+**Der Laufstatus fragt nur Prozessnamen ab, nicht die volle Prozessliste.** Die
+Liste im Task-Manager holt Arbeitsspeicher, Prozessorzeit und Fenstertitel für jeden
+Prozess und braucht dafür einige hundert Millisekunden. Für den Status genügt die
+Frage, ob ein Name lebt, deshalb gibt es dafür eine eigene, deutlich billigere
+Abfrage. Sie läuft nur, solange eine Ansicht sie tatsächlich anzeigt.
 
 **Overlays sind eigenständige Verbraucher des Messstroms.** Der Sammler zählt
 Fensterabonnenten und Overlay-Fenster getrennt, damit die Widgets weiterlaufen,
@@ -300,6 +327,23 @@ umgehen.
 **Programme werden nur gestartet, nicht überwacht.** Der Hub prüft nicht, ob ein
 Spiel tatsächlich hochgekommen ist. Die Verzögerungen sind feste Zeiten, keine
 Bedingungen. Bei sehr langsamen Datenträgern musst du die Werte anpassen.
+
+**Der Laufstatus braucht einen Prozessnamen.** Bei Programmen, die der Hub direkt
+über eine exe startet, ergibt er sich von selbst. Bei Spielen über `steam://` gibt es
+keinen Pfad, aus dem sich etwas ableiten ließe. Für Steam-Titel rät der Hub die
+größte exe im Installationsverzeichnis, was meist stimmt, aber nicht immer. Trifft es
+nicht zu, startest du das Spiel einmal und wählst den Prozess im Profil-Editor über
+**wählen** aus der Liste der laufenden Prozesse. Einträge ohne Prozessnamen werden
+gestrichelt dargestellt und als unbekannt behandelt, nicht als gestoppt.
+
+**Das Hub-Kürzel kann kein Vollbild-Spiel überlagern.** Es holt das Fenster über
+normale Fenster und über Spiele im randlosen Fenstermodus nach vorne. Im exklusiven
+Vollbildmodus verweigert Windows das, dieselbe Grenze wie bei den Overlays. Das
+Kürzel selbst wird trotzdem ausgelöst, du siehst nur nichts davon.
+
+**Ein Kürzel kann von einem anderen Programm belegt sein.** Windows vergibt globale
+Tastenkombinationen nach dem Prinzip „wer zuerst kommt". Der Hub meldet das beim
+Setzen und behält die vorherige Belegung, statt stillschweigend nichts zu tun.
 
 **Der Bibliotheks-Scan ist auf fünf Minuten zwischengespeichert.** Nach einer
 Neuinstallation musst du in der Bibliothek einmal **Neu scannen** drücken.

@@ -192,6 +192,12 @@ function bindShortcuts() {
       event.preventDefault();
       location.reload();
     }
+    // Handled here rather than as a global shortcut, so F11 keeps working in
+    // every other application on the system.
+    if (event.key === 'F11') {
+      event.preventDefault();
+      api.window.toggleFullscreen().catch(() => {});
+    }
   });
 
   // Block the browser context menu; this is an appliance, not a web page.

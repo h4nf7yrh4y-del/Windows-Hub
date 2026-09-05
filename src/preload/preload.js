@@ -23,7 +23,12 @@ contextBridge.exposeInMainWorld('hub', {
     minimize: () => invoke('window:minimize'),
     toggleFullscreen: () => invoke('window:toggleFullscreen'),
     isFullscreen: () => invoke('window:isFullscreen'),
-    close: () => invoke('window:close')
+    close: () => invoke('window:close'),
+    reveal: () => invoke('window:reveal')
+  },
+  hotkeys: {
+    list: () => invoke('hotkeys:list'),
+    set: (action, accelerator) => invoke('hotkeys:set', action, accelerator)
   },
   settings: {
     get: () => invoke('settings:get'),
@@ -42,6 +47,7 @@ contextBridge.exposeInMainWorld('hub', {
   library: {
     scan: (opts) => invoke('library:scan', opts),
     icon: (target) => invoke('library:icon', target),
+    guessExecutable: (installDir) => invoke('library:guessExecutable', installDir),
     pickExecutable: () => invoke('library:pickExecutable'),
     pickImage: () => invoke('library:pickImage'),
     launch: (item) => invoke('launch:item', item)
@@ -55,6 +61,7 @@ contextBridge.exposeInMainWorld('hub', {
   },
   processes: {
     list: () => invoke('processes:list'),
+    running: () => invoke('processes:running'),
     kill: (pid) => invoke('processes:kill', pid),
     killByName: (name) => invoke('processes:killByName', name),
     priority: (pid, priority) => invoke('processes:priority', pid, priority)
@@ -90,7 +97,8 @@ contextBridge.exposeInMainWorld('hub', {
     list: () => invoke('overlays:list'),
     set: (type, enabled) => invoke('overlays:set', type, enabled),
     update: (type, patch) => invoke('overlays:update', type, patch),
-    closeAll: () => invoke('overlays:closeAll')
+    closeAll: () => invoke('overlays:closeAll'),
+    onChanged: (handler) => on('overlays:changed', handler)
   },
   // Used only by overlay windows, about themselves.
   overlay: {

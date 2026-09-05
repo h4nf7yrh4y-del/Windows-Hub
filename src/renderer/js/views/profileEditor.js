@@ -1,8 +1,8 @@
-import { el, svg, clear, uuid, colorFromString } from '../util.js';
+import { el, svg, clear, uuid, colorFromString, resolveProcessName, normalizeProcessName } from '../util.js';
 import { openModal, confirmDialog } from '../widgets/modal.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { api } from '../api.js';
-import { state, loadProfiles, loadLibrary } from '../state.js';
+import { state, loadProfiles, loadLibrary, refreshRunning } from '../state.js';
 
 const ICON_TRASH = 'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13';
 const ICON_PLUS = 'M12 5v14M5 12h14';
@@ -38,6 +38,65 @@ function describeLaunch(launch) {
   return launch.target;
 }
 
+/**
+ * Lets the user point an entry at a running process.
+ *
+ * Games started through steam:// have no executable path the hub could read,
+ * so the reliable way to learn the process name is to start the game once and
+ * pick it from the list of what is actually running.
+ */
+async function pickProcess(app, input, onPicked) {
+  let names = [];
+  try {
+    await refreshRunning();
+    names = Array.from(state.running).sort();
+  } catch (err) {
+    notifyError(err.message);
+    return;
+  }
+
+  const listHost = el('div', { class: 'stack gap-4', style: { maxHeight: '46vh', overflowY: 'auto' } });
+  const search = el('input', { class: 'input', placeholder: 'Prozess suchen …', autofocus: true });
+
+  const render = (query = '') => {
+    clear(listHost);
+    const needle = query.trim().toLowerCase();
+    const shown = names.filter((n) => !needle || n.includes(needle));
+    if (!shown.length) {
+      listHost.appendChild(el('div', { class: 'empty' }, [el('div', { class: 'empty-title', text: 'Nichts gefunden' })]));
+      return;
+    }
+    for (const name of shown) {
+      listHost.appendChild(el('button', {
+        class: 'fm-side-btn',
+        onClick: () => {
+          app.processName = name;
+          input.value = name;
+          if (onPicked) onPicked();
+          if (ctxClose) ctxClose();
+        }
+      }, [el('span', { class: 'mono truncate', text: name })]));
+    }
+  };
+
+  let ctxClose = null;
+  search.addEventListener('input', () => render(search.value));
+  render();
+
+  const { close } = openModal({
+    title: 'Laufenden Prozess auswählen',
+    width: '520px',
+    render: () => el('div', { class: 'stack gap-12' }, [
+      el('div', { class: 'faint', style: { fontSize: '11.5px', lineHeight: '1.6' },
+        text: 'Starte das Spiel einmal, dann taucht es hier auf. Der gewählte Name wird für die Laufstatus-Anzeige und zum Beenden des Profils verwendet.' }),
+      search,
+      listHost
+    ]),
+    actions: (closeFn) => [el('button', { class: 'btn subtle', text: 'Abbrechen', onClick: () => closeFn() })]
+  });
+  ctxClose = close;
+}
+
 /* ---------------------------------------------------------- app row editor */
 
 function appRow(app, ctx) {
@@ -47,9 +106,34 @@ function appRow(app, ctx) {
     svg(ICON_GRIP, { width: 15, height: 15, strokeWidth: 2 })
   ]);
 
-  const meta = el('div', { class: 'stack', style: { minWidth: '0' } }, [
+  const derived = resolveProcessName({ ...app, processName: null });
+
+  const procInput = el('input', {
+    class: 'input proc-input',
+    value: app.processName || '',
+    placeholder: derived ? `${derived} (automatisch)` : 'Prozessname für Statusanzeige',
+    title: 'Nach diesem Prozess wird geprüft, ob das Programm läuft',
+    onChange: (event) => {
+      const value = normalizeProcessName(event.target.value);
+      app.processName = value || null;
+      event.target.value = value;
+      if (ctx.onStatusFieldChange) ctx.onStatusFieldChange();
+    }
+  });
+
+  const meta = el('div', { class: 'stack gap-4', style: { minWidth: '0' } }, [
     el('div', { class: 'app-name truncate', text: app.name }),
-    el('div', { class: 'app-target', text: `${LAUNCH_TYPE_LABELS[app.launch.type] || app.launch.type} · ${describeLaunch(app.launch)}` })
+    el('div', { class: 'app-target', text: `${LAUNCH_TYPE_LABELS[app.launch.type] || app.launch.type} · ${describeLaunch(app.launch)}` }),
+    el('div', { class: 'proc-row' }, [
+      el('span', { class: 'label', text: 'Prozess' }),
+      procInput,
+      el('button', {
+        class: 'btn subtle xs',
+        text: 'wählen',
+        title: 'Aus den gerade laufenden Prozessen auswählen',
+        onClick: () => pickProcess(app, procInput)
+      })
+    ])
   ]);
 
   const delay = el('input', {
@@ -138,18 +222,32 @@ async function pickFromLibrary(ctx) {
     for (const item of items) {
       listHost.appendChild(el('div', {
         class: 'lib-card',
-        onClick: () => {
-          ctx.profile.apps.push({
+        onClick: async () => {
+          const entry = {
             id: uuid(),
             name: item.name,
             launch: item.launch,
             delayMs: ctx.profile.apps.length * 2000,
             enabled: true,
             required: false,
-            processName: item.exe ? item.exe.split('\\').pop() : null
-          });
+            processName: item.exe ? normalizeProcessName(item.exe.split(/[\\/]/).pop()) : null
+          };
+          ctx.profile.apps.push(entry);
           ctx.renderApps();
           ctx.closePicker();
+
+          // A steam:// entry carries no executable, so look inside the install
+          // directory for the most likely one instead of leaving it untracked.
+          if (!entry.processName && item.installDir) {
+            try {
+              const guess = await api.library.guessExecutable(item.installDir);
+              if (guess && guess.name) {
+                entry.processName = normalizeProcessName(guess.name);
+                ctx.renderApps();
+                toast(`Prozess erkannt: ${entry.processName}`, 'ok');
+              }
+            } catch (_) { /* the user can still set it by hand */ }
+          }
         }
       }, [
         el('div', { class: 'lib-icon' }, [el('span', { class: 'lib-initial', text: item.name.charAt(0).toUpperCase() })]),
@@ -225,7 +323,9 @@ function addManual(ctx) {
             delayMs: Math.max(0, Number(delay.value) || 0),
             enabled: true,
             required: false,
-            processName: type.value === 'exe' ? target.value.split(/[\\/]/).pop() : null
+            processName: type.value === 'exe'
+              ? normalizeProcessName(target.value.split(/[\\/]/).pop())
+              : null
           });
           ctx.renderApps();
           close();

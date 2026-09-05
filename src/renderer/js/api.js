@@ -28,7 +28,12 @@ export const api = {
     minimize: call(bridge.window.minimize),
     toggleFullscreen: call(bridge.window.toggleFullscreen),
     isFullscreen: call(bridge.window.isFullscreen),
-    close: call(bridge.window.close)
+    close: call(bridge.window.close),
+    reveal: call(bridge.window.reveal)
+  },
+  hotkeys: {
+    list: call(bridge.hotkeys.list),
+    set: call(bridge.hotkeys.set)
   },
   settings: {
     get: call(bridge.settings.get),
@@ -47,6 +52,7 @@ export const api = {
   library: {
     scan: call(bridge.library.scan),
     icon: call(bridge.library.icon),
+    guessExecutable: call(bridge.library.guessExecutable),
     pickExecutable: call(bridge.library.pickExecutable),
     pickImage: call(bridge.library.pickImage),
     launch: call(bridge.library.launch)
@@ -60,6 +66,7 @@ export const api = {
   },
   processes: {
     list: call(bridge.processes.list),
+    running: call(bridge.processes.running),
     kill: call(bridge.processes.kill),
     killByName: call(bridge.processes.killByName),
     priority: call(bridge.processes.priority)
@@ -95,6 +102,7 @@ export const api = {
     list: call(bridge.overlays.list),
     set: call(bridge.overlays.set),
     update: call(bridge.overlays.update),
-    closeAll: call(bridge.overlays.closeAll)
+    closeAll: call(bridge.overlays.closeAll),
+    onChanged: bridge.overlays.onChanged
   }
 };

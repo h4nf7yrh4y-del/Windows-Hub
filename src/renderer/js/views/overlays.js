@@ -172,5 +172,10 @@ export function createOverlaysView() {
   ]);
 
   refresh();
+
+  // The overlay hotkey can open or close widgets while this panel is open.
+  const unsubscribe = api.overlays.onChanged(() => refresh());
+  view.addEventListener('view:unmount', () => { if (unsubscribe) unsubscribe(); });
+
   return view;
 }

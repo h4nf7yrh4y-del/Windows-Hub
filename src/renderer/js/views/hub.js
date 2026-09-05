@@ -1,6 +1,6 @@
-import { el, svg, clear, relativeTime, colorFromString } from '../util.js';
+import { el, svg, clear, relativeTime, colorFromString, resolveProcessName, profileStatus } from '../util.js';
 import { api } from '../api.js';
-import { state, on, loadProfiles } from '../state.js';
+import { state, on, loadProfiles, watchRunning, refreshRunning } from '../state.js';
 import { openProfileEditor } from './profileEditor.js';
 import { LaunchOverlay } from './launchOverlay.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
@@ -40,6 +40,9 @@ async function launchProfile(profile) {
   } finally {
     activeOverlay = null;
     await loadProfiles();
+    // Games take a while to appear in the process list, so re-check twice.
+    setTimeout(() => refreshRunning(), 2000);
+    setTimeout(() => refreshRunning(), 8000);
   }
 }
 
@@ -54,13 +57,23 @@ async function stopProfile(profile) {
   try {
     await api.profiles.stop(profile.id);
     notifyOk(`${profile.name} beendet`);
+    // Give the processes a moment to disappear before re-reading the list.
+    setTimeout(() => refreshRunning(), 1200);
   } catch (err) {
     notifyError(err.message);
   }
 }
 
+const STATUS_LABELS = {
+  running: 'läuft',
+  partial: 'teilweise',
+  idle: 'gestoppt',
+  unknown: null
+};
+
 function profileCard(profile, index) {
   const accent = profile.accent || colorFromString(profile.name);
+  const status = profileStatus(profile, state.running);
 
   const card = el('div', {
     class: 'profile-card',
@@ -70,12 +83,27 @@ function profileCard(profile, index) {
     profile.cover ? el('div', { class: 'card-cover', style: { backgroundImage: `url("${profile.cover}")` } }) : null,
     el('div', { class: 'card-scrim' }),
     el('div', { class: 'card-glow' }),
-    el('div', { class: 'card-index', text: String(index + 1).padStart(2, '0') }),
+    el('div', { class: 'row between' }, [
+      el('div', { class: 'card-index', text: String(index + 1).padStart(2, '0') }),
+      STATUS_LABELS[status.state]
+        ? el('span', { class: `status-tag ${status.state}`, title: `${status.running} von ${status.tracked} überwachten Programmen läuft` }, [
+          el('span', { class: 'status-dot' }),
+          el('span', { text: STATUS_LABELS[status.state] })
+        ])
+        : null
+    ]),
     el('div', { class: 'card-name', text: profile.name }),
     el('div', { class: 'card-tagline', text: profile.tagline || '' }),
-    el('div', { class: 'card-apps' }, (profile.apps || []).filter((a) => a.enabled !== false).slice(0, 5).map((app) =>
-      el('span', { class: 'chip', text: app.name })
-    )),
+    el('div', { class: 'card-apps' }, (profile.apps || []).filter((a) => a.enabled !== false).slice(0, 5).map((app) => {
+      const name = resolveProcessName(app);
+      // No process name means the entry cannot be watched, which the chip
+      // shows as a neutral state rather than pretending it is stopped.
+      const cls = !name ? 'chip untracked' : (state.running.has(name) ? 'chip live' : 'chip');
+      return el('span', {
+        class: cls,
+        title: name ? `${name}.exe` : 'Kein Prozessname hinterlegt, Status unbekannt'
+      }, [name ? el('span', { class: 'chip-dot' }) : null, app.name]);
+    })),
     el('div', { class: 'card-foot' }, [
       el('button', { class: 'card-launch', onClick: (e) => { e.stopPropagation(); launchProfile(profile); } }, [
         svg(ICON_PLAY, { width: 11, height: 11, strokeWidth: 0 }),
@@ -83,7 +111,7 @@ function profileCard(profile, index) {
       ]),
       el('div', { class: 'card-actions' }, [
         el('button', {
-          class: 'icon-btn',
+          class: `icon-btn${status.state === 'running' || status.state === 'partial' ? ' danger active' : ''}`,
           title: 'Alle Programme beenden',
           onClick: (e) => { e.stopPropagation(); stopProfile(profile); }
         }, [svg(ICON_STOP, { width: 14, height: 14 })]),
@@ -143,6 +171,12 @@ export function createHubView() {
   ]);
 
   on('profiles', render);
+  on('running', render);
+
+  let releaseWatch = watchRunning();
+  host.addEventListener('view:unmount', () => { if (releaseWatch) { releaseWatch(); releaseWatch = null; } });
+  host.addEventListener('view:mount', () => { if (!releaseWatch) releaseWatch = watchRunning(); });
+
   render();
   return host;
 }

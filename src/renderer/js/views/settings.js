@@ -1,4 +1,5 @@
 import { el, clear, bytes } from '../util.js';
+import { toAccelerator, formatAccelerator } from '../keys.js';
 import { api } from '../api.js';
 import { state, saveSettings, applyTheme } from '../state.js';
 import { confirmDialog } from '../widgets/modal.js';
@@ -152,6 +153,94 @@ export function createSettingsView() {
   }
   renderDiag();
 
+  /* -------------------------------------------------------------- hotkeys */
+
+  const hotkeyHost = el('div', {});
+
+  async function renderHotkeys() {
+    clear(hotkeyHost);
+    let bindings = [];
+    try {
+      bindings = await api.hotkeys.list();
+    } catch (err) {
+      hotkeyHost.appendChild(el('div', { class: 'faint', text: err.message }));
+      return;
+    }
+
+    for (const binding of bindings) {
+      const display = el('span', {
+        class: `key-display${binding.accelerator ? '' : ' empty'}`,
+        text: binding.accelerator ? formatAccelerator(binding.accelerator) : 'nicht belegt'
+      });
+
+      let capturing = false;
+      let onKey = null;
+
+      const stopCapture = () => {
+        capturing = false;
+        if (onKey) document.removeEventListener('keydown', onKey, true);
+        onKey = null;
+        captureBtn.textContent = 'Ändern';
+        captureBtn.classList.remove('primary');
+      };
+
+      const captureBtn = el('button', {
+        class: 'btn subtle sm',
+        text: 'Ändern',
+        onClick: () => {
+          if (capturing) { stopCapture(); return; }
+          capturing = true;
+          captureBtn.textContent = 'Taste drücken …';
+          captureBtn.classList.add('primary');
+
+          onKey = async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key === 'Escape') { stopCapture(); return; }
+
+            const accelerator = toAccelerator(event);
+            if (!accelerator) {
+              // Held modifiers alone, or a bare key: keep waiting.
+              return;
+            }
+            stopCapture();
+            try {
+              await api.hotkeys.set(binding.action, accelerator);
+              notifyOk(`${formatAccelerator(accelerator)} gesetzt`);
+            } catch (err) {
+              notifyError(err.message);
+            }
+            renderHotkeys();
+          };
+          document.addEventListener('keydown', onKey, true);
+        }
+      });
+
+      const clearBtn = el('button', {
+        class: 'icon-btn danger',
+        title: 'Belegung entfernen',
+        onClick: async () => {
+          try {
+            await api.hotkeys.set(binding.action, '');
+            renderHotkeys();
+          } catch (err) { notifyError(err.message); }
+        }
+      }, ['×']);
+
+      hotkeyHost.appendChild(el('div', { class: 'setting-row' }, [
+        el('div', {}, [
+          el('div', { class: 'setting-label', text: binding.label }),
+          el('div', { class: 'setting-hint', text: binding.accelerator && !binding.active
+            ? 'Belegt von einem anderen Programm, aktuell ohne Wirkung.'
+            : 'Wirkt systemweit, auch während ein Spiel läuft.' })
+        ]),
+        el('div', { class: 'row gap-8' }, [display, captureBtn, binding.accelerator ? clearBtn : null])
+      ]));
+    }
+  }
+
+  renderHotkeys();
+
   const view = el('section', { class: 'view', id: 'view-settings' }, [
     el('div', { class: 'view-head' }, [
       el('div', {}, [
@@ -170,6 +259,14 @@ export function createSettingsView() {
         toggleRow('Kiosk-Modus', 'Blockiert das Verlassen des Vollbilds. Beenden weiterhin über Strg+Umschalt+Q.', 'kiosk'),
         toggleRow('Beim Profilstart minimieren', 'Der Hub tritt in den Hintergrund, sobald ein Profil gestartet wird.', 'minimizeOnLaunch'),
         toggleRow('Boot-Animation', 'Die Startsequenz beim Öffnen des Hubs.', 'bootAnimation')
+      ]),
+
+      panel('Tastenkürzel', [
+        hotkeyHost,
+        el('div', { class: 'setting-hint', style: { marginTop: '12px', lineHeight: '1.65' },
+          text: 'Jede Kombination braucht mindestens Strg, Alt oder Shift, sonst würde die Taste in allen anderen Programmen verschluckt. '
+            + 'Über einem Spiel im echten Vollbildmodus kann Windows das Hub-Fenster nicht nach vorne holen; im randlosen Fenstermodus funktioniert es. '
+            + 'Strg+Umschalt+Q beendet den Hub immer und lässt sich nicht ändern.' })
       ]),
 
       panel('Darstellung', [

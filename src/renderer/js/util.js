@@ -151,3 +151,39 @@ export function hexToRgba(hex, alpha) {
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Matches the main process: "Game.exe", "GAME" and "game" compare equal. */
+export function normalizeProcessName(name) {
+  if (typeof name !== 'string') return '';
+  return name.trim().replace(/\.(exe|com|bat|cmd)$/i, '').toLowerCase();
+}
+
+/**
+ * The process a profile entry should be watched by. An explicit name always
+ * wins; otherwise an executable launch can supply its own file name. Entries
+ * launched through a URI have nothing to derive from and stay untracked until
+ * the user names one.
+ */
+export function resolveProcessName(app) {
+  if (!app) return null;
+  if (app.processName) return normalizeProcessName(app.processName);
+  const launch = app.launch || {};
+  if (launch.type === 'exe' && launch.target) {
+    return normalizeProcessName(String(launch.target).split(/[\\/]/).pop());
+  }
+  return null;
+}
+
+/** Running state of a whole profile, derived from its trackable entries. */
+export function profileStatus(profile, running) {
+  const apps = (profile.apps || []).filter((a) => a && a.enabled !== false);
+  const tracked = apps.map((a) => ({ app: a, name: resolveProcessName(a) })).filter((x) => x.name);
+  if (!tracked.length) return { state: 'unknown', running: 0, tracked: 0, total: apps.length };
+
+  const live = tracked.filter((x) => running.has(x.name));
+  let state = 'idle';
+  if (live.length === tracked.length) state = 'running';
+  else if (live.length > 0) state = 'partial';
+
+  return { state, running: live.length, tracked: tracked.length, total: apps.length };
+}
