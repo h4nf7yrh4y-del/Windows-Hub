@@ -63,13 +63,36 @@ npm install
 npm start
 ```
 
-Für ein installierbares Paket (muss unter Windows laufen):
+### Fertige exe herunterladen
+
+Jeder Push baut die Windows-Dateien automatisch auf einem Windows-Runner. Du musst
+nichts selbst kompilieren:
+
+1. Im Repository auf **Actions** gehen.
+2. Den obersten Lauf von **Build Windows** öffnen.
+3. Unten unter **Artifacts** liegen zwei Dateien:
+   - `WindowsHub-setup` enthält den Installer.
+   - `WindowsHub-portable` enthält eine einzelne exe, die ohne Installation startet.
+
+Für einen dauerhaften Download-Link genügt ein Tag:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Dann hängt der Lauf beide Dateien an ein GitHub-Release.
+
+### Selbst bauen
+
+Das geht nur unter Windows, weil electron-builder dort die Windows-Werkzeugkette
+braucht:
 
 ```bash
 npm run dist
 ```
 
-Das Ergebnis liegt in `release/` als `WindowsHub-<version>-setup.exe`.
+Das Ergebnis liegt in `release/` als `WindowsHub-<version>-setup.exe` und
+`WindowsHub-<version>-portable.exe`.
 
 ---
 

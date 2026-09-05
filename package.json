@@ -11,8 +11,8 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "lint": "node --check src/main/main.js && node scripts/syntax-check.js",
-    "dist": "electron-builder --win",
-    "pack": "electron-builder --win --dir",
+    "dist": "electron-builder --win --x64 --publish never",
+    "pack": "electron-builder --win --x64 --dir --publish never",
     "test": "node test/gpu.test.js && node test/powershell.test.js",
     "check": "npm run lint && npm test"
   },
@@ -41,16 +41,29 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "artifactName": "WindowsHub-${version}-setup.${ext}"
+      "artifactName": "${productName}-${version}-${arch}-${os}.${ext}",
+      "signAndEditExecutable": true
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Windows Hub"
-    }
+      "shortcutName": "Windows Hub",
+      "artifactName": "WindowsHub-${version}-setup.exe"
+    },
+    "portable": {
+      "artifactName": "WindowsHub-${version}-portable.exe",
+      "unpackDirName": "WindowsHub"
+    },
+    "compression": "maximum"
   }
 }

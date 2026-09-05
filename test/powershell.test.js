@@ -25,7 +25,7 @@ function findPowerShell() {
   const candidates = [process.env.PWSH_PATH, 'pwsh', 'powershell', 'powershell.exe'].filter(Boolean);
   for (const candidate of candidates) {
     try {
-      const probe = spawnSync(candidate, ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], {
+      const probe = spawnSync(candidate, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', '$PSVersionTable.PSVersion.Major'], {
         encoding: 'utf8',
         timeout: 20000
       });
@@ -61,7 +61,7 @@ function run(script) {
   const file = path.join(os.tmpdir(), `hub-ps-${process.pid}-${Math.random().toString(36).slice(2)}.ps1`);
   fs.writeFileSync(file, script, 'utf8');
   try {
-    return execFileSync(shell, ['-NoProfile', '-File', file], { encoding: 'utf8', timeout: 60000 });
+    return execFileSync(shell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', file], { encoding: 'utf8', timeout: 60000 });
   } finally {
     try { fs.unlinkSync(file); } catch (_) { /* ignore */ }
   }
@@ -123,7 +123,7 @@ function parseCheck(script) {
   fs.writeFileSync(target, script, 'utf8');
   fs.writeFileSync(checker, PARSE_CHECK, 'utf8');
   try {
-    return execFileSync(shell, ['-NoProfile', '-File', checker, target], { encoding: 'utf8', timeout: 60000 }).trim();
+    return execFileSync(shell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', checker, target], { encoding: 'utf8', timeout: 60000 }).trim();
   } finally {
     try { fs.unlinkSync(target); } catch (_) { /* ignore */ }
     try { fs.unlinkSync(checker); } catch (_) { /* ignore */ }
