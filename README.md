@@ -65,22 +65,22 @@ npm start
 
 ### Fertige exe herunterladen
 
-Jeder Push baut die Windows-Dateien automatisch auf einem Windows-Runner. Du musst
-nichts selbst kompilieren:
+Jeder Push baut die Windows-Dateien auf einem Windows-Runner und veröffentlicht sie
+unter **Releases**. Du musst nichts selbst kompilieren und dich für den Download auch
+nicht anmelden:
 
-1. Im Repository auf **Actions** gehen.
-2. Den obersten Lauf von **Build Windows** öffnen.
-3. Unten unter **Artifacts** liegen zwei Dateien:
-   - `WindowsHub-setup` enthält den Installer.
-   - `WindowsHub-portable` enthält eine einzelne exe, die ohne Installation startet.
+| Datei | Wofür |
+|---|---|
+| `WindowsHub-<version>-portable.exe` | Startet direkt, ohne Installation |
+| `WindowsHub-<version>-setup.exe` | Installer mit Verknüpfungen |
 
-Für einen dauerhaften Download-Link genügt ein Tag:
+Dieselben Dateien liegen zusätzlich unter **Actions** beim jeweiligen Lauf als
+Artefakte. Die sind allerdings immer in ein Zip verpackt und nur für angemeldete
+Nutzer erreichbar, deshalb ist der Release der bequemere Weg.
 
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-Dann hängt der Lauf beide Dateien an ein GitHub-Release.
+Beide Dateien sind nicht signiert. Windows SmartScreen warnt beim ersten Start,
+über *Weitere Informationen* und *Trotzdem ausführen* kommst du daran vorbei. Ein
+Code-Signing-Zertifikat kostet Geld; ohne eines lässt sich das nicht umgehen.
 
 ### Selbst bauen
 
