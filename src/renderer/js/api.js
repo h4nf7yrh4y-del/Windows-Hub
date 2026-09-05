@@ -31,6 +31,23 @@ export const api = {
     close: call(bridge.window.close),
     reveal: call(bridge.window.reveal)
   },
+  display: {
+    list: call(bridge.display.list),
+    brightness: call(bridge.display.brightness),
+    setMode: call(bridge.display.setMode),
+    confirmMode: call(bridge.display.confirmMode),
+    setPrimary: call(bridge.display.setPrimary),
+    projection: call(bridge.display.projection),
+    openSettings: call(bridge.display.openSettings),
+    onReverted: bridge.display.onReverted
+  },
+  features: {
+    list: call(bridge.features.list),
+    toggle: call(bridge.features.toggle),
+    open: call(bridge.features.open),
+    action: call(bridge.features.action),
+    restartExplorer: call(bridge.features.restartExplorer)
+  },
   hotkeys: {
     list: call(bridge.hotkeys.list),
     set: call(bridge.hotkeys.set)

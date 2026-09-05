@@ -22,6 +22,16 @@ alles, gelb für teilweise, grau für gestoppt. Die einzelnen Einträge sind ebe
 markiert, sodass du siehst, ob nur Discord fehlt oder das Spiel selbst. Der Hub prüft
 dafür alle vier Sekunden, welche Prozessnamen aktiv sind.
 
+**Bildschirme.** Helligkeit, Auflösung, Bildwiederholrate und Hauptbildschirm pro
+Monitor, dazu die Anzeigemodi hinter Windows-Taste und P. Eine Auflösungsänderung
+wird nach fünfzehn Sekunden automatisch zurückgenommen, wenn du sie nicht bestätigst,
+damit ein schwarzer Bildschirm kein Problem bleibt.
+
+**Windows-Funktionen.** Ein Katalog aus 28 Einstellungen und Werkzeugen, die nützlich
+und schwer zu finden sind, von Spielmodus über Zwischenablage-Verlauf bis zum
+Zuverlässigkeitsverlauf. Wo es gefahrlos möglich ist, lässt sich direkt umschalten,
+sonst öffnet ein Klick die zuständige Windows-Seite.
+
 **Globale Tastenkürzel.** Ein Kürzel holt den Hub aus jedem Programm heraus nach
 vorne, ein zweites blendet alle Overlays ein und aus. Beide sind frei belegbar.
 
@@ -207,6 +217,9 @@ src/main/        Hauptprozess: Fenster, IPC, OS-Zugriffe
   launcher.js    Startsequenzen für Profile
   gpu.js         Herstellerneutrale GPU-Telemetrie über die Windows-Zähler
   hotkeys.js     Globale Tastenkürzel mit Prüfung und Rückfall
+  display.js     Monitore: Helligkeit, Auflösung, Hauptbildschirm
+  winfeatures.js Katalog der Windows-Einstellungen und -Werkzeuge
+  ps/            C#-Hilfsklasse für die Win32-Aufrufe der Bildschirmsteuerung
   files.js       Dateioperationen mit Papierkorb und Schutzregeln
   startup.js     Autostart-Einträge aus Registry und Startordnern
   overlays.js    Lebenszyklus der Floating-Fenster
@@ -254,6 +267,21 @@ einzelnen Prozesse dagegen sehr wohl addiert.
 Base64-kodiertes UTF-16LE übergeben, wodurch Anführungszeichen, Zeilenumbrüche und
 Umlaute unverändert ankommen und nichts für den Kommandozeilen-Parser von Windows
 maskiert werden muss.
+
+**Die Bildschirmsteuerung braucht drei getrennte Mechanismen.** Windows bietet für
+Helligkeit keine einheitliche Schnittstelle: die WMI-Klasse `WmiMonitorBrightness`
+kennt ausschließlich das eingebaute Notebook-Panel, externe Monitore laufen über
+DDC/CI, und Auflösung sowie Hauptbildschirm gehen über `ChangeDisplaySettingsEx`. Die
+letzten beiden sind reine Win32-Aufrufe ohne PowerShell-Entsprechung, deshalb liegt in
+`ps/display.cs.txt` eine kleine C#-Klasse, die beim ersten Aufruf übersetzt und als
+DLL zwischengespeichert wird. Bei jedem Aufruf neu zu übersetzen würde einem Regler
+ein bis zwei Sekunden Verzögerung geben.
+
+**Schalter im Funktionskatalog schreiben ausschließlich unter HKCU.** Diese Werte
+gelten nur für den angemeldeten Benutzer, brauchen keine erhöhten Rechte und lassen
+sich mit einem Klick zurücknehmen. Alles unter HKLM, alles was den Startvorgang
+verändert und alles was einen Treiber neu lädt ist hier bewusst nur ablesbar, mit
+einem Knopf zur zuständigen Windows-Seite.
 
 **Der Laufstatus fragt nur Prozessnamen ab, nicht die volle Prozessliste.** Die
 Liste im Task-Manager holt Arbeitsspeicher, Prozessorzeit und Fenstertitel für jeden
@@ -341,6 +369,27 @@ normale Fenster und über Spiele im randlosen Fenstermodus nach vorne. Im exklus
 Vollbildmodus verweigert Windows das, dieselbe Grenze wie bei den Overlays. Das
 Kürzel selbst wird trotzdem ausgelöst, du siehst nur nichts davon.
 
+**Helligkeit externer Monitore hängt an DDC/CI.** Das ist ein Steuerkanal über das
+Bildkabel, den viele Monitore beherrschen, aber längst nicht alle. Manche haben ihn
+im eigenen Menü ab Werk deaktiviert, oft unter einem Namen wie „DDC/CI" oder
+„Monitorsteuerung". Antwortet der Monitor nicht, zeigt der Hub das offen an statt
+einen wirkungslosen Regler.
+
+**Nachtmodus, HDR und Skalierung lassen sich nicht schalten.** Windows legt den
+Nachtmodus in einem undokumentierten Binärformat ab, das sich zwischen Builds ändert,
+und für HDR gibt es gar keine Schnittstelle. Der Hub öffnet dafür die passende
+Windows-Seite, statt eine Steuerung vorzutäuschen.
+
+**Bei mehreren Monitoren ist die Zuordnung der Helligkeit eine Vermutung.** DDC/CI
+und die Anzeigegeräte werden von Windows getrennt aufgezählt, ohne gemeinsame
+Kennung. Der Hub paart sie über die Reihenfolge. Bei einem Monitor stimmt das immer,
+bei mehreren fast immer.
+
+**Auflösungsänderungen sind das Riskanteste im ganzen Programm.** Deshalb wird jede
+Änderung zuerst beim Treiber angefragt, und danach läuft im Hauptprozess ein Timer,
+der nach fünfzehn Sekunden zurückstellt. Der Timer liegt bewusst nicht in der
+Oberfläche: er muss auch dann auslösen, wenn vom Bildschirm nichts mehr zu sehen ist.
+
 **Ein Kürzel kann von einem anderen Programm belegt sein.** Windows vergibt globale
 Tastenkombinationen nach dem Prinzip „wer zuerst kommt". Der Hub meldet das beim
 Setzen und behält die vorherige Belegung, statt stillschweigend nichts zu tun.
@@ -385,7 +434,10 @@ npm run check   # lint und test zusammen
 npm run pack    # baut ein entpacktes Verzeichnis statt eines Installers
 ```
 
-Die Tests brauchen kein Windows. Die GPU-Auswertung wird gegen aufgezeichnete
+Die Tests brauchen kein Windows. Ist eine PowerShell vorhanden, wird zusätzlich die
+C#-Hilfsklasse für die Bildschirmsteuerung übersetzt. Die Win32-Aufrufe darin gibt es
+außerhalb von Windows nicht, aber der Compiler muss den Quelltext trotzdem annehmen,
+und ein Tippfehler würde sonst erst zur Laufzeit auffallen. Die GPU-Auswertung wird gegen aufgezeichnete
 Zählerdaten geprüft, und wenn eine PowerShell vorhanden ist, werden zusätzlich alle
 erzeugten Skripte von PowerShells eigenem Parser auf Syntaxfehler geprüft und die
 JSON-Ausgabe gegen den Node-seitigen Parser gehalten. Ohne PowerShell wird dieser

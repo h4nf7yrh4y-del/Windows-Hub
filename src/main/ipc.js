@@ -13,6 +13,8 @@ const files = require('./files');
 const startup = require('./startup');
 const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
+const display = require('./display');
+const winfeatures = require('./winfeatures');
 
 /**
  * Single place where the renderer is allowed to reach the OS.
@@ -324,6 +326,41 @@ function registerIpc({ getWindow, applyAutostart, revealWindow }) {
       return fail(err);
     }
   });
+
+  /* -------------------------------------------------------------- displays */
+
+  // The revert timer lives in main, so it still fires when the screen is
+  // black and the renderer cannot be seen at all.
+  display.setRevertHandler((event) => send('display:reverted', event));
+
+  ipcMain.handle('display:list', wrap(async () => display.list()));
+
+  ipcMain.handle('display:brightness', wrap(async (target, value) => {
+    if (!target || typeof target !== 'object') throw new Error('Bildschirm fehlt');
+    return display.setBrightness(target, value);
+  }));
+
+  ipcMain.handle('display:setMode', wrap(async (device, mode) => {
+    if (!mode || typeof mode !== 'object') throw new Error('Modus fehlt');
+    return display.setModeSafely(
+      requireString(device, 'Bildschirm'),
+      mode.width, mode.height, mode.refresh
+    );
+  }));
+
+  ipcMain.handle('display:confirmMode', wrap(async () => display.cancelRevert()));
+  ipcMain.handle('display:setPrimary', wrap(async (device) => display.setPrimary(requireString(device, 'Bildschirm'))));
+  ipcMain.handle('display:projection', wrap(async (mode) => display.setProjection(requireString(mode, 'Modus'))));
+  ipcMain.handle('display:openSettings', wrap(async (page) => display.openSettings(requireString(page, 'Seite'))));
+
+  /* -------------------------------------------------------------- features */
+
+  ipcMain.handle('features:list', wrap(async () => winfeatures.list()));
+  ipcMain.handle('features:toggle', wrap(async (id, enabled) =>
+    winfeatures.setToggle(requireString(id, 'Eintrag'), !!enabled)));
+  ipcMain.handle('features:open', wrap(async (id) => winfeatures.open(requireString(id, 'Eintrag'))));
+  ipcMain.handle('features:action', wrap(async (id) => winfeatures.runAction(requireString(id, 'Eintrag'))));
+  ipcMain.handle('features:restartExplorer', wrap(async () => winfeatures.restartExplorer()));
 
   /* --------------------------------------------------------------- hotkeys */
 

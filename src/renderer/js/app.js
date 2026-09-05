@@ -10,6 +10,7 @@ import { createProcessesView } from './views/processes.js';
 import { createLibraryView } from './views/library.js';
 import { createFilesView } from './views/files.js';
 import { createOverlaysView } from './views/overlays.js';
+import { createWindowsView } from './views/windows.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 
@@ -49,6 +50,13 @@ const VIEWS = [
     label: 'Overlay',
     icon: ['M4 5h11v10H4z', 'M9 9h11v10H9z'],
     factory: createOverlaysView,
+    keep: false
+  },
+  {
+    id: 'windows',
+    label: 'Windows',
+    icon: ['M3 5h18v14H3z', 'M12 5v14M3 12h18'],
+    factory: createWindowsView,
     keep: false
   },
   {

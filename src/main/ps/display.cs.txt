@@ -1,0 +1,375 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+// Native display control for Windows Hub.
+//
+// Windows exposes three unrelated mechanisms here and each covers a different
+// case, so all three are needed:
+//   EnumDisplayDevices / EnumDisplaySettings -> which screens exist, what
+//     modes they support and which one is active
+//   ChangeDisplaySettingsEx                  -> apply a mode, or move the
+//     primary flag to another screen
+//   dxva2 (DDC/CI)                           -> brightness of external
+//     monitors, which the WMI brightness class does not cover at all
+public static class HubDisplay
+{
+    /* ------------------------------------------------------------ structs */
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+        public int StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public short dmSpecVersion;
+        public short dmDriverVersion;
+        public short dmSize;
+        public short dmDriverExtra;
+        public int dmFields;
+        public int dmPositionX;
+        public int dmPositionY;
+        public int dmDisplayOrientation;
+        public int dmDisplayFixedOutput;
+        public short dmColor;
+        public short dmDuplex;
+        public short dmYResolution;
+        public short dmTTOption;
+        public short dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel;
+        public int dmPelsWidth;
+        public int dmPelsHeight;
+        public int dmDisplayFlags;
+        public int dmDisplayFrequency;
+        public int dmICMMethod;
+        public int dmICMIntent;
+        public int dmMediaType;
+        public int dmDitherType;
+        public int dmReserved1;
+        public int dmReserved2;
+        public int dmPanningWidth;
+        public int dmPanningHeight;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct PHYSICAL_MONITOR
+    {
+        public IntPtr hPhysicalMonitor;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szPhysicalMonitorDescription;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    /* -------------------------------------------------------------- imports */
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern bool EnumDisplayDevices(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern bool EnumDisplaySettings(string lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int ChangeDisplaySettingsEx(string lpszDeviceName, ref DEVMODE lpDevMode, IntPtr hwnd, uint dwflags, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int ChangeDisplaySettingsEx(string lpszDeviceName, IntPtr lpDevMode, IntPtr hwnd, uint dwflags, IntPtr lParam);
+
+    delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data);
+
+    [DllImport("user32.dll")]
+    static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, ref uint pdwNumberOfPhysicalMonitors);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    static extern bool GetPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, uint dwPhysicalMonitorArraySize, [Out] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    static extern bool GetMonitorBrightness(IntPtr hMonitor, ref uint pdwMinimumBrightness, ref uint pdwCurrentBrightness, ref uint pdwMaximumBrightness);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    static extern bool SetMonitorBrightness(IntPtr hMonitor, uint dwNewBrightness);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    static extern bool DestroyPhysicalMonitor(IntPtr hMonitor);
+
+    const int ENUM_CURRENT_SETTINGS = -1;
+    const int DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x00000001;
+    const int DISPLAY_DEVICE_PRIMARY_DEVICE = 0x00000004;
+
+    const uint CDS_UPDATEREGISTRY = 0x00000001;
+    const uint CDS_TEST = 0x00000002;
+    const uint CDS_SET_PRIMARY = 0x00000010;
+    const uint CDS_NORESET = 0x10000000;
+
+    const int DM_POSITION = 0x00000020;
+    const int DM_BITSPERPEL = 0x00040000;
+    const int DM_PELSWIDTH = 0x00080000;
+    const int DM_PELSHEIGHT = 0x00100000;
+    const int DM_DISPLAYFREQUENCY = 0x00400000;
+
+    /* ------------------------------------------------------------- helpers */
+
+    static DEVMODE NewDevMode()
+    {
+        DEVMODE dm = new DEVMODE();
+        dm.dmDeviceName = new string(new char[32]);
+        dm.dmFormName = new string(new char[32]);
+        dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+        return dm;
+    }
+
+    public class ModeInfo
+    {
+        public int Width;
+        public int Height;
+        public int Refresh;
+        public int Depth;
+    }
+
+    public class MonitorInfo
+    {
+        public string Device;
+        public string Adapter;
+        public string Name;
+        public bool Primary;
+        public bool Attached;
+        public int Width;
+        public int Height;
+        public int Refresh;
+        public int Depth;
+        public int PositionX;
+        public int PositionY;
+        public List<ModeInfo> Modes = new List<ModeInfo>();
+    }
+
+    /* --------------------------------------------------------------- query */
+
+    public static List<MonitorInfo> List(bool includeModes)
+    {
+        List<MonitorInfo> result = new List<MonitorInfo>();
+
+        for (uint i = 0; ; i++)
+        {
+            DISPLAY_DEVICE adapter = new DISPLAY_DEVICE();
+            adapter.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE));
+            if (!EnumDisplayDevices(null, i, ref adapter, 0)) break;
+            if ((adapter.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0) continue;
+
+            MonitorInfo info = new MonitorInfo();
+            info.Device = adapter.DeviceName;
+            info.Adapter = adapter.DeviceString;
+            info.Primary = (adapter.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
+            info.Attached = true;
+
+            // The monitor attached to the adapter carries the friendly name.
+            DISPLAY_DEVICE screen = new DISPLAY_DEVICE();
+            screen.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE));
+            if (EnumDisplayDevices(adapter.DeviceName, 0, ref screen, 0))
+            {
+                info.Name = screen.DeviceString;
+            }
+            if (string.IsNullOrEmpty(info.Name)) info.Name = adapter.DeviceString;
+
+            DEVMODE current = NewDevMode();
+            if (EnumDisplaySettings(adapter.DeviceName, ENUM_CURRENT_SETTINGS, ref current))
+            {
+                info.Width = current.dmPelsWidth;
+                info.Height = current.dmPelsHeight;
+                info.Refresh = current.dmDisplayFrequency;
+                info.Depth = current.dmBitsPerPel;
+                info.PositionX = current.dmPositionX;
+                info.PositionY = current.dmPositionY;
+            }
+
+            if (includeModes)
+            {
+                Dictionary<string, ModeInfo> seen = new Dictionary<string, ModeInfo>();
+                for (int m = 0; ; m++)
+                {
+                    DEVMODE mode = NewDevMode();
+                    if (!EnumDisplaySettings(adapter.DeviceName, m, ref mode)) break;
+                    if (mode.dmBitsPerPel < 32) continue;
+                    if (mode.dmDisplayFrequency < 24) continue;
+                    string key = mode.dmPelsWidth + "x" + mode.dmPelsHeight + "@" + mode.dmDisplayFrequency;
+                    if (seen.ContainsKey(key)) continue;
+                    ModeInfo entry = new ModeInfo();
+                    entry.Width = mode.dmPelsWidth;
+                    entry.Height = mode.dmPelsHeight;
+                    entry.Refresh = mode.dmDisplayFrequency;
+                    entry.Depth = mode.dmBitsPerPel;
+                    seen[key] = entry;
+                    info.Modes.Add(entry);
+                }
+            }
+
+            result.Add(info);
+        }
+
+        return result;
+    }
+
+    /* ---------------------------------------------------------- mode change */
+
+    /// Applies a mode. Returns 0 on success; any other value is the Win32
+    /// DISP_CHANGE_* code, which the caller turns into a message.
+    public static int SetMode(string device, int width, int height, int refresh)
+    {
+        DEVMODE dm = NewDevMode();
+        if (!EnumDisplaySettings(device, ENUM_CURRENT_SETTINGS, ref dm)) return -100;
+
+        dm.dmPelsWidth = width;
+        dm.dmPelsHeight = height;
+        if (refresh > 0) dm.dmDisplayFrequency = refresh;
+        dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL
+                    | (refresh > 0 ? DM_DISPLAYFREQUENCY : 0);
+
+        // Ask the driver first, so an unsupported combination fails without
+        // ever being shown on screen.
+        int test = ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, CDS_TEST, IntPtr.Zero);
+        if (test != 0) return test;
+
+        return ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, CDS_UPDATEREGISTRY, IntPtr.Zero);
+    }
+
+    public static int SetPrimary(string device)
+    {
+        DEVMODE target = NewDevMode();
+        if (!EnumDisplaySettings(device, ENUM_CURRENT_SETTINGS, ref target)) return -100;
+
+        int offsetX = target.dmPositionX;
+        int offsetY = target.dmPositionY;
+
+        // The primary screen sits at the origin, so every other screen has to
+        // move by the same amount or the desktop layout tears apart.
+        List<MonitorInfo> monitors = List(false);
+        foreach (MonitorInfo monitor in monitors)
+        {
+            DEVMODE dm = NewDevMode();
+            if (!EnumDisplaySettings(monitor.Device, ENUM_CURRENT_SETTINGS, ref dm)) continue;
+            dm.dmPositionX = dm.dmPositionX - offsetX;
+            dm.dmPositionY = dm.dmPositionY - offsetY;
+            dm.dmFields = DM_POSITION;
+
+            uint flags = CDS_UPDATEREGISTRY | CDS_NORESET;
+            if (string.Equals(monitor.Device, device, StringComparison.OrdinalIgnoreCase))
+            {
+                flags |= CDS_SET_PRIMARY;
+            }
+            ChangeDisplaySettingsEx(monitor.Device, ref dm, IntPtr.Zero, flags, IntPtr.Zero);
+        }
+
+        // A null device name with no mode commits the batched changes.
+        return ChangeDisplaySettingsEx(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+    }
+
+    /* ----------------------------------------------------------- brightness */
+
+    public class BrightnessInfo
+    {
+        public string Description;
+        public int Index;
+        public uint Minimum;
+        public uint Current;
+        public uint Maximum;
+        public bool Supported;
+    }
+
+    static List<IntPtr> CollectHandles()
+    {
+        List<IntPtr> handles = new List<IntPtr>();
+        MonitorEnumProc callback = delegate(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data)
+        {
+            handles.Add(hMonitor);
+            return true;
+        };
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, callback, IntPtr.Zero);
+        return handles;
+    }
+
+    /// DDC/CI brightness for every physical monitor that answers.
+    /// Monitors that do not implement DDC/CI simply report Supported = false.
+    public static List<BrightnessInfo> GetBrightness()
+    {
+        List<BrightnessInfo> result = new List<BrightnessInfo>();
+        List<IntPtr> handles = CollectHandles();
+        int index = 0;
+
+        foreach (IntPtr hMonitor in handles)
+        {
+            uint count = 0;
+            if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, ref count) || count == 0) continue;
+
+            PHYSICAL_MONITOR[] physical = new PHYSICAL_MONITOR[count];
+            if (!GetPhysicalMonitorsFromHMONITOR(hMonitor, count, physical)) continue;
+
+            foreach (PHYSICAL_MONITOR monitor in physical)
+            {
+                BrightnessInfo info = new BrightnessInfo();
+                info.Index = index++;
+                info.Description = monitor.szPhysicalMonitorDescription;
+
+                uint min = 0, cur = 0, max = 0;
+                info.Supported = GetMonitorBrightness(monitor.hPhysicalMonitor, ref min, ref cur, ref max);
+                info.Minimum = min;
+                info.Current = cur;
+                info.Maximum = max;
+                result.Add(info);
+
+                DestroyPhysicalMonitor(monitor.hPhysicalMonitor);
+            }
+        }
+
+        return result;
+    }
+
+    /// Sets DDC/CI brightness on one physical monitor, addressed by the index
+    /// GetBrightness reported.
+    public static bool SetBrightness(int targetIndex, uint value)
+    {
+        List<IntPtr> handles = CollectHandles();
+        int index = 0;
+        bool applied = false;
+
+        foreach (IntPtr hMonitor in handles)
+        {
+            uint count = 0;
+            if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, ref count) || count == 0) continue;
+
+            PHYSICAL_MONITOR[] physical = new PHYSICAL_MONITOR[count];
+            if (!GetPhysicalMonitorsFromHMONITOR(hMonitor, count, physical)) continue;
+
+            foreach (PHYSICAL_MONITOR monitor in physical)
+            {
+                if (index == targetIndex)
+                {
+                    uint min = 0, cur = 0, max = 0;
+                    if (GetMonitorBrightness(monitor.hPhysicalMonitor, ref min, ref cur, ref max))
+                    {
+                        uint scaled = min + (uint)Math.Round((max - min) * (value / 100.0));
+                        if (scaled < min) scaled = min;
+                        if (scaled > max) scaled = max;
+                        applied = SetMonitorBrightness(monitor.hPhysicalMonitor, scaled);
+                    }
+                }
+                index++;
+                DestroyPhysicalMonitor(monitor.hPhysicalMonitor);
+            }
+        }
+
+        return applied;
+    }
+}

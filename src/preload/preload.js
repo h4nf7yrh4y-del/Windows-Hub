@@ -26,6 +26,23 @@ contextBridge.exposeInMainWorld('hub', {
     close: () => invoke('window:close'),
     reveal: () => invoke('window:reveal')
   },
+  display: {
+    list: () => invoke('display:list'),
+    brightness: (target, value) => invoke('display:brightness', target, value),
+    setMode: (device, mode) => invoke('display:setMode', device, mode),
+    confirmMode: () => invoke('display:confirmMode'),
+    setPrimary: (device) => invoke('display:setPrimary', device),
+    projection: (mode) => invoke('display:projection', mode),
+    openSettings: (page) => invoke('display:openSettings', page),
+    onReverted: (handler) => on('display:reverted', handler)
+  },
+  features: {
+    list: () => invoke('features:list'),
+    toggle: (id, enabled) => invoke('features:toggle', id, enabled),
+    open: (id) => invoke('features:open', id),
+    action: (id) => invoke('features:action', id),
+    restartExplorer: () => invoke('features:restartExplorer')
+  },
   hotkeys: {
     list: () => invoke('hotkeys:list'),
     set: (action, accelerator) => invoke('hotkeys:set', action, accelerator)

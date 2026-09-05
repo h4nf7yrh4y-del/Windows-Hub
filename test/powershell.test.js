@@ -97,13 +97,123 @@ Remove-ItemProperty -LiteralPath '${RUN_KEY}' -Name '${"O'Brien Updater".replace
 `
 };
 
-// Pull the remaining inline scripts straight out of the sources so a newly
-// added one cannot slip past this test.
-for (const file of ['src/main/files.js', 'src/main/scanner.js']) {
-  const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-  const blocks = [...source.matchAll(/runPowerShell\((?:String\.raw)?`([\s\S]*?)`\)/g)].map((m) => m[1]);
-  blocks.forEach((block, i) => { SCRIPTS[`${path.basename(file)} #${i + 1}`] = block; });
+/* --------------------------- catalogue-driven and templated scripts ------ */
+
+const winfeatures = require('../src/main/winfeatures');
+
+// The registry read is assembled from the catalogue, so a badly quoted entry
+// would only surface as an empty result at runtime.
+{
+  const lines = winfeatures.CATALOGUE
+    .filter((e) => e.toggle || e.read)
+    .map((e) => {
+      const spec = e.toggle || e.read;
+      const regPath = spec.path.replace(/'/g, "''");
+      const name = spec.name.replace(/'/g, "''");
+      return `  [PSCustomObject]@{ id = '${e.id}'; value = (Get-ItemProperty -LiteralPath '${regPath}' -Name '${name}' -ErrorAction SilentlyContinue).'${name}' }`;
+    });
+  SCRIPTS['feature state read'] = `
+$ErrorActionPreference = "SilentlyContinue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+@(
+${lines.join('\n')}
+) | ConvertTo-Json -Compress
+`;
+
+  const toggle = winfeatures.CATALOGUE.find((e) => e.toggle && !e.readOnly).toggle;
+  SCRIPTS['feature toggle write'] = `
+$ErrorActionPreference = "Stop"
+if (-not (Test-Path -LiteralPath '${toggle.path}')) { New-Item -Path '${toggle.path}' -Force | Out-Null }
+Set-ItemProperty -LiteralPath '${toggle.path}' -Name '${toggle.name}' -Value 1 -Type DWord -Force
+`;
 }
+
+// The display helper is loaded by a preamble that compiles C# on first use.
+SCRIPTS['display helper preamble'] = `
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+if (-not ('HubDisplay' -as [type])) {
+  if (Test-Path -LiteralPath 'C:\\Users\\a\\HubDisplay.dll') {
+    try { Add-Type -Path 'C:\\Users\\a\\HubDisplay.dll' } catch { }
+  }
+}
+if (-not ('HubDisplay' -as [type])) {
+  $src = Get-Content -Raw -LiteralPath 'C:\\Users\\a\\HubDisplay.cs'
+  try {
+    Add-Type -TypeDefinition $src -OutputAssembly 'C:\\Users\\a\\HubDisplay.dll'
+    Add-Type -Path 'C:\\Users\\a\\HubDisplay.dll'
+  } catch {
+    Add-Type -TypeDefinition $src
+  }
+}
+[HubDisplay]::List($true) | ConvertTo-Json -Compress -Depth 4
+`;
+
+/**
+ * Several scripts are JavaScript templates. The interpolations are replaced
+ * with values of the right shape so PowerShell sees a realistic script rather
+ * than a literal `${...}`, which is not valid syntax in any language.
+ */
+function fillPlaceholders(block) {
+  let out = block.replace(/\$\{preamble\(paths\)\}/g, '');
+  // Interpolations nest, so the innermost are replaced first and the pass is
+  // repeated until none are left.
+  for (let pass = 0; pass < 8 && out.includes('${'); pass += 1) {
+    out = out.replace(/\$\{[^{}]*\}/g, (match) => (
+      // Anything naming a path, device or identifier stands in as a string;
+      // everything else is treated as a number.
+      /psLiteral|device|path|name|target|entry|spec|args/i.test(match)
+        ? "'PLACEHOLDER'"
+        : '50'
+    ));
+  }
+  return out;
+}
+
+// Pull the inline scripts straight out of the sources so a newly added one
+// cannot slip past this test.
+for (const file of [
+  'src/main/files.js',
+  'src/main/scanner.js',
+  'src/main/winfeatures.js',
+  'src/main/display.js'
+]) {
+  const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  const blocks = [...source.matchAll(/runPowerShell\(\s*(?:String\.raw)?`([\s\S]*?)`/g)].map((m) => m[1]);
+  blocks.forEach((block, i) => {
+    SCRIPTS[`${path.basename(file)} #${i + 1}`] = fillPlaceholders(block);
+  });
+}
+
+/* ------------------------------------------------ native helper compiles */
+
+test('the C# display helper compiles', () => {
+  // DllImport targets do not exist off Windows, but the compiler still has to
+  // accept the source. A typo here would otherwise only surface at runtime.
+  const csPath = path.join(__dirname, '..', 'src/main/ps/display.cs.txt');
+  const checker = path.join(os.tmpdir(), `hub-cs-${process.pid}.ps1`);
+  fs.writeFileSync(checker, `
+$src = Get-Content -Raw -LiteralPath $args[0]
+try {
+  Add-Type -TypeDefinition $src -ErrorAction Stop
+  $methods = ([HubDisplay].GetMethods('Public,Static,DeclaredOnly') | ForEach-Object { $_.Name }) -join ','
+  Write-Output "COMPILED:$methods"
+} catch {
+  Write-Output ("FAILED: " + $_.Exception.Message)
+}
+`, 'utf8');
+  try {
+    const result = execFileSync(shell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', checker, csPath],
+      { encoding: 'utf8', timeout: 120000 }).trim();
+    assert.ok(result.startsWith('COMPILED'), `compiler said:\n       ${result}`);
+    for (const method of ['List', 'SetMode', 'SetPrimary', 'GetBrightness', 'SetBrightness']) {
+      assert.ok(result.includes(method), `missing method ${method}`);
+    }
+  } finally {
+    try { fs.unlinkSync(checker); } catch (_) { /* ignore */ }
+  }
+});
 
 const PARSE_CHECK = `
 $errors = $null
@@ -142,11 +252,11 @@ test('registry paths keep their backslashes', () => {
     'the display class key lost its backslashes');
 });
 
-test('scripts are genuinely multi-line', () => {
-  for (const [name, script] of Object.entries(SCRIPTS)) {
-    assert.ok(script.split('\n').length > 1, `${name} collapsed onto one line`);
-  }
-});
+// The original bug this file was written for was fragments joined with an
+// empty string, leaving several statements on one line with no separator.
+// No separate assertion is needed for it: PowerShell's parser rejects exactly
+// that, and every script above is run through the parser. A line-length
+// heuristic only produced false alarms on legitimately long single statements.
 
 /* ----------------------------------------- serialisation round trip */
 
