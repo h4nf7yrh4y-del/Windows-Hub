@@ -8,6 +8,8 @@ import { createHubView } from './views/hub.js';
 import { createSystemView } from './views/system.js';
 import { createProcessesView } from './views/processes.js';
 import { createLibraryView } from './views/library.js';
+import { createFilesView } from './views/files.js';
+import { createOverlaysView } from './views/overlays.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 
@@ -33,6 +35,20 @@ const VIEWS = [
     label: 'Tasks',
     icon: ['M4 6h16M4 12h16M4 18h10', 'M18 16l2 2 3-3'],
     factory: createProcessesView,
+    keep: false
+  },
+  {
+    id: 'files',
+    label: 'Files',
+    icon: ['M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z'],
+    factory: createFilesView,
+    keep: true
+  },
+  {
+    id: 'overlays',
+    label: 'Overlay',
+    icon: ['M4 5h11v10H4z', 'M9 9h11v10H9z'],
+    factory: createOverlaysView,
     keep: false
   },
   {
@@ -73,11 +89,15 @@ function showView(id) {
   }
 
   let node = def.keep ? mounted.get(id) : null;
+  const isNew = !node;
   if (!node) {
     node = def.factory();
     mounted.set(id, node);
   }
   main.appendChild(node);
+  // A kept view is re-attached rather than rebuilt, so it needs a signal to
+  // restore anything its unmount handler tore down.
+  if (!isNew) node.dispatchEvent(new CustomEvent('view:mount'));
 
   currentId = id;
   state.activeView = id;

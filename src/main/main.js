@@ -7,6 +7,7 @@ const url = require('url');
 const store = require('./store');
 const metrics = require('./metrics');
 const { registerIpc } = require('./ipc');
+const overlays = require('./overlays');
 
 const IS_DEV = process.argv.includes('--dev');
 const IS_WIN = process.platform === 'win32';
@@ -153,15 +154,25 @@ app.on('ready', () => {
   registerShortcuts();
   registerIpc({ getWindow: () => mainWindow, applyAutostart });
 
+  overlays.init({
+    preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+    // Overlays are consumers of the metrics stream in their own right, so the
+    // collector must keep running even when the hub window is hidden.
+    onChange: (count) => metrics.setExtraSubscribers(count)
+  });
+
   metrics.start((sample) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('metrics:sample', sample);
     }
+    overlays.broadcast('metrics:sample', sample);
   }, {
     fastMs: settings.metricsIntervalMs,
     slowMs: settings.slowMetricsIntervalMs,
     includeGpu: settings.showGpu
   });
+
+  overlays.restore();
 
   // Keep the stored autostart flag and the real login item in sync on boot.
   if (IS_WIN) {
@@ -173,6 +184,10 @@ app.on('ready', () => {
 app.on('window-all-closed', () => {
   metrics.stop();
   app.quit();
+});
+
+app.on('before-quit', () => {
+  overlays.closeAll();
 });
 
 app.on('will-quit', () => {

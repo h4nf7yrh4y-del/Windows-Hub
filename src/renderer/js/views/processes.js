@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 import { confirmDialog } from '../widgets/modal.js';
 import { notifyError, notifyOk } from '../widgets/toast.js';
+import { createStartupPanel } from './startup.js';
 
 /**
  * Built-in task manager.
@@ -58,7 +59,7 @@ export function createProcessesView() {
   intervalSelect.value = String(intervalMs);
   intervalSelect.addEventListener('change', () => {
     intervalMs = Number(intervalSelect.value) || 3000;
-    restart();
+    if (activeTab === 'processes') restart();
   });
 
   function renderHead() {
@@ -185,27 +186,71 @@ export function createProcessesView() {
     timer = setInterval(poll, intervalMs);
   }
 
+  /* ------------------------------------------------------------------ tabs */
+
+  // Processes and autostart entries are two views of the same question:
+  // what is running, and what will run next time. Windows groups them in one
+  // window too.
+  const procBody = el('div', { class: 'tab-body' }, [
+    el('div', { class: 'proc-toolbar' }, [search, summary]),
+    el('div', { class: 'table-wrap grow' }, [
+      el('table', { class: 'table' }, [thead, tbody])
+    ])
+  ]);
+
+  const bodyHost = el('div', { class: 'tab-body' });
+  const procActions = el('div', { class: 'view-actions' }, [
+    el('span', { class: 'label', text: 'Intervall' }),
+    intervalSelect,
+    el('button', { class: 'btn subtle', text: 'Jetzt aktualisieren', onClick: () => poll() })
+  ]);
+
+  let startupPanel = null;
+  let activeTab = 'processes';
+
+  const tabBar = el('div', { class: 'tab-bar' }, [
+    el('button', { class: 'tab active', dataset: { tab: 'processes' }, text: 'Prozesse' }),
+    el('button', { class: 'tab', dataset: { tab: 'startup' }, text: 'Autostart' })
+  ]);
+
+  function showTab(id) {
+    activeTab = id;
+    tabBar.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === id));
+    clear(bodyHost);
+
+    if (id === 'processes') {
+      procActions.classList.remove('hidden');
+      bodyHost.appendChild(procBody);
+      // Polling costs a PowerShell round trip, so it only runs on this tab.
+      poll();
+      restart();
+    } else {
+      procActions.classList.add('hidden');
+      if (timer) { clearInterval(timer); timer = null; }
+      if (!startupPanel) startupPanel = createStartupPanel();
+      bodyHost.appendChild(startupPanel);
+    }
+  }
+
+  tabBar.addEventListener('click', (event) => {
+    const button = event.target.closest('.tab');
+    if (button && button.dataset.tab !== activeTab) showTab(button.dataset.tab);
+  });
+
   const view = el('section', { class: 'view fixed-height', id: 'view-processes' }, [
     el('div', { class: 'view-head' }, [
       el('div', {}, [
         el('h2', { class: 'glitch', dataset: { text: 'Task Manager' }, text: 'Task Manager' }),
         el('div', { class: 'view-sub' }, [statusLine])
       ]),
-      el('div', { class: 'view-actions' }, [
-        el('span', { class: 'label', text: 'Intervall' }),
-        intervalSelect,
-        el('button', { class: 'btn subtle', text: 'Jetzt aktualisieren', onClick: () => poll() })
-      ])
+      procActions
     ]),
-    el('div', { class: 'proc-toolbar' }, [search, summary]),
-    el('div', { class: 'table-wrap' }, [
-      el('table', { class: 'table' }, [thead, tbody])
-    ])
+    tabBar,
+    bodyHost
   ]);
 
   renderHead();
-  poll();
-  restart();
+  showTab('processes');
 
   view.addEventListener('view:unmount', () => {
     if (timer) clearInterval(timer);

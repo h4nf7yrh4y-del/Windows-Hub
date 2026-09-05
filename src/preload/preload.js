@@ -66,5 +66,35 @@ contextBridge.exposeInMainWorld('hub', {
   shell: {
     openExternal: (url) => invoke('shell:openExternal', url),
     openPath: (target) => invoke('shell:openPath', target)
+  },
+  files: {
+    drives: () => invoke('files:drives'),
+    quickLocations: () => invoke('files:quickLocations'),
+    list: (target) => invoke('files:list', target),
+    search: (root, query, opts) => invoke('files:search', root, query, opts),
+    createFolder: (parent, name) => invoke('files:createFolder', parent, name),
+    rename: (target, name) => invoke('files:rename', target, name),
+    trash: (targets) => invoke('files:trash', targets),
+    transfer: (sources, destination, mode) => invoke('files:transfer', sources, destination, mode),
+    open: (target) => invoke('files:open', target),
+    reveal: (target) => invoke('files:reveal', target),
+    info: (target) => invoke('files:info', target),
+    folderSize: (target) => invoke('files:folderSize', target)
+  },
+  startup: {
+    list: () => invoke('startup:list'),
+    remove: (id) => invoke('startup:remove', id),
+    reveal: (id) => invoke('startup:reveal', id)
+  },
+  overlays: {
+    list: () => invoke('overlays:list'),
+    set: (type, enabled) => invoke('overlays:set', type, enabled),
+    update: (type, patch) => invoke('overlays:update', type, patch),
+    closeAll: () => invoke('overlays:closeAll')
+  },
+  // Used only by overlay windows, about themselves.
+  overlay: {
+    close: () => invoke('overlay:close'),
+    onScale: (handler) => on('overlay:scale', handler)
   }
 });

@@ -337,6 +337,8 @@ input[type='color'] {
 .table tbody tr.selected { background: color-mix(in srgb, var(--accent) 13%, transparent); }
 
 .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+/* Beats the `.table thead th` rule, which would otherwise force left. */
+.table thead th.num { text-align: right; }
 
 /* ------------------------------------------------------------------ badge */
 

@@ -200,11 +200,11 @@ function start(handler, opts = {}) {
   stop();
   sampleCpu(); // prime the delta
   fastTimer = setInterval(() => {
-    if (subscribers <= 0) return;
+    if (subscribers + extraSubscribers <= 0) return;
     try { onSample(fastSample()); } catch (err) { console.error('[metrics]', err.message); }
   }, fastMs);
   slowTimer = setInterval(() => {
-    if (subscribers <= 0) return;
+    if (subscribers + extraSubscribers <= 0) return;
     collectSlow({ includeGpu: opts.includeGpu !== false });
   }, slowMs);
   collectSlow({ includeGpu: opts.includeGpu !== false });
@@ -220,4 +220,19 @@ function stop() {
 function subscribe() { subscribers += 1; return subscribers; }
 function unsubscribe() { subscribers = Math.max(0, subscribers - 1); return subscribers; }
 
-module.exports = { start, stop, subscribe, unsubscribe, fastSample, collectSlow, getStaticInfo, slow };
+/**
+ * Consumers outside the main window, currently the floating overlays. Tracked
+ * separately so closing the hub window does not stop a stream the overlays are
+ * still rendering.
+ */
+let extraSubscribers = 0;
+function setExtraSubscribers(count) {
+  extraSubscribers = Math.max(0, Number(count) || 0);
+  return extraSubscribers;
+}
+function activeConsumers() { return subscribers + extraSubscribers; }
+
+module.exports = {
+  start, stop, subscribe, unsubscribe, setExtraSubscribers, activeConsumers,
+  fastSample, collectSlow, getStaticInfo, slow
+};

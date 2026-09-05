@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { ipcMain, dialog, shell, app, nativeImage } = require('electron');
+const { ipcMain, dialog, shell, app, nativeImage, BrowserWindow } = require('electron');
 
 const store = require('./store');
 const metrics = require('./metrics');
@@ -9,6 +9,9 @@ const processes = require('./processes');
 const scanner = require('./scanner');
 const launcher = require('./launcher');
 const power = require('./power');
+const files = require('./files');
+const startup = require('./startup');
+const overlays = require('./overlays');
 
 /**
  * Single place where the renderer is allowed to reach the OS.
@@ -281,6 +284,61 @@ function registerIpc({ getWindow, applyAutostart }) {
 
   ipcMain.handle('power:perform', wrap(async (action) => power.perform(requireString(action, 'Power action'))));
   ipcMain.handle('power:actions', wrap(async () => power.actions));
+
+  /* -------------------------------------------------------------- overlays */
+
+  ipcMain.handle('overlays:list', wrap(async () => overlays.list()));
+
+  ipcMain.handle('overlays:set', wrap(async (type, enabled) =>
+    overlays.setEnabled(requireString(type, 'Overlay-Typ'), !!enabled)));
+
+  ipcMain.handle('overlays:update', wrap(async (type, patch) => {
+    if (!patch || typeof patch !== 'object') throw new Error('Keine Änderungen übergeben');
+    return overlays.update(requireString(type, 'Overlay-Typ'), patch);
+  }));
+
+  ipcMain.handle('overlays:closeAll', wrap(async () => overlays.disableAll()));
+
+  // An overlay closing itself. The type comes from the window's own URL rather
+  // than from the payload, so one overlay cannot close another.
+  ipcMain.handle('overlay:close', async (event) => {
+    try {
+      const type = new URL(event.sender.getURL()).searchParams.get('type');
+      if (type) {
+        overlays.setEnabled(type, false);
+        return ok({ closed: type });
+      }
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) win.close();
+      return ok({ closed: null });
+    } catch (err) {
+      return fail(err);
+    }
+  });
+
+  /* ----------------------------------------------------------------- files */
+
+  ipcMain.handle('files:drives', wrap(async () => files.drives()));
+  ipcMain.handle('files:quickLocations', wrap(async () => files.quickLocations()));
+  ipcMain.handle('files:list', wrap(async (target) => files.list(target)));
+  ipcMain.handle('files:search', wrap(async (root, query, opts) => files.search(root, query, opts || {})));
+  ipcMain.handle('files:createFolder', wrap(async (parent, name) => files.createFolder(parent, name)));
+  ipcMain.handle('files:rename', wrap(async (target, name) => files.rename(target, name)));
+  ipcMain.handle('files:trash', wrap(async (targets) => files.trash(targets)));
+  ipcMain.handle('files:transfer', wrap(async (sources, destination, mode) => {
+    if (mode !== 'copy' && mode !== 'move') throw new Error('Modus muss copy oder move sein');
+    return files.transfer(sources, destination, mode);
+  }));
+  ipcMain.handle('files:open', wrap(async (target) => files.open(target)));
+  ipcMain.handle('files:reveal', wrap(async (target) => files.reveal(target)));
+  ipcMain.handle('files:info', wrap(async (target) => files.info(target)));
+  ipcMain.handle('files:folderSize', wrap(async (target) => files.folderSize(target)));
+
+  /* --------------------------------------------------------------- startup */
+
+  ipcMain.handle('startup:list', wrap(async () => startup.list()));
+  ipcMain.handle('startup:remove', wrap(async (id) => startup.remove(id)));
+  ipcMain.handle('startup:reveal', wrap(async (id) => startup.reveal(id)));
 
   /* ----------------------------------------------------------------- shell */
 

@@ -31,6 +31,22 @@ Zeitdeltas, Speicherverbrauch absolut und relativ, Threads und Fenstertitel.
 Sortierbar, durchsuchbar, Prozesse lassen sich samt Unterprozessen beenden.
 Systemkritische Prozesse sind gesperrt.
 
+**Floating-Overlays.** Sechs frei platzierbare Mini-Fenster, die immer im
+Vordergrund bleiben: eine kompakte Balkenleiste mit CPU, RAM, GPU und Netz sowie
+je ein eigenes Widget pro Messwert. Größe, Deckkraft und Position sind pro Widget
+einstellbar. Ein fixiertes Overlay nimmt keine Klicks mehr an, du klickst durch es
+hindurch. Aktive Overlays kommen beim nächsten Hub-Start automatisch zurück.
+
+**Dateimanager.** Zweispaltig mit Schnellzugriff und Laufwerksleiste, Verlauf
+vorwärts und rückwärts, Breadcrumb-Navigation, Sortierung, Mehrfachauswahl mit
+Strg und Umschalt, rekursive Suche, Kopieren, Verschieben, Umbenennen, Ordner
+anlegen und Eigenschaften samt Ordnergrößenberechnung. Gelöschtes landet im
+Papierkorb.
+
+**Autostart-Manager.** Als zweiter Tab im Task-Manager. Zeigt alle vier Run-Schlüssel
+der Registry und beide Autostart-Ordner mit Befehlszeile und Bereich. Einträge lassen
+sich entfernen und im Explorer anzeigen.
+
 **Systemsteuerung.** Sperren, Energiesparen, Abmelden, Neustart, Herunterfahren.
 Jede dieser Aktionen verlangt eine Bestätigung.
 
@@ -75,10 +91,21 @@ Die Reihenfolge in der Startsequenz lässt sich per Drag-and-drop ändern.
 | Taste | Wirkung |
 |---|---|
 | `F11` | Vollbild umschalten |
-| `Alt` + `1` … `5` | Direkt zu Hub, System, Tasks, Library, Setup |
+| `Alt` + `1` … `7` | Direkt zu Hub, System, Tasks, Files, Overlay, Library, Setup |
 | `Strg` + `Umschalt` + `Q` | Hub sofort beenden, auch im Kiosk-Modus |
 | `F5` | Oberfläche neu laden |
 | `Esc` | Offenen Dialog schließen |
+
+Im Dateimanager zusätzlich:
+
+| Taste | Wirkung |
+|---|---|
+| `Strg` + `C` / `X` / `V` | Kopieren, Ausschneiden, Einfügen |
+| `Strg` + `A` | Alles auswählen |
+| `Entf` | In den Papierkorb |
+| `F2` | Umbenennen |
+| `Rücktaste` | Eine Ebene nach oben |
+| `Enter` im Suchfeld | Rekursiv ab dem aktuellen Ordner suchen |
 
 ---
 
@@ -129,9 +156,14 @@ src/main/        Hauptprozess: Fenster, IPC, OS-Zugriffe
   processes.js   Prozessliste und Beenden
   scanner.js     Erkennung installierter Programme und Spiele
   launcher.js    Startsequenzen für Profile
+  files.js       Dateioperationen mit Papierkorb und Schutzregeln
+  startup.js     Autostart-Einträge aus Registry und Startordnern
+  overlays.js    Lebenszyklus der Floating-Fenster
   power.js       Herunterfahren, Neustart, Sperren
 src/preload/     Die einzige Brücke zwischen Renderer und System
 src/renderer/    Oberfläche, reines ES-Modul-JavaScript ohne Build-Schritt
+  index.html     Hauptfenster
+  overlay.html   Ein Floating-Widget, Typ kommt aus der eigenen URL
 ```
 
 Zwei Entscheidungen, die den Rest erklären:
@@ -151,6 +183,18 @@ Die Prozessliste wird pro Abfrage mit genau einem PowerShell-Aufruf geholt. Die
 CPU-Prozente entstehen aus der Differenz der Prozessorsekunden zwischen zwei Abfragen,
 geteilt durch die verstrichene Zeit und die Kernanzahl. Genau so rechnet auch der
 Windows-Task-Manager.
+
+**Overlays sind eigenständige Verbraucher des Messstroms.** Der Sammler zählt
+Fensterabonnenten und Overlay-Fenster getrennt, damit die Widgets weiterlaufen,
+während der Hub minimiert ist. Ein Overlay kennt seinen Typ nur aus der eigenen
+Fenster-URL, nie aus einer Nachricht, und kann deshalb ausschließlich sich selbst
+anzeigen und schließen.
+
+**Der Dateimanager weigert sich, Laufwerkswurzeln, `C:\Windows`, die Programm-
+verzeichnisse und das Benutzerverzeichnis selbst zu verändern.** Kopieren in den
+eigenen Unterordner wird ebenfalls abgelehnt, sonst läuft der Datenträger voll.
+Gelöschtes geht in den Papierkorb; endgültiges Löschen bietet der Hub gar nicht erst
+an.
 
 ---
 
@@ -194,6 +238,31 @@ Bedingungen. Bei sehr langsamen Datenträgern musst du die Werte anpassen.
 
 **Der Bibliotheks-Scan ist auf fünf Minuten zwischengespeichert.** Nach einer
 Neuinstallation musst du in der Bibliothek einmal **Neu scannen** drücken.
+
+**Die Overlays sind über echten Vollbild-Spielen unsichtbar.** Das ist die wichtigste
+Einschränkung dieser Funktion. Windows setzt das Bild im exklusiven Vollbildmodus
+direkt auf der Grafikkarte zusammen und lässt kein fremdes Fenster darüber. Steam und
+Discord schaffen das nur, weil sie sich in die Grafikschnittstelle des Spiels
+einklinken, und genau das kann Electron nicht. Stell das Spiel auf **randloses
+Fenster**, dann funktionieren die Overlays. Läuft es echt im Vollbild, hilft nur ein
+zweiter Monitor oder das eingebaute Overlay des Spiels.
+
+**Kopieren und Verschieben großer Ordner zeigen keinen Fortschritt.** Der Vorgang
+läuft asynchron und blockiert die Oberfläche nicht, aber du siehst nur „läuft" und
+danach das Ergebnis. Für ein 200-GB-Spielverzeichnis nimm den Explorer.
+
+**Der Dateimanager listet höchstens 8000 Einträge pro Ordner** und bricht die
+rekursive Suche nach 400 Treffern, sechs Ebenen oder zwölf Sekunden ab. Das ist eine
+bewusste Grenze, damit ein Ordner mit 80000 Dateien die Oberfläche nicht einfriert.
+
+**Autostart-Einträge lassen sich entfernen, aber nicht abschalten.** Windows legt den
+Aktiv-Zustand in binären `StartupApproved`-Blobs ab. Diese falsch zu schreiben
+hinterlässt einen Eintrag, den weder der Hub noch der Windows-Task-Manager wieder
+geradebiegen kann. Entfernen ist umkehrbar, ein kaputter Blob nicht, deshalb gibt es
+hier bewusst keinen Schalter. Zum reinen Abschalten nimm den Windows-Task-Manager.
+
+**Systemweite Autostart-Einträge und Registry-Schlüssel unter `HKLM` brauchen
+Administratorrechte.** Ohne diese schlägt das Entfernen mit einer Fehlermeldung fehl.
 
 ---
 

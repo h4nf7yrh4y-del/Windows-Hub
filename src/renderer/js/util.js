@@ -59,7 +59,7 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
 export function bytes(value, digits = 1) {
   const n = Number(value) || 0;
-  if (n < 1024) return `${n} B`;
+  if (n < 1024) return `${Math.round(n)} B`;
   let i = 0;
   let v = n;
   while (v >= 1024 && i < UNITS.length - 1) { v /= 1024; i += 1; }

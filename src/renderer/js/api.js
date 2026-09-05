@@ -71,5 +71,30 @@ export const api = {
   shell: {
     openExternal: call(bridge.shell.openExternal),
     openPath: call(bridge.shell.openPath)
+  },
+  files: {
+    drives: call(bridge.files.drives),
+    quickLocations: call(bridge.files.quickLocations),
+    list: call(bridge.files.list),
+    search: call(bridge.files.search),
+    createFolder: call(bridge.files.createFolder),
+    rename: call(bridge.files.rename),
+    trash: call(bridge.files.trash),
+    transfer: call(bridge.files.transfer),
+    open: call(bridge.files.open),
+    reveal: call(bridge.files.reveal),
+    info: call(bridge.files.info),
+    folderSize: call(bridge.files.folderSize)
+  },
+  startup: {
+    list: call(bridge.startup.list),
+    remove: call(bridge.startup.remove),
+    reveal: call(bridge.startup.reveal)
+  },
+  overlays: {
+    list: call(bridge.overlays.list),
+    set: call(bridge.overlays.set),
+    update: call(bridge.overlays.update),
+    closeAll: call(bridge.overlays.closeAll)
   }
 };

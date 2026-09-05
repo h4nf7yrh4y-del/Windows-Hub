@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'" />
+  <title>Hub Overlay</title>
+  <link rel="stylesheet" href="styles/overlay.css" />
+</head>
+<body class="overlay-body">
+  <div id="overlay-root" class="ov">
+    <div class="ov-drag"></div>
+    <div class="ov-content"></div>
+    <button class="ov-close" title="Overlay schließen" aria-label="Schließen">×</button>
+  </div>
+  <script type="module" src="js/overlay.js"></script>
+</body>
+</html>
