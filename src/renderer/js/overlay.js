@@ -162,15 +162,22 @@ function buildGpu() {
       ui.value.textContent = '--';
       ui.value.className = 'ov-value';
       ui.unit.textContent = '';
-      ui.sub.textContent = gpu ? 'keine Telemetrie' : 'keine GPU';
+      ui.sub.textContent = gpu ? 'keine Werte' : 'keine GPU';
       return;
     }
     ui.value.textContent = Math.round(gpu.load);
     ui.value.className = `ov-value ${severity(gpu.load)}`;
     ui.unit.textContent = '%';
+
     const parts = [];
-    if (gpu.temp != null) parts.push(`${gpu.temp}°C`);
-    if (gpu.memTotal) parts.push(`${Math.round(gpu.memUsed || 0)}/${Math.round(gpu.memTotal)}MB`);
+    if (gpu.temp != null) parts.push(`${Math.round(gpu.temp)}°C`);
+    if (gpu.memTotal) parts.push(`${(gpu.memUsed / 1024).toFixed(1)}/${(gpu.memTotal / 1024).toFixed(0)}G`);
+    else if (gpu.memUsed) parts.push(`${Math.round(gpu.memUsed)}MB`);
+    // With no sensor data at all, the busiest engine is still worth showing.
+    if (!parts.length && gpu.breakdown) {
+      const top = Object.entries(gpu.breakdown).sort((a, b) => b[1] - a[1])[0];
+      if (top) parts.push(`${top[0]} ${Math.round(top[1])}%`);
+    }
     ui.sub.textContent = parts.join(' · ') || (gpu.model || '');
     spark.push(gpu.load);
   };

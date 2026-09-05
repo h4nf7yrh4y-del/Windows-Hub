@@ -19,6 +19,11 @@ try {
   console.warn('[metrics] systeminformation unavailable:', err.message);
 }
 
+// GPU telemetry lives in its own module because getting it right for AMD and
+// Intel means going through the Windows graphics counters rather than
+// systeminformation's nvidia-smi path.
+const gpu = require('./gpu');
+
 let prevCpu = null;
 let fastTimer = null;
 let slowTimer = null;
@@ -31,6 +36,8 @@ const slow = {
   diskIO: null,
   net: null,
   gpu: [],
+  gpuSource: null,
+  gpuNote: null,
   cpuTemp: null,
   battery: null,
   updatedAt: 0
@@ -132,18 +139,29 @@ async function collectSlow({ includeGpu = true } = {}) {
     }
 
     if (includeGpu) {
-      const graphics = await safe(() => si.graphics(), null);
-      if (graphics && Array.isArray(graphics.controllers)) {
-        slow.gpu = graphics.controllers.map((g) => ({
-          model: g.model,
-          vendor: g.vendor,
-          vram: g.vram,
-          memUsed: g.memoryUsed,
-          memTotal: g.memoryTotal,
-          load: g.utilizationGpu,
-          temp: g.temperatureGpu,
-          fanSpeed: g.fanSpeed
+      try {
+        const report = await gpu.read();
+        // memUsed/memTotal stay in megabytes for compatibility with the
+        // existing consumers; everything new is carried alongside.
+        slow.gpu = (report.adapters || []).map((a) => ({
+          model: a.model,
+          vendor: a.vendor,
+          driver: a.driver,
+          load: a.load,
+          breakdown: a.breakdown,
+          memUsed: a.memUsed != null ? a.memUsed / (1024 * 1024) : null,
+          memTotal: a.memTotal != null ? a.memTotal / (1024 * 1024) : null,
+          memShared: a.memShared != null ? a.memShared / (1024 * 1024) : null,
+          vram: a.memTotal != null ? a.memTotal / (1024 * 1024) : null,
+          temp: a.temp,
+          fanSpeed: a.fan,
+          loadSource: a.loadSource,
+          tempSource: a.tempSource
         }));
+        slow.gpuSource = report.source;
+        slow.gpuNote = report.note;
+      } catch (err) {
+        slow.gpuNote = err.message;
       }
     }
 

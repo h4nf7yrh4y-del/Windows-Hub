@@ -205,7 +205,7 @@ export function createSettingsView() {
           { value: 1000, label: '1 s' }, { value: 2000, label: '2 s' },
           { value: 3000, label: '3 s' }, { value: 5000, label: '5 s' }
         ]),
-        toggleRow('GPU-Telemetrie abfragen', 'Abschalten spart eine teure Abfrage, wenn deine GPU ohnehin keine Werte liefert.', 'showGpu')
+        toggleRow('GPU-Telemetrie abfragen', 'Nutzt die Windows-GPU-Zähler und funktioniert mit AMD, Intel und NVIDIA. Abschalten spart eine WMI-Abfrage pro Intervall.', 'showGpu')
       ]),
 
       panel('System', [

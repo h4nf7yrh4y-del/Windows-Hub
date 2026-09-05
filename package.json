@@ -12,7 +12,9 @@
     "dev": "electron . --dev",
     "lint": "node --check src/main/main.js && node scripts/syntax-check.js",
     "dist": "electron-builder --win",
-    "pack": "electron-builder --win --dir"
+    "pack": "electron-builder --win --dir",
+    "test": "node test/gpu.test.js && node test/powershell.test.js",
+    "check": "npm run lint && npm test"
   },
   "dependencies": {
     "systeminformation": "^5.33.8"
@@ -34,7 +36,12 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "artifactName": "WindowsHub-${version}-setup.${ext}"
     },

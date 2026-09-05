@@ -1006,3 +1006,59 @@
 .fm-name.kind-code svg   { color: #4d9fff; }
 
 .fm-link-mark { color: var(--text-faint); font-size: 10px; }
+
+/* ------------------------------------------------------------- GPU panel */
+
+.gpu-block {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.gpu-block:first-child { padding-top: 0; }
+.gpu-block:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.gpu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gpu-model {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  min-width: 0;
+}
+
+.gpu-load-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.gpu-load {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+}
+
+.gpu-load-row .meter { flex: 1; }
+
+.gpu-engines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 9px;
+}
+.gpu-engines .chip { font-size: 9.5px; padding: 2px 7px; }
+
+.gpu-source {
+  margin-top: 9px;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}

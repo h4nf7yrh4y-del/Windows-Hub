@@ -19,27 +19,36 @@ let prev = new Map(); // pid -> { cpuSeconds, ts }
 let lastPoll = 0;
 let inFlight = null;
 
-const PS_SCRIPT = [
-  '$ErrorActionPreference="SilentlyContinue";',
-  '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;',
-  'Get-Process | ForEach-Object {',
-  '  [PSCustomObject]@{',
-  '    id=$_.Id;',
-  '    name=$_.ProcessName;',
-  '    ws=$_.WorkingSet64;',
-  '    cpu=$_.CPU;',
-  '    title=$_.MainWindowTitle;',
-  '    threads=$_.Threads.Count;',
-  '    start=if($_.StartTime){$_.StartTime.ToFileTimeUtc()}else{0}',
-  '  }',
-  '} | ConvertTo-Json -Compress -Depth 2'
-].join('');
+const PS_SCRIPT = `
+$ErrorActionPreference = "SilentlyContinue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Get-Process | ForEach-Object {
+  [PSCustomObject]@{
+    id      = $_.Id
+    name    = $_.ProcessName
+    ws      = $_.WorkingSet64
+    cpu     = $_.CPU
+    title   = $_.MainWindowTitle
+    threads = $_.Threads.Count
+    start   = if ($_.StartTime) { $_.StartTime.ToFileTimeUtc() } else { 0 }
+  }
+} | ConvertTo-Json -Compress -Depth 2
+`;
 
+/**
+ * Runs a PowerShell script via -EncodedCommand.
+ *
+ * The script is handed over as base64 UTF-16LE rather than as a -Command
+ * string, which removes every quoting and line-break hazard: multi-line
+ * scripts, embedded quotes and non-ASCII text all survive intact, and nothing
+ * has to be escaped for the Windows command-line parser on the way through.
+ */
 function runPowerShell(script, timeout = 15000) {
+  const encoded = Buffer.from(String(script), 'utf16le').toString('base64');
   return new Promise((resolve, reject) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
       { timeout, maxBuffer: 24 * 1024 * 1024, windowsHide: true },
       (err, stdout, stderr) => {
         if (err && !stdout) return reject(new Error(stderr || err.message));
@@ -194,4 +203,4 @@ function reset() {
   lastPoll = 0;
 }
 
-module.exports = { list, kill, killByName, setPriority, reset, runPowerShell };
+module.exports = { list, kill, killByName, setPriority, reset, runPowerShell, PS_SCRIPT };

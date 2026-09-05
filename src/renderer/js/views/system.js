@@ -93,11 +93,11 @@ export function createSystemView() {
 
       panel('Datenträger-Aktivität', [diskCanvas], 'span-6', diskLegend),
 
-      panel('Laufwerke', [diskList], 'span-6'),
+      panel('Laufwerke', [diskList], 'span-4'),
 
-      panel('Grafik', [gpuDetail], 'span-3'),
+      panel('Grafik', [gpuDetail], 'span-4'),
 
-      panel('Maschine', [sysDetail], 'span-3')
+      panel('Maschine', [sysDetail], 'span-4')
     ])
   ]);
 
@@ -167,6 +167,99 @@ export function createSystemView() {
     if (sub) sub.textContent = `${info.hostname} · ${info.cpuBrand || info.cpuModel}`;
   }
 
+  const SOURCE_LABELS = {
+    counters: 'Windows-GPU-Zähler',
+    'nvidia-smi': 'nvidia-smi'
+  };
+
+  // WMI reports vendors as "Advanced Micro Devices, Inc."; the badge wants AMD.
+  function shortVendor(vendor, model) {
+    const text = `${vendor || ''} ${model || ''}`.toLowerCase();
+    if (/amd|advanced micro|radeon|ati /.test(text)) return 'AMD';
+    if (/nvidia|geforce|quadro|rtx |gtx /.test(text)) return 'NVIDIA';
+    if (/intel|arc |iris |uhd graphics|hd graphics/.test(text)) return 'Intel';
+    if (/microsoft|basic display/.test(text)) return 'Microsoft';
+    if (!vendor) return null;
+    return String(vendor).split(/[\s,]+/)[0];
+  }
+
+  function renderGpu(slow) {
+    const adapters = slow.gpu || [];
+    clear(gpuDetail);
+
+    if (!adapters.length) {
+      gpuRing.set(0, '—');
+      gpuDetail.appendChild(el('div', { class: 'faint', style: { fontSize: '12px', lineHeight: '1.6' },
+        text: slow.gpuNote || 'Keine Grafikkarte erkannt.' }));
+      return;
+    }
+
+    const primary = adapters[0];
+    gpuRing.set(primary.load != null ? primary.load : 0, primary.load != null ? undefined : '—');
+
+    adapters.forEach((gpu, index) => {
+      const block = el('div', { class: 'gpu-block' });
+
+      block.appendChild(el('div', { class: 'gpu-head' }, [
+        el('span', { class: 'gpu-model truncate', title: gpu.model || '', text: gpu.model || 'Unbekannt' }),
+        (() => {
+          const label = shortVendor(gpu.vendor, gpu.model);
+          return label ? el('span', { class: 'badge', text: label }) : null;
+        })()
+      ]));
+
+      if (gpu.load != null) {
+        block.appendChild(el('div', { class: 'gpu-load-row' }, [
+          el('span', { class: 'gpu-load', text: pct(gpu.load, 0) }),
+          meter(gpu.load, severity(gpu.load))
+        ]));
+      } else {
+        block.appendChild(el('div', { class: 'faint', style: { fontSize: '11.5px' }, text: 'Keine Auslastungswerte' }));
+      }
+
+      // Per-engine detail is what makes an AMD card readable: a video export
+      // pins the encoder while 3D sits idle, and one number hides that.
+      const breakdown = gpu.breakdown && Object.entries(gpu.breakdown).filter(([, v]) => v >= 1);
+      if (breakdown && breakdown.length) {
+        block.appendChild(el('div', { class: 'gpu-engines' }, breakdown
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(([label, value]) => el('span', { class: 'chip', text: `${label} ${Math.round(value)}%` }))));
+      }
+
+      const detail = el('div', { class: 'kv-list' });
+      if (gpu.memTotal) {
+        const usedPct = gpu.memUsed != null ? (gpu.memUsed / gpu.memTotal) * 100 : 0;
+        detail.appendChild(kv('Videospeicher',
+          `${Math.round(gpu.memUsed || 0)} / ${Math.round(gpu.memTotal)} MB`));
+        detail.appendChild(meter(usedPct, severity(usedPct)));
+      } else if (gpu.memUsed != null) {
+        detail.appendChild(kv('Videospeicher', `${Math.round(gpu.memUsed)} MB`));
+      }
+      if (gpu.memShared) detail.appendChild(kv('Geteilt', `${Math.round(gpu.memShared)} MB`));
+      detail.appendChild(kv('Temperatur', gpu.temp != null ? `${Math.round(gpu.temp)} °C` : '—'));
+      if (gpu.fanSpeed != null) detail.appendChild(kv('Lüfter', `${gpu.fanSpeed}%`));
+      if (gpu.driver) detail.appendChild(kv('Treiber', gpu.driver));
+      block.appendChild(detail);
+
+      if (index === adapters.length - 1) {
+        const source = SOURCE_LABELS[gpu.loadSource] || null;
+        const parts = [];
+        if (source) parts.push(`Auslastung über ${source}`);
+        if (gpu.temp == null) parts.push('Temperatur liefern nur NVIDIA-Treiber');
+        if (parts.length) {
+          block.appendChild(el('div', { class: 'gpu-source', text: `${parts.join(' · ')}.` }));
+        }
+      }
+
+      gpuDetail.appendChild(block);
+    });
+
+    if (slow.gpuNote) {
+      gpuDetail.appendChild(el('div', { class: 'gpu-source', style: { color: 'var(--warn)' }, text: slow.gpuNote }));
+    }
+  }
+
   function update(sample) {
     if (!sample) return;
     const cpu = sample.cpu || { total: 0, cores: [] };
@@ -197,23 +290,7 @@ export function createSystemView() {
     );
     memDetail.appendChild(meter(mem.percent, severity(mem.percent)));
 
-    const gpu = (slow.gpu || [])[0];
-    if (gpu) {
-      const load = gpu.load != null ? gpu.load : 0;
-      gpuRing.set(load);
-      clear(gpuDetail);
-      gpuDetail.append(
-        kv('Modell', el('span', { class: 'kv-val truncate', style: { maxWidth: '180px' }, text: gpu.model || '—' })),
-        kv('Auslastung', gpu.load != null ? pct(gpu.load, 0) : '—'),
-        kv('Speicher', gpu.memTotal ? `${Math.round(gpu.memUsed || 0)} / ${Math.round(gpu.memTotal)} MB` : (gpu.vram ? `${gpu.vram} MB` : '—')),
-        kv('Temperatur', gpu.temp != null ? `${gpu.temp} °C` : '—'),
-        kv('Lüfter', gpu.fanSpeed != null ? `${gpu.fanSpeed}%` : '—')
-      );
-    } else {
-      gpuRing.set(0, '—');
-      clear(gpuDetail);
-      gpuDetail.appendChild(el('div', { class: 'faint', style: { fontSize: '12px' }, text: 'Keine GPU-Telemetrie. Auslastungswerte liefern in der Regel nur NVIDIA-Karten über nvidia-smi.' }));
-    }
+    renderGpu(slow);
 
     if (slow.net) {
       netGraph.push(slow.net.rxSec, slow.net.txSec);

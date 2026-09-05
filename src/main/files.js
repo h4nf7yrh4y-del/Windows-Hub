@@ -93,11 +93,13 @@ async function drives() {
     return [{ path: '/', label: 'Root', type: 'fixed', size: 0, free: 0 }];
   }
   try {
-    const out = await runPowerShell(
-      '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;'
-      + 'Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,VolumeName,DriveType,Size,FreeSpace'
-      + ' | ConvertTo-Json -Compress'
-    );
+    const out = await runPowerShell(`
+$ErrorActionPreference = "SilentlyContinue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+@(Get-CimInstance -ClassName Win32_LogicalDisk |
+  Select-Object DeviceID, VolumeName, DriveType, Size, FreeSpace) | ConvertTo-Json -Compress
+`);
     const trimmed = (out || '').trim();
     if (!trimmed) return [];
     const parsed = JSON.parse(trimmed);

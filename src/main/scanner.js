@@ -70,9 +70,10 @@ async function steamRoot() {
 
   if (IS_WIN) {
     try {
-      const out = await runPowerShell(
-        '(Get-ItemProperty -Path "HKCU:\\Software\\Valve\\Steam" -Name SteamPath -ErrorAction SilentlyContinue).SteamPath'
-      );
+      const out = await runPowerShell(String.raw`
+$ErrorActionPreference = "SilentlyContinue"
+(Get-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name SteamPath).SteamPath
+`);
       const p = (out || '').trim();
       if (p) candidates.unshift(p.replace(/\//g, '\\'));
     } catch (_) { /* registry unavailable, fall back to defaults */ }
@@ -218,9 +219,11 @@ async function scanStartMenu() {
 async function scanStartApps() {
   if (!IS_WIN) return [];
   try {
-    const out = await runPowerShell(
-      '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-StartApps | ConvertTo-Json -Compress'
-    );
+    const out = await runPowerShell(`
+$ErrorActionPreference = "SilentlyContinue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+@(Get-StartApps) | ConvertTo-Json -Compress
+`);
     const trimmed = (out || '').trim();
     if (!trimmed) return [];
     const parsed = JSON.parse(trimmed);

@@ -24,7 +24,9 @@ inklusive UWP- und Xbox-Game-Pass-Titel.
 
 **Systemüberwachung.** CPU gesamt und pro Kern, RAM, GPU-Auslastung, Laufwerks-
 belegung, Datenträger- und Netzwerkdurchsatz, Betriebszeit, Temperaturen. Alles live
-als Ringe, Verlaufsgraphen und Balken.
+als Ringe, Verlaufsgraphen und Balken. Die GPU-Werte kommen von AMD, Intel und NVIDIA
+gleichermaßen, aufgeschlüsselt nach Engine, also 3D, Video-Kodierung, Compute und
+Kopieren getrennt.
 
 **Task-Manager.** Vollständige Prozessliste mit echter CPU-Prozentberechnung über
 Zeitdeltas, Speicherverbrauch absolut und relativ, Threads und Fenstertitel.
@@ -156,6 +158,7 @@ src/main/        Hauptprozess: Fenster, IPC, OS-Zugriffe
   processes.js   Prozessliste und Beenden
   scanner.js     Erkennung installierter Programme und Spiele
   launcher.js    Startsequenzen für Profile
+  gpu.js         Herstellerneutrale GPU-Telemetrie über die Windows-Zähler
   files.js       Dateioperationen mit Papierkorb und Schutzregeln
   startup.js     Autostart-Einträge aus Registry und Startordnern
   overlays.js    Lebenszyklus der Floating-Fenster
@@ -184,6 +187,26 @@ CPU-Prozente entstehen aus der Differenz der Prozessorsekunden zwischen zwei Abf
 geteilt durch die verstrichene Zeit und die Kernanzahl. Genau so rechnet auch der
 Windows-Task-Manager.
 
+**GPU-Werte kommen aus den Windows-Grafikzählern, nicht von `nvidia-smi`.** Der
+naheliegende Weg über `systeminformation` ruft intern `nvidia-smi` auf und liefert
+deshalb nur für NVIDIA etwas Brauchbares. Windows selbst veröffentlicht seit Version
+1709 Zähler pro Grafik-Engine, und genau darauf baut auch die GPU-Spalte des
+Windows-Task-Managers auf. Sie decken jeden WDDM-2.0-Treiber ab, also AMD, Intel und
+NVIDIA gleichermaßen. Der Hub liest sie über die WMI-Leistungsklassen statt über
+`Get-Counter`, weil WMI-Klassen- und Eigenschaftsnamen unveränderlich englisch sind,
+während `Get-Counter`-Pfade lokalisiert werden und auf einem deutschen Windows
+`\GPU-Engine(*)\Prozentsatz der Auslastung` heißen würden.
+
+Die Auslastung ist bewusst das Maximum über die Engine-Typen und nicht deren Summe.
+3D-, Video- und Kopier-Engine laufen parallel auf derselben Hardware; sie zu addieren
+ergibt Werte über 100 Prozent. Innerhalb eines Engine-Typs werden die Anteile der
+einzelnen Prozesse dagegen sehr wohl addiert.
+
+**PowerShell-Aufrufe gehen über `-EncodedCommand`.** Das Skript wird als
+Base64-kodiertes UTF-16LE übergeben, wodurch Anführungszeichen, Zeilenumbrüche und
+Umlaute unverändert ankommen und nichts für den Kommandozeilen-Parser von Windows
+maskiert werden muss.
+
 **Overlays sind eigenständige Verbraucher des Messstroms.** Der Sammler zählt
 Fensterabonnenten und Overlay-Fenster getrennt, damit die Widgets weiterlaufen,
 während der Hub minimiert ist. Ein Overlay kennt seinen Typ nur aus der eigenen
@@ -209,10 +232,25 @@ nur mit WPF oder WinUI in C#, dann aber mit erheblich mehr Aufwand für genau di
 Animationen und Effekte, die den Reiz ausmachen. Auf einem Gaming-PC mit 16 GB oder
 mehr fällt es nicht ins Gewicht, auf einem 8-GB-Rechner schon eher.
 
-**GPU-Auslastung liefert in der Praxis nur NVIDIA.** Die Werte stammen aus
-`nvidia-smi`. AMD- und Intel-Karten zeigen meist nur Modell und VRAM, das Auslastungs-
-feld bleibt leer. Wenn deine GPU nichts liefert, schalte die Abfrage unter
-**Setup → Telemetrie** ab, das spart eine teure Abfrage alle fünf Sekunden.
+**GPU-Temperatur und Lüfterdrehzahl liefern nur NVIDIA-Karten.** Auslastung und
+Videospeicher funktionieren bei AMD, Intel und NVIDIA gleich gut, weil sie aus den
+Windows-GPU-Zählern kommen. Für Temperatur und Lüfter gibt es keinen solchen Zähler:
+NVIDIA gibt sie über `nvidia-smi` heraus, AMD und Intel stellen unter Windows gar
+keine allgemein abfragbare Schnittstelle dafür bereit. Diese beiden Felder bleiben
+dort leer, solange kein Sensorprogramm wie HWiNFO oder LibreHardwareMonitor läuft.
+Der Hub liest solche Programme bewusst nicht aus, das wäre eine zusätzliche
+Abhängigkeit für zwei Zahlen.
+
+**Die GPU-Zähler brauchen Windows 10 ab Version 1709 und einen WDDM-2.0-Treiber.**
+Auf älteren Systemen bleibt die Auslastung leer, und der Hub sagt das im
+Grafik-Bereich auch so.
+
+**Bei mehreren Grafikkarten ist die Zuordnung eine begründete Vermutung.** Die Zähler
+sind nach Adapter-LUID gruppiert, und Windows bietet keinen dokumentierten Weg, eine
+LUID einem Eintrag aus `Win32_VideoController` zuzuordnen. Der Hub paart deshalb die
+Zählergruppe mit dem höchsten belegten Videospeicher mit der Karte mit dem meisten
+VRAM. Bei genau einer Karte, also im Normalfall, ist die Zuordnung exakt. Auf einem
+Notebook mit iGPU und dGPU kann sie in seltenen Fällen vertauscht sein.
 
 **CPU-Temperatur bleibt oft leer.** Windows gibt Sensordaten ohne erhöhte Rechte
 und ohne Zusatztreiber meist nicht heraus.
@@ -271,8 +309,18 @@ Administratorrechte.** Ohne diese schlägt das Entfernen mit einer Fehlermeldung
 ```bash
 npm run dev     # startet mit geöffneten DevTools
 npm run lint    # prüft alle Quelldateien auf Syntaxfehler
+npm test        # prüft die GPU-Auswertung und die PowerShell-Skripte
+npm run check   # lint und test zusammen
 npm run pack    # baut ein entpacktes Verzeichnis statt eines Installers
 ```
+
+Die Tests brauchen kein Windows. Die GPU-Auswertung wird gegen aufgezeichnete
+Zählerdaten geprüft, und wenn eine PowerShell vorhanden ist, werden zusätzlich alle
+erzeugten Skripte von PowerShells eigenem Parser auf Syntaxfehler geprüft und die
+JSON-Ausgabe gegen den Node-seitigen Parser gehalten. Ohne PowerShell wird dieser
+Teil übersprungen; mit `PWSH_PATH` lässt sich ein Binary explizit angeben. Das ist
+wichtig, weil ein Syntaxfehler in einem dieser Skripte unter Windows nicht abstürzt,
+sondern nur ein leeres Ergebnis liefert.
 
 Es gibt bewusst keinen Bundler. Der Renderer besteht aus nativen ES-Modulen, die der
 Browser direkt lädt; eine Änderung ist nach `F5` sichtbar.

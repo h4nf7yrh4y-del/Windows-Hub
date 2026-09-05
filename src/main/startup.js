@@ -31,14 +31,17 @@ function psPath(entry) {
 }
 
 async function readRunKey(entry) {
-  const script = [
-    '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;',
-    '$ErrorActionPreference="SilentlyContinue";',
-    `$k = Get-Item -LiteralPath '${psPath(entry)}';`,
-    'if ($k) { $k.GetValueNames() | ForEach-Object {',
-    '  [PSCustomObject]@{ name=$_; value=[string]$k.GetValue($_) }',
-    '} | ConvertTo-Json -Compress }'
-  ].join('');
+  const script = `
+$ErrorActionPreference = "SilentlyContinue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+$k = Get-Item -LiteralPath '${psPath(entry)}'
+if ($k) {
+  @($k.GetValueNames() | ForEach-Object {
+    [PSCustomObject]@{ name = $_; value = [string]$k.GetValue($_) }
+  }) | ConvertTo-Json -Compress
+}
+`;
 
   try {
     const out = await runPowerShell(script);
@@ -125,11 +128,12 @@ async function remove(id) {
     return { ok: true, name: entry.name, method: 'Papierkorb' };
   }
 
-  // Escape single quotes for the PowerShell literal.
+  // Doubling single quotes is the PowerShell escape inside a literal string.
   const safeName = entry.name.replace(/'/g, "''");
-  await runPowerShell(
-    `Remove-ItemProperty -LiteralPath '${psPath(entry)}' -Name '${safeName}' -Force -ErrorAction Stop`
-  );
+  await runPowerShell(`
+$ErrorActionPreference = "Stop"
+Remove-ItemProperty -LiteralPath '${psPath(entry)}' -Name '${safeName}' -Force
+`);
   return { ok: true, name: entry.name, method: 'Registry' };
 }
 
