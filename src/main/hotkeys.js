@@ -22,6 +22,10 @@ const ACTIONS = {
   toggleOverlays: {
     label: 'Alle Overlays ein- oder ausblenden',
     default: ''
+  },
+  openClaude: {
+    label: 'Claude-Code-Konsole öffnen',
+    default: ''
   }
 };
 

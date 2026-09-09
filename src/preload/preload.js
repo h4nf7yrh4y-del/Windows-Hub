@@ -56,7 +56,16 @@ contextBridge.exposeInMainWorld('hub', {
     detect: (force) => invoke('claude:detect', force),
     pickFolder: () => invoke('claude:pickFolder'),
     open: (cwd, prompt) => invoke('claude:open', cwd, prompt),
-    analyse: (reportPath, question) => invoke('claude:analyse', reportPath, question)
+    analyse: (reportPath, question) => invoke('claude:analyse', reportPath, question),
+    openWindow: () => invoke('claude:openWindow'),
+    options: () => invoke('claude:options'),
+    state: () => invoke('claude:state'),
+    start: (opts) => invoke('claude:start', opts),
+    send: (text) => invoke('claude:send', text),
+    stopSession: () => invoke('claude:stop'),
+    interrupt: () => invoke('claude:interrupt'),
+    windowAction: (action) => invoke('claude:window', action),
+    onEvent: (handler) => on('claude:event', handler)
   },
   hotkeys: {
     list: () => invoke('hotkeys:list'),

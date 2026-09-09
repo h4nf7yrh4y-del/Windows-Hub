@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'" />
+  <title>Claude Code</title>
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/effects.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles/claude.css" />
+</head>
+<body class="claude-body">
+  <div id="fx-layer" aria-hidden="true">
+    <div class="fx-grid"></div>
+    <div class="fx-vignette"></div>
+    <div class="fx-scanlines"></div>
+  </div>
+  <div id="claude-root"></div>
+  <div id="toasts"></div>
+  <script type="module" src="js/claude-console.js"></script>
+</body>
+</html>

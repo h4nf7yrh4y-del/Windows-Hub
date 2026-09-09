@@ -62,7 +62,16 @@ export const api = {
     detect: call(bridge.claude.detect),
     pickFolder: call(bridge.claude.pickFolder),
     open: call(bridge.claude.open),
-    analyse: call(bridge.claude.analyse)
+    analyse: call(bridge.claude.analyse),
+    openWindow: call(bridge.claude.openWindow),
+    options: call(bridge.claude.options),
+    state: call(bridge.claude.state),
+    start: call(bridge.claude.start),
+    send: call(bridge.claude.send),
+    stopSession: call(bridge.claude.stopSession),
+    interrupt: call(bridge.claude.interrupt),
+    windowAction: call(bridge.claude.windowAction),
+    onEvent: bridge.claude.onEvent
   },
   hotkeys: {
     list: call(bridge.hotkeys.list),

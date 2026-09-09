@@ -17,6 +17,7 @@ const display = require('./display');
 const winfeatures = require('./winfeatures');
 const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
+const claudesession = require('./claudesession');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -90,7 +91,7 @@ function sanitizeProfile(raw) {
   };
 }
 
-function registerIpc({ getWindow, applyAutostart, revealWindow }) {
+function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow }) {
   const send = (channel, payload) => {
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -428,6 +429,33 @@ function registerIpc({ getWindow, applyAutostart, revealWindow }) {
   ipcMain.handle('claude:open', wrap(async (cwd, prompt) => claudecode.openTerminal(cwd, prompt), 'claude:open'));
   ipcMain.handle('claude:analyse', wrap(async (reportPath, question) =>
     claudecode.analyse(reportPath, question), 'claude:analyse'));
+
+  /* -------------------------------------------------------- Claude console */
+
+  ipcMain.handle('claude:openWindow', wrap(async () => {
+    if (typeof openClaudeWindow !== 'function') throw new Error('Fenster nicht verfügbar');
+    openClaudeWindow();
+    return { ok: true };
+  }, 'claude:openWindow'));
+
+  ipcMain.handle('claude:options', wrap(async () => claudesession.options(), 'claude:options'));
+  ipcMain.handle('claude:state', wrap(async () => claudesession.state(), 'claude:state'));
+  ipcMain.handle('claude:start', wrap(async (opts) => claudesession.start(opts || {}), 'claude:start'));
+  ipcMain.handle('claude:send', wrap(async (text) => claudesession.send(text), 'claude:send'));
+  ipcMain.handle('claude:stop', wrap(async () => claudesession.stop(), 'claude:stop'));
+  ipcMain.handle('claude:interrupt', wrap(async () => claudesession.interrupt(), 'claude:interrupt'));
+
+  // The console runs in its own window and needs the frame controls itself.
+  ipcMain.handle('claude:window', wrap(async (action) => {
+    const win = BrowserWindow.getFocusedWindow()
+      || BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('claude.html'));
+    if (!win) throw new Error('Fenster nicht gefunden');
+    if (action === 'minimize') win.minimize();
+    else if (action === 'close') win.close();
+    else if (action === 'maximize') { if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
+    else throw new Error(`Unbekannte Aktion: ${action}`);
+    return { ok: true };
+  }, 'claude:window'));
 
   /* ----------------------------------------------------------------- shell */
 

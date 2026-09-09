@@ -1,0 +1,318 @@
+/* =============================================================
+   Claude Code console window
+   ============================================================= */
+
+.claude-body { overflow: hidden; }
+
+#claude-root {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-rows: 46px auto 1fr auto;
+  height: 100vh;
+}
+
+/* ------------------------------------------------------------------ head */
+
+.cc-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: linear-gradient(180deg, rgba(9, 16, 27, 0.92), rgba(9, 16, 27, 0.6));
+  -webkit-app-region: drag;
+}
+
+.cc-head button,
+.cc-head .no-drag { -webkit-app-region: no-drag; }
+
+.cc-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+.cc-brand .mark { color: var(--accent); text-shadow: 0 0 14px var(--accent-glow); }
+
+.cc-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.cc-meta b { color: var(--text-dim); font-weight: 500; }
+
+.cc-controls { display: flex; gap: 2px; }
+
+/* ----------------------------------------------------------------- setup */
+
+.cc-setup {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.cc-setup-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+@media (max-width: 760px) {
+  .cc-setup-grid { grid-template-columns: 1fr; }
+}
+
+.cc-mode-note {
+  margin-top: 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+  padding-left: 10px;
+  border-left: 2px solid var(--hairline);
+}
+.cc-mode-note.danger { color: var(--danger); border-left-color: var(--danger); }
+
+/* -------------------------------------------------------------- messages */
+
+.cc-stream {
+  overflow-y: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-behavior: smooth;
+}
+
+.cc-msg {
+  max-width: 88%;
+  padding: 11px 14px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  animation: rise-in 260ms var(--ease-out) both;
+}
+
+.cc-msg.user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid var(--accent-line);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+.cc-msg.assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 2px solid var(--accent-2);
+  max-width: 94%;
+}
+
+.cc-msg.system {
+  align-self: center;
+  max-width: 100%;
+  padding: 5px 12px;
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cc-msg.system.error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+
+/* The cursor that follows streaming text. */
+.cc-caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: caret-blink 1s steps(2) infinite;
+}
+@keyframes caret-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+/* ------------------------------------------------------------------ tools */
+
+.cc-tool {
+  align-self: flex-start;
+  max-width: 94%;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.25);
+  animation: rise-in 240ms var(--ease-out) both;
+}
+
+.cc-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.cc-tool-head:hover { background: rgba(255, 255, 255, 0.03); }
+
+.cc-tool-name {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-3);
+}
+
+.cc-tool-summary {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.cc-tool-state {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+  animation: pulse 1.4s var(--ease-in-out) infinite;
+}
+.cc-tool.done .cc-tool-state { background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: none; }
+.cc-tool.failed .cc-tool-state { background: var(--danger); box-shadow: 0 0 8px var(--danger); animation: none; }
+.cc-tool.failed { border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+
+.cc-tool-body {
+  padding: 0 12px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow: auto;
+  user-select: text;
+}
+
+.cc-tool-body .cc-tool-label {
+  display: block;
+  margin: 8px 0 4px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--text-faint);
+}
+
+/* ------------------------------------------------------------------ input */
+
+.cc-input-bar {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--hairline);
+  background: rgba(9, 16, 27, 0.7);
+}
+
+.cc-input {
+  flex: 1;
+  min-height: 42px;
+  max-height: 180px;
+  padding: 11px 13px;
+  resize: none;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--hairline);
+  color: var(--text);
+  outline: none;
+  user-select: text;
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.cc-input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
+.cc-input:disabled { opacity: 0.5; }
+
+.cc-hint {
+  padding: 0 16px 10px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.cc-busy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  align-self: flex-start;
+  padding: 8px 13px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Three dots that fill in turn while a turn is running. */
+.cc-dots { display: inline-flex; gap: 4px; }
+.cc-dots i {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: cc-dot 1.2s var(--ease-in-out) infinite;
+}
+.cc-dots i:nth-child(2) { animation-delay: 0.18s; }
+.cc-dots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes cc-dot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  40%      { opacity: 1;    transform: translateY(-3px); }
+}
+
+.cc-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--text-faint);
+  max-width: 44ch;
+  line-height: 1.7;
+  font-size: 13px;
+}
+.cc-empty .cc-empty-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+/* A running session fixes the settings, so the panel folds to just its
+   controls and the conversation gets the space. */
+.cc-setup.collapsed .cc-setup-grid,
+.cc-setup.collapsed .cc-mode-note { display: none; }
+.cc-setup.collapsed { padding: 10px 18px; }
+
+.cc-status {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  min-width: 74px;
+  opacity: 0.85;
+}

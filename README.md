@@ -41,8 +41,11 @@ Oberfläche. Ein Knopf schreibt daraus einen Diagnosebericht mit Versionen, Hard
 dem Ergebnis aller Plattform-Abfragen und der Konfiguration, aus der persönliche Pfade
 und Hintergrundbilder entfernt sind.
 
-**Claude Code.** Erkennt die installierte Befehlszeile, öffnet sie in einem gewählten
-Ordner und kann den Diagnosebericht auswerten lassen.
+**Claude-Code-Konsole.** Ein eigenes Fenster mit laufender Sitzung: Ordner, Modell und
+Berechtigungen einstellen, Nachrichten schicken, Antworten im Zeichenfluss mitlesen.
+Jeder Werkzeugaufruf erscheint als eigene Karte mit Befehl und Ergebnis, die laufenden
+Kosten stehen in der Kopfzeile. Daneben weiterhin: Erkennung der Befehlszeile, Öffnen
+in einem Terminal und Auswertung des Diagnoseberichts.
 
 **Globale Tastenkürzel.** Ein Kürzel holt den Hub aus jedem Programm heraus nach
 vorne, ein zweites blendet alle Overlays ein und aus. Beide sind frei belegbar.
@@ -163,7 +166,7 @@ Innerhalb des Hub-Fensters:
 | Taste | Wirkung |
 |---|---|
 | `F11` | Vollbild umschalten |
-| `Alt` + `1` … `7` | Direkt zu Hub, System, Tasks, Files, Overlay, Library, Setup |
+| `Alt` + `1` … `9` | Direkt zu Hub, System, Tasks, Files, Overlay, Windows, Claude, Library, Setup |
 | `F5` | Oberfläche neu laden |
 | `Esc` | Offenen Dialog schließen |
 
@@ -231,7 +234,8 @@ src/main/        Hauptprozess: Fenster, IPC, OS-Zugriffe
   hotkeys.js     Globale Tastenkürzel mit Prüfung und Rückfall
   logger.js      Rotierende Logdatei mit Kopie der letzten Zeilen im Speicher
   diagnostics.js Diagnosebericht mit entfernten persönlichen Daten
-  claudecode.js  Anbindung an die Claude-Code-Befehlszeile
+  claudecode.js  Erkennung der Claude-Code-Befehlszeile und einmalige Aufrufe
+  claudesession.js Laufende Sitzung über das Streaming-JSON-Protokoll
   display.js     Monitore: Helligkeit, Auflösung, Hauptbildschirm
   winfeatures.js Katalog der Windows-Einstellungen und -Werkzeuge
   ps/            C#-Hilfsklasse für die Win32-Aufrufe der Bildschirmsteuerung
@@ -243,6 +247,7 @@ src/preload/     Die einzige Brücke zwischen Renderer und System
 src/renderer/    Oberfläche, reines ES-Modul-JavaScript ohne Build-Schritt
   index.html     Hauptfenster
   overlay.html   Ein Floating-Widget, Typ kommt aus der eigenen URL
+  claude.html    Fenster der Claude-Code-Konsole
 ```
 
 Zwei Entscheidungen, die den Rest erklären:
@@ -316,12 +321,23 @@ raus, von Programmpfaden bleibt nur der Dateiname. Der Bericht ist zum Weitergeb
 gedacht, er darf also weder deine Ordnerstruktur noch ein Megabyte Bildmaterial
 enthalten.
 
-**Claude Code läuft als eigener Prozess, nicht eingebettet.** Ein echtes Terminal im
-Fenster bräuchte ein Pseudo-Terminal, unter Windows also ein natives Modul, und damit
-einen Build, der je Electron-Version und Architektur neu übersetzt werden muss. Für
-den Zugewinn wäre das ein schlechter Tausch. Die Analyse läuft über `claude -p` und
-verbraucht das Kontingent des angemeldeten Kontos, wird deshalb nie von selbst
-gestartet.
+**Die Konsole spricht das Protokoll, sie emuliert kein Terminal.**
+`claude --print --input-format stream-json --output-format stream-json` hält einen
+Prozess offen, der Nachrichten als JSON-Zeilen auf der Standardeingabe liest und
+Ereignisse als JSON-Zeilen ausgibt. Das ist eine vollwertige programmierbare
+Schnittstelle, weshalb kein Pseudo-Terminal nötig ist und damit auch kein natives
+Modul, das je Electron-Version und Architektur neu übersetzt werden müsste. Die
+Konsole ist ein echter Client dieses Protokolls, kein Abgreifen einer Terminalausgabe.
+
+**Berechtigungen sind die sicherheitskritische Stelle.** Im Fenster kann nichts eine
+Rückfrage beantworten, deshalb läuft die Sitzung mit `--permission-prompts none`:
+alles, was nachfragen würde, wird abgelehnt. Was Claude darf, entscheidet allein der
+gewählte Modus, und die drei Beschreibungen im Fenster sind gegen das tatsächliche
+Verhalten geprüft. „Nur lesen" erlaubt auch suchende Befehle, nicht nur das Lesen von
+Dateien; das steht so dort, weil sonst beim ersten Bash-Aufruf das Vertrauen weg wäre.
+
+**Jede Sitzung verbraucht das Kontingent des angemeldeten Kontos.** Deshalb läuft
+nichts von selbst, und die laufenden Kosten stehen dauerhaft in der Kopfzeile.
 
 **Der Laufstatus fragt nur Prozessnamen ab, nicht die volle Prozessliste.** Die
 Liste im Task-Manager holt Arbeitsspeicher, Prozessorzeit und Fenstertitel für jeden

@@ -222,8 +222,13 @@ export function createSettingsView() {
 
     claudeActions.append(
       el('button', {
+        class: 'btn primary sm',
+        text: 'Konsole öffnen',
+        onClick: () => api.claude.openWindow().catch((err) => notifyError(err.message))
+      }),
+      el('button', {
         class: 'btn subtle sm',
-        text: 'In Ordner öffnen',
+        text: 'In Terminal öffnen',
         onClick: async () => {
           try {
             const dir = await api.claude.pickFolder();
@@ -234,7 +239,7 @@ export function createSettingsView() {
         }
       }),
       el('button', {
-        class: 'btn primary sm',
+        class: 'btn subtle sm',
         text: 'Systembericht analysieren',
         onClick: () => analyseReport()
       }),
@@ -500,9 +505,9 @@ export function createSettingsView() {
         claudeStatus,
         claudeActions,
         el('div', { class: 'setting-hint', style: { marginTop: '14px', lineHeight: '1.65' },
-          text: 'Der Hub bettet kein Terminal ein, sondern nutzt die installierte Claude-Code-Befehlszeile. '
-            + '„Systembericht analysieren" erstellt einen Diagnosebericht und lässt ihn auswerten. '
-            + 'Das läuft über deine eigene Anmeldung und verbraucht dein Kontingent.' })
+          text: 'Die Konsole ist ein eigenes Fenster mit laufender Sitzung: Nachrichten, Antworten im Zeichenfluss, '
+            + 'sichtbare Werkzeugaufrufe und laufende Kosten. „In Terminal öffnen" startet stattdessen die gewohnte '
+            + 'Befehlszeile. Beides läuft über deine eigene Anmeldung und verbraucht dein Kontingent.' })
       ])
     ])
   ]);

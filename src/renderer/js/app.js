@@ -61,6 +61,14 @@ const VIEWS = [
     keep: false
   },
   {
+    id: 'claude',
+    label: 'Claude',
+    icon: ['M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z'],
+    // Opens its own window instead of switching the view: the console is
+    // something you keep beside other work, not a page in a launcher.
+    opens: () => api.claude.openWindow()
+  },
+  {
     id: 'library',
     label: 'Library',
     icon: ['M6 4h12v16H6z', 'M9 4v16'],
@@ -86,6 +94,13 @@ let railIndicator = null;
 function showView(id) {
   const def = VIEWS.find((v) => v.id === id);
   if (!def) return;
+
+  // Entries that open a window are actions, not destinations; the current
+  // view stays where it is.
+  if (typeof def.opens === 'function') {
+    def.opens().catch((err) => notifyError(err.message));
+    return;
+  }
 
   // Direction comes from the rail order, so a view slides in from the side
   // it actually sits on rather than always rising from below.

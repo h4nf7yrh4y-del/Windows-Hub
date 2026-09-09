@@ -10,6 +10,7 @@ const metrics = require('./metrics');
 const { registerIpc } = require('./ipc');
 const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
+const claudesession = require('./claudesession');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -142,6 +143,53 @@ function createWindow() {
   return mainWindow;
 }
 
+let claudeWindow = null;
+
+/**
+ * The Claude console gets its own window rather than a view in the hub: it is
+ * something you keep open beside other work, resize, and move to a second
+ * screen, none of which a panel inside a fullscreen launcher allows.
+ */
+function createClaudeWindow() {
+  if (claudeWindow && !claudeWindow.isDestroyed()) {
+    if (claudeWindow.isMinimized()) claudeWindow.restore();
+    claudeWindow.show();
+    claudeWindow.focus();
+    return claudeWindow;
+  }
+
+  const display = screen.getPrimaryDisplay().workAreaSize;
+  claudeWindow = new BrowserWindow({
+    width: Math.min(1080, display.width - 80),
+    height: Math.min(820, display.height - 80),
+    minWidth: 620,
+    minHeight: 480,
+    show: false,
+    frame: false,
+    backgroundColor: '#05070a',
+    title: 'Claude Code',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: false,
+      backgroundThrottling: false
+    }
+  });
+
+  claudeWindow.removeMenu();
+  claudeWindow.loadURL('hub://app/claude.html');
+  claudeWindow.once('ready-to-show', () => { claudeWindow.show(); claudeWindow.focus(); });
+  claudeWindow.on('closed', () => { claudeWindow = null; });
+  claudeWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  claudeWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+
+  log.info('Claude-Konsole geöffnet');
+  return claudeWindow;
+}
+
 function applyAutostart(enabled) {
   if (!IS_WIN) return { ok: false, reason: 'Autostart is Windows-only' };
   try {
@@ -213,7 +261,8 @@ function registerShortcuts() {
 
   const results = hotkeys.init({
     toggleHub: toggleWindow,
-    toggleOverlays
+    toggleOverlays,
+    openClaude: () => createClaudeWindow()
   });
   for (const result of results) {
     if (!result.ok) console.warn(`[hotkeys] ${result.action}: ${result.reason}`);
@@ -234,7 +283,12 @@ app.on('ready', () => {
 
   registerRendererProtocol();
   createWindow();
-  registerIpc({ getWindow: () => mainWindow, applyAutostart, revealWindow });
+  registerIpc({
+    getWindow: () => mainWindow,
+    applyAutostart,
+    revealWindow,
+    openClaudeWindow: createClaudeWindow
+  });
 
   overlays.init({
     preload: path.join(__dirname, '..', 'preload', 'preload.js'),
@@ -255,6 +309,13 @@ app.on('ready', () => {
   });
 
   overlays.restore();
+
+  claudesession.setEmitter((event) => {
+    for (const win of [claudeWindow, mainWindow]) {
+      if (win && !win.isDestroyed()) win.webContents.send('claude:event', event);
+    }
+  });
+
   registerShortcuts();
 
   // Keep the stored autostart flag and the real login item in sync on boot.
@@ -279,6 +340,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   overlays.closeAll();
+  try { claudesession.stop(); } catch (_) { /* nothing running */ }
 });
 
 app.on('will-quit', () => {
