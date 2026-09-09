@@ -43,6 +43,21 @@ contextBridge.exposeInMainWorld('hub', {
     action: (id) => invoke('features:action', id),
     restartExplorer: () => invoke('features:restartExplorer')
   },
+  diagnostics: {
+    build: () => invoke('diag:build'),
+    save: () => invoke('diag:save'),
+    export: () => invoke('diag:export'),
+    openLogs: () => invoke('diag:openLogs'),
+    logInfo: () => invoke('diag:logInfo'),
+    logTail: (lines) => invoke('diag:logTail', lines),
+    report: (entry) => invoke('diag:report', entry)
+  },
+  claude: {
+    detect: (force) => invoke('claude:detect', force),
+    pickFolder: () => invoke('claude:pickFolder'),
+    open: (cwd, prompt) => invoke('claude:open', cwd, prompt),
+    analyse: (reportPath, question) => invoke('claude:analyse', reportPath, question)
+  },
   hotkeys: {
     list: () => invoke('hotkeys:list'),
     set: (action, accelerator) => invoke('hotkeys:set', action, accelerator)

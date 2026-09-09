@@ -4,11 +4,13 @@ const path = require('path');
 const { app, BrowserWindow, globalShortcut, screen, protocol, net } = require('electron');
 const url = require('url');
 
+const logger = require('./logger');
 const store = require('./store');
 const metrics = require('./metrics');
 const { registerIpc } = require('./ipc');
 const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
+const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
 const IS_WIN = process.platform === 'win32';
@@ -112,6 +114,27 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
+  // Without this a crashed renderer leaves a blank window and the only way
+  // out is the emergency exit. Reload once, and stop if it keeps dying so a
+  // crash loop does not spin forever.
+  let reloadAttempts = 0;
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    log.error(`Renderer beendet: ${details.reason} (exitCode ${details.exitCode})`);
+    if (details.reason === 'clean-exit' || mainWindow.isDestroyed()) return;
+    reloadAttempts += 1;
+    if (reloadAttempts > 3) {
+      log.error('Renderer stürzt wiederholt ab, kein weiterer Neuladeversuch');
+      return;
+    }
+    log.warn(`Oberfläche wird neu geladen (Versuch ${reloadAttempts})`);
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+    }, 600);
+  });
+
+  mainWindow.webContents.on('unresponsive', () => log.warn('Oberfläche reagiert nicht'));
+  mainWindow.webContents.on('responsive', () => log.info('Oberfläche reagiert wieder'));
+
   // Never let the renderer navigate away or spawn extra windows.
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -200,6 +223,12 @@ function registerShortcuts() {
 app.on('ready', () => {
   if (!gotLock) return;
 
+  logger.init({ dir: path.join(app.getPath('userData'), 'logs'), level: IS_DEV ? 'debug' : 'info' });
+  logger.logStartup({
+    Autostart: process.argv.includes('--autostart') ? 'ja' : 'nein',
+    Konfiguration: store.configPath()
+  });
+
   store.load();
   const settings = store.getSettings();
 
@@ -235,6 +264,14 @@ app.on('ready', () => {
   }
 });
 
+process.on('uncaughtException', (err) => {
+  log.error('Unbehandelte Ausnahme im Hauptprozess:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  log.error('Unbehandelte Zurückweisung im Hauptprozess:', reason);
+});
+
 app.on('window-all-closed', () => {
   metrics.stop();
   app.quit();
@@ -245,6 +282,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  log.info('Hub wird beendet');
   hotkeys.dispose();
   globalShortcut.unregisterAll();
   metrics.stop();

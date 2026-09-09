@@ -48,6 +48,22 @@ export const api = {
     action: call(bridge.features.action),
     restartExplorer: call(bridge.features.restartExplorer)
   },
+  diagnostics: {
+    build: call(bridge.diagnostics.build),
+    save: call(bridge.diagnostics.save),
+    export: call(bridge.diagnostics.export),
+    openLogs: call(bridge.diagnostics.openLogs),
+    logInfo: call(bridge.diagnostics.logInfo),
+    logTail: call(bridge.diagnostics.logTail),
+    // Fire and forget: reporting an error must never raise another one.
+    report: (entry) => bridge.diagnostics.report(entry).catch(() => {})
+  },
+  claude: {
+    detect: call(bridge.claude.detect),
+    pickFolder: call(bridge.claude.pickFolder),
+    open: call(bridge.claude.open),
+    analyse: call(bridge.claude.analyse)
+  },
   hotkeys: {
     list: call(bridge.hotkeys.list),
     set: call(bridge.hotkeys.set)

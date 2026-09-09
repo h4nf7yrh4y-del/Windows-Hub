@@ -2,7 +2,7 @@ import { el, clear, bytes } from '../util.js';
 import { toAccelerator, formatAccelerator } from '../keys.js';
 import { api } from '../api.js';
 import { state, saveSettings, applyTheme } from '../state.js';
-import { confirmDialog } from '../widgets/modal.js';
+import { confirmDialog, openModal } from '../widgets/modal.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 
 const PRESET_ACCENTS = ['#00f0ff', '#ff2e88', '#ffb400', '#26e08a', '#8b5cf6', '#ff6b35', '#4d9fff', '#ff0044'];
@@ -130,6 +130,9 @@ export function createSettingsView() {
   /* ------------------------------------------------------------- diagnostics */
 
   const diag = el('div', { class: 'kv-list' });
+  const logLine = el('div', { class: 'setting-hint', text: 'Protokoll wird gelesen …' });
+  let lastReportPath = null;
+
   function renderDiag() {
     clear(diag);
     const s = state.staticInfo || {};
@@ -152,6 +155,142 @@ export function createSettingsView() {
     }
   }
   renderDiag();
+
+  async function refreshLogInfo() {
+    try {
+      const paths = await api.diagnostics.logInfo();
+      const files = paths.files || [];
+      const total = files.reduce((sum, f) => sum + f.size, 0);
+      logLine.textContent = paths.disabled
+        ? 'Protokoll konnte nicht geschrieben werden.'
+        : `${files.length} Datei${files.length === 1 ? '' : 'en'} · ${bytes(total)} · ${paths.dir}`;
+    } catch (err) {
+      logLine.textContent = err.message;
+    }
+  }
+  refreshLogInfo();
+
+  async function showLogTail() {
+    try {
+      const data = await api.diagnostics.logTail(300);
+      const pre = el('pre', {
+        class: 'log-view',
+        text: (data.lines || []).join('\n') || '(leer)'
+      });
+      openModal({
+        title: 'Protokoll',
+        width: '900px',
+        render: () => pre,
+        actions: (close) => [
+          el('button', { class: 'btn subtle', text: 'Ordner öffnen', onClick: () => api.diagnostics.openLogs().catch((e) => notifyError(e.message)) }),
+          el('button', { class: 'btn primary', text: 'Schließen', onClick: () => close() })
+        ]
+      });
+      // Newest lines are the interesting ones.
+      requestAnimationFrame(() => { pre.scrollTop = pre.scrollHeight; });
+    } catch (err) { notifyError(err.message); }
+  }
+
+  /* ---------------------------------------------------------- Claude Code */
+
+  const claudeStatus = el('div', { class: 'setting-hint', text: 'Suche Claude Code …' });
+  const claudeActions = el('div', { class: 'row gap-8', style: { flexWrap: 'wrap', marginTop: '12px' } });
+  let claudeInfo = null;
+
+  async function renderClaude(force = false) {
+    clear(claudeActions);
+    claudeStatus.textContent = 'Suche Claude Code …';
+    try {
+      claudeInfo = await api.claude.detect(force);
+    } catch (err) {
+      claudeStatus.textContent = err.message;
+      return;
+    }
+
+    if (!claudeInfo.installed) {
+      claudeStatus.textContent = claudeInfo.hint || 'Claude Code wurde nicht gefunden.';
+      claudeActions.appendChild(el('button', { class: 'btn subtle sm', text: 'Erneut suchen', onClick: () => renderClaude(true) }));
+      claudeActions.appendChild(el('button', {
+        class: 'btn subtle sm',
+        text: 'Installationsanleitung',
+        onClick: () => api.shell.openExternal('https://code.claude.com/docs').catch((e) => notifyError(e.message))
+      }));
+      return;
+    }
+
+    claudeStatus.textContent = `Gefunden: ${claudeInfo.version}`;
+
+    claudeActions.append(
+      el('button', {
+        class: 'btn subtle sm',
+        text: 'In Ordner öffnen',
+        onClick: async () => {
+          try {
+            const dir = await api.claude.pickFolder();
+            if (!dir) return;
+            await api.claude.open(dir);
+            notifyOk('Claude Code gestartet');
+          } catch (err) { notifyError(err.message); }
+        }
+      }),
+      el('button', {
+        class: 'btn primary sm',
+        text: 'Systembericht analysieren',
+        onClick: () => analyseReport()
+      }),
+      el('button', { class: 'btn subtle sm', text: 'Erneut suchen', onClick: () => renderClaude(true) })
+    );
+  }
+
+  /**
+   * Writes a fresh report, then hands it to Claude Code. This spends the
+   * user's own Claude quota, so it is never triggered automatically and the
+   * confirmation says so plainly.
+   */
+  async function analyseReport() {
+    const sure = await confirmDialog({
+      title: 'Systembericht analysieren',
+      message: 'Der Hub schreibt einen Diagnosebericht und lässt ihn von Claude Code auswerten. '
+        + 'Das läuft über deine eigene Claude-Anmeldung und verbraucht dein Kontingent. Die Auswertung dauert meist unter einer Minute.',
+      confirmLabel: 'Analysieren'
+    });
+    if (!sure) return;
+
+    const body = el('div', { class: 'stack gap-12' }, [
+      el('div', { class: 'row gap-8' }, [el('span', { class: 'pulse-dot' }), el('span', { text: 'Bericht wird erstellt …' })])
+    ]);
+    const { close } = openModal({
+      title: 'Analyse läuft',
+      width: '820px',
+      render: () => body,
+      actions: (closeFn) => [el('button', { class: 'btn subtle', text: 'Schließen', onClick: () => closeFn() })]
+    });
+
+    try {
+      const saved = await api.diagnostics.save();
+      lastReportPath = saved.path;
+      clear(body).appendChild(el('div', { class: 'row gap-8' }, [
+        el('span', { class: 'pulse-dot' }),
+        el('span', { text: 'Claude Code wertet den Bericht aus. Das kann bis zu einer Minute dauern …' })
+      ]));
+
+      const result = await api.claude.analyse(saved.path, null);
+      clear(body).append(
+        el('div', { class: 'setting-hint', text: `Antwort nach ${result.seconds} Sekunden · Bericht: ${saved.path}` }),
+        el('pre', { class: 'log-view answer', text: result.answer })
+      );
+    } catch (err) {
+      clear(body).append(
+        el('div', { style: { color: 'var(--danger)', lineHeight: '1.6' }, text: err.message }),
+        lastReportPath
+          ? el('div', { class: 'setting-hint', style: { marginTop: '10px' }, text: `Der Bericht liegt trotzdem unter: ${lastReportPath}` })
+          : null
+      );
+    }
+    void close;
+  }
+
+  renderClaude();
 
   /* -------------------------------------------------------------- hotkeys */
 
@@ -320,7 +459,51 @@ export function createSettingsView() {
         ])
       ]),
 
-      panel('Diagnose', [diag])
+      panel('Diagnose', [
+        diag,
+        el('div', { style: { height: '14px' } }),
+        logLine,
+        el('div', { class: 'row gap-8', style: { flexWrap: 'wrap', marginTop: '12px' } }, [
+          el('button', { class: 'btn subtle sm', text: 'Protokoll anzeigen', onClick: showLogTail }),
+          el('button', {
+            class: 'btn subtle sm',
+            text: 'Protokollordner',
+            onClick: () => api.diagnostics.openLogs().catch((err) => notifyError(err.message))
+          }),
+          el('button', {
+            class: 'btn primary sm',
+            text: 'Bericht exportieren',
+            onClick: async (event) => {
+              const button = event.currentTarget;
+              button.setAttribute('aria-disabled', 'true');
+              try {
+                const result = await api.diagnostics.export();
+                if (result.canceled) return;
+                lastReportPath = result.path;
+                notifyOk(`Bericht gespeichert (${bytes(result.bytes)})`);
+              } catch (err) {
+                notifyError(err.message);
+              } finally {
+                button.removeAttribute('aria-disabled');
+                refreshLogInfo();
+              }
+            }
+          })
+        ]),
+        el('div', { class: 'setting-hint', style: { marginTop: '12px', lineHeight: '1.65' },
+          text: 'Der Bericht enthält Versionen, Hardware, das Ergebnis aller Plattform-Abfragen, '
+            + 'die Konfiguration ohne persönliche Pfade und Hintergrundbilder sowie die letzten Protokollzeilen. '
+            + 'Genau das, was zur Fehlersuche gebraucht wird.' })
+      ]),
+
+      panel('Claude Code', [
+        claudeStatus,
+        claudeActions,
+        el('div', { class: 'setting-hint', style: { marginTop: '14px', lineHeight: '1.65' },
+          text: 'Der Hub bettet kein Terminal ein, sondern nutzt die installierte Claude-Code-Befehlszeile. '
+            + '„Systembericht analysieren" erstellt einen Diagnosebericht und lässt ihn auswerten. '
+            + 'Das läuft über deine eigene Anmeldung und verbraucht dein Kontingent.' })
+      ])
     ])
   ]);
 

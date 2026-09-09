@@ -58,13 +58,57 @@ function deepMerge(base, override) {
   return out;
 }
 
+const SCHEMA_VERSION = 1;
+
+/**
+ * Brings an older configuration up to the current shape.
+ *
+ * Nothing has needed migrating yet, but the hook has to exist before the
+ * format changes rather than after: without it an old file either breaks
+ * silently or loses the fields a new version does not recognise. Each step
+ * is applied in order and is responsible for one version bump.
+ */
+const MIGRATIONS = [
+  // Example shape for the next change:
+  // { to: 2, apply(config) { ...; return config; } }
+];
+
+function migrate(config) {
+  let current = Number(config.version) || 1;
+  if (current === SCHEMA_VERSION) return { config, migrated: false, from: current };
+
+  if (current > SCHEMA_VERSION) {
+    // Written by a newer build. Merging defaults keeps it usable rather than
+    // discarding fields this version simply does not know about.
+    console.warn(`[store] Konfiguration stammt aus Version ${current}, diese Version kennt ${SCHEMA_VERSION}`);
+    return { config, migrated: false, from: current, newer: true };
+  }
+
+  for (const step of MIGRATIONS) {
+    if (step.to > current && step.to <= SCHEMA_VERSION) {
+      config = step.apply(config) || config;
+      current = step.to;
+    }
+  }
+  config.version = SCHEMA_VERSION;
+  return { config, migrated: true, from: Number(config.version) || 1 };
+}
+
 function load() {
   if (cache) return cache;
   const file = resolvePath();
   try {
     if (fs.existsSync(file)) {
       const raw = fs.readFileSync(file, 'utf8');
-      cache = deepMerge(DEFAULTS, JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      const result = migrate(parsed);
+      cache = deepMerge(DEFAULTS, result.config);
+      if (result.migrated) {
+        // Keep the original around; a migration that turns out wrong should
+        // not be the reason a user loses their profiles.
+        try { fs.copyFileSync(file, `${file}.v${result.from}-backup`); } catch (_) { /* best effort */ }
+        save();
+      }
     } else {
       cache = JSON.parse(JSON.stringify(DEFAULTS));
     }
@@ -111,6 +155,8 @@ function save({ defer = false } = {}) {
 
 module.exports = {
   DEFAULTS,
+  SCHEMA_VERSION,
+  migrate,
   get state() { return load(); },
   load,
   save,

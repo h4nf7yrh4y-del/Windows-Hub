@@ -35,6 +35,15 @@ Administrator-Abfrage bei den drei Einträgen, die den ganzen Rechner betreffen.
 Die restlichen elf sind Werkzeuge wie der Geräte-Manager, die man nicht einschalten,
 sondern nur starten kann.
 
+**Protokoll und Diagnose.** Alles Nennenswerte landet in einer rotierenden Logdatei:
+Startumgebung, fehlgeschlagene Systemaufrufe samt betroffenem Kanal und Fehler aus der
+Oberfläche. Ein Knopf schreibt daraus einen Diagnosebericht mit Versionen, Hardware,
+dem Ergebnis aller Plattform-Abfragen und der Konfiguration, aus der persönliche Pfade
+und Hintergrundbilder entfernt sind.
+
+**Claude Code.** Erkennt die installierte Befehlszeile, öffnet sie in einem gewählten
+Ordner und kann den Diagnosebericht auswerten lassen.
+
 **Globale Tastenkürzel.** Ein Kürzel holt den Hub aus jedem Programm heraus nach
 vorne, ein zweites blendet alle Overlays ein und aus. Beide sind frei belegbar.
 
@@ -220,6 +229,9 @@ src/main/        Hauptprozess: Fenster, IPC, OS-Zugriffe
   launcher.js    Startsequenzen für Profile
   gpu.js         Herstellerneutrale GPU-Telemetrie über die Windows-Zähler
   hotkeys.js     Globale Tastenkürzel mit Prüfung und Rückfall
+  logger.js      Rotierende Logdatei mit Kopie der letzten Zeilen im Speicher
+  diagnostics.js Diagnosebericht mit entfernten persönlichen Daten
+  claudecode.js  Anbindung an die Claude-Code-Befehlszeile
   display.js     Monitore: Helligkeit, Auflösung, Hauptbildschirm
   winfeatures.js Katalog der Windows-Einstellungen und -Werkzeuge
   ps/            C#-Hilfsklasse für die Win32-Aufrufe der Bildschirmsteuerung
@@ -292,6 +304,24 @@ erhöhter Befehl hinter einer Windows-Abfrage. **Der Hub selbst läuft nie mit
 Administratorrechten.** Ein Programm, das mit Windows startet und den ganzen Tag
 erhöhte Rechte hält, ist ein deutlich schlechterer Tausch als eine Rückfrage pro
 Aktion.
+
+**Protokolliert wird synchron und angehängt.** Ein Protokoll, das beim Absturz seine
+letzten Zeilen verliert, verliert genau den Teil, auf den es ankam. Die letzten
+Einträge liegen zusätzlich im Speicher, damit der Diagnosebericht sie mitnehmen kann,
+ohne eine Datei zu lesen, die gerade rotiert.
+
+**Der Diagnosebericht entfernt persönliche Daten, bevor er sie zeigt.** Hintergrund-
+bilder sind eingebettete Bilddaten von teils mehreren hundert Kilobyte und fliegen
+raus, von Programmpfaden bleibt nur der Dateiname. Der Bericht ist zum Weitergeben
+gedacht, er darf also weder deine Ordnerstruktur noch ein Megabyte Bildmaterial
+enthalten.
+
+**Claude Code läuft als eigener Prozess, nicht eingebettet.** Ein echtes Terminal im
+Fenster bräuchte ein Pseudo-Terminal, unter Windows also ein natives Modul, und damit
+einen Build, der je Electron-Version und Architektur neu übersetzt werden muss. Für
+den Zugewinn wäre das ein schlechter Tausch. Die Analyse läuft über `claude -p` und
+verbraucht das Kontingent des angemeldeten Kontos, wird deshalb nie von selbst
+gestartet.
 
 **Der Laufstatus fragt nur Prozessnamen ab, nicht die volle Prozessliste.** Die
 Liste im Task-Manager holt Arbeitsspeicher, Prozessorzeit und Fenstertitel für jeden

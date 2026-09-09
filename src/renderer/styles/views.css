@@ -1269,3 +1269,47 @@
 .feature-hint.warn { color: var(--warn); border-left-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 
 .badge svg { flex: 0 0 auto; }
+
+/* --------------------------------------------------- log and answer views */
+
+.log-view {
+  max-height: 56vh;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.log-view.answer {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ------------------------------------------------ sliding rail indicator */
+
+.rail-indicator {
+  position: absolute;
+  left: 0;
+  width: 2px;
+  height: 0;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 380ms var(--ease-out), height 380ms var(--ease-out), opacity 220ms;
+}
+
+#rail { position: relative; }
+
+/* The per-button marker is replaced by the shared sliding one. */
+.rail-btn::before { display: none; }

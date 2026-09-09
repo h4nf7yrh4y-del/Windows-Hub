@@ -1,4 +1,5 @@
 import { el } from '../util.js';
+import { countTo } from '../motion.js';
 
 const R = 46;
 const CIRC = 2 * Math.PI * R;
@@ -43,7 +44,13 @@ export class Ring {
     this.valueCircle.setAttribute('stroke-dashoffset', String(CIRC * (1 - clamped / 100)));
     const stroke = clamped >= 90 ? 'var(--danger)' : clamped >= 75 ? 'var(--warn)' : 'var(--accent)';
     this.valueCircle.style.stroke = stroke;
-    this.num.textContent = displayText !== undefined ? displayText : `${Math.round(clamped)}`;
+
+    if (displayText !== undefined) {
+      this.num.textContent = displayText;
+      this.num.__countValue = undefined;
+    } else {
+      countTo(this.num, clamped);
+    }
     return this;
   }
 

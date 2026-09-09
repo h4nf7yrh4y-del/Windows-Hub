@@ -13,6 +13,7 @@ import { createOverlaysView } from './views/overlays.js';
 import { createWindowsView } from './views/windows.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
+import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
 
 /* ------------------------------------------------------------------ views */
 
@@ -80,10 +81,17 @@ const VIEWS = [
 
 const mounted = new Map();
 let currentId = null;
+let railIndicator = null;
 
 function showView(id) {
   const def = VIEWS.find((v) => v.id === id);
   if (!def) return;
+
+  // Direction comes from the rail order, so a view slides in from the side
+  // it actually sits on rather than always rising from below.
+  const fromIndex = VIEWS.findIndex((v) => v.id === currentId);
+  const toIndex = VIEWS.findIndex((v) => v.id === id);
+  const direction = fromIndex >= 0 && toIndex < fromIndex ? 'up' : 'down';
 
   const main = $('#main');
   const previous = mounted.get(currentId);
@@ -107,12 +115,18 @@ function showView(id) {
   // restore anything its unmount handler tore down.
   if (!isNew) node.dispatchEvent(new CustomEvent('view:mount'));
 
+  enterView(node, direction);
+
   currentId = id;
   state.activeView = id;
 
+  let activeButton = null;
   document.querySelectorAll('.rail-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.view === id);
+    const isActive = btn.dataset.view === id;
+    btn.classList.toggle('active', isActive);
+    if (isActive) activeButton = btn;
   });
+  if (railIndicator) railIndicator.move(activeButton);
 }
 
 function buildRail() {
@@ -156,18 +170,20 @@ function bindTopbar() {
   const gpuBar = $('#mini-gpu-meter').querySelector('i');
   const gpuWrap = $('#mini-gpu-wrap');
 
+  const asPercent = (v) => `${Math.round(v)}%`;
+
   on('metrics', (sample) => {
     const cpu = sample.cpu ? sample.cpu.total : 0;
     const ram = sample.mem ? sample.mem.percent : 0;
-    cpuValue.textContent = `${cpu.toFixed(0)}%`;
+    countTo(cpuValue, cpu, { format: asPercent });
     cpuBar.style.width = `${cpu}%`;
-    ramValue.textContent = `${ram.toFixed(0)}%`;
+    countTo(ramValue, ram, { format: asPercent });
     ramBar.style.width = `${ram}%`;
 
     const gpu = (sample.slow && sample.slow.gpu || [])[0];
     if (gpu && gpu.load != null) {
       gpuWrap.classList.remove('hidden');
-      gpuValue.textContent = `${Math.round(gpu.load)}%`;
+      countTo(gpuValue, gpu.load, { format: asPercent });
       gpuBar.style.width = `${gpu.load}%`;
     } else {
       gpuWrap.classList.add('hidden');
@@ -220,11 +236,23 @@ function bindShortcuts() {
 /* ------------------------------------------------------------------- init */
 
 async function init() {
+  // Renderer failures are forwarded to the log file; otherwise they exist
+  // only in a devtools console nobody has open on the user's machine.
   window.addEventListener('error', (event) => {
-    console.error(event.error || event.message);
+    const error = event.error || {};
+    console.error(error.message || event.message);
+    api.diagnostics.report({
+      level: 'error',
+      message: error.message || String(event.message),
+      stack: error.stack || `${event.filename}:${event.lineno}:${event.colno}`
+    });
   });
+
   window.addEventListener('unhandledrejection', (event) => {
-    notifyError(event.reason && event.reason.message ? event.reason.message : String(event.reason));
+    const reason = event.reason || {};
+    const message = reason.message ? reason.message : String(event.reason);
+    notifyError(message);
+    api.diagnostics.report({ level: 'error', message, stack: reason.stack || null });
   });
 
   let settings = null;
@@ -251,7 +279,15 @@ async function init() {
   startClock();
   bindShortcuts();
   buildRail();
+  railIndicator = createRailIndicator($('#rail'));
+  bindParallax($('#fx-layer'));
   showView('hub');
+
+  // A window resize moves the rail buttons; the indicator has to follow.
+  window.addEventListener('resize', () => {
+    const active = document.querySelector('.rail-btn.active');
+    if (railIndicator) railIndicator.move(active, { instant: true });
+  });
 }
 
 init().catch((err) => {
