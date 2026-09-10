@@ -64,6 +64,35 @@ const modelSelect = el('select', { class: 'select' });
 const modeSelect = el('select', { class: 'select' });
 const modeNote = el('div', { class: 'cc-mode-note', text: '' });
 
+const resumeSelect = el('select', { class: 'select' }, [
+  el('option', { value: '', text: 'Neue Sitzung' })
+]);
+
+/**
+ * Claude Code keeps the transcripts and can resume any of them by id. What it
+ * cannot do is say which of them came from this window; that list is kept here,
+ * so the ids turn into something recognisable — folder, time, last answer.
+ */
+async function refreshResumeList() {
+  const previous = resumeSelect.value;
+  const cwd = cwdInput.value;
+  let sessions = [];
+  try {
+    ({ sessions } = await api.claude.history(cwd));
+  } catch (_) { /* an empty list is a fine answer */ }
+
+  clear(resumeSelect);
+  resumeSelect.appendChild(el('option', { value: '', text: 'Neue Sitzung' }));
+  for (const entry of sessions) {
+    const when = new Date(entry.updatedAt || entry.startedAt)
+      .toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const label = entry.summary ? `${when} · ${entry.summary.slice(0, 46)}` : `${when} · ${entry.turns || 0} Runden`;
+    resumeSelect.appendChild(el('option', { value: entry.id, text: label, title: entry.id }));
+  }
+  resumeSelect.value = sessions.some((e) => e.id === previous) ? previous : '';
+  resumeSelect.disabled = sessions.length === 0;
+}
+
 const startButton = el('button', { class: 'btn primary', text: 'Sitzung starten' });
 const stopButton = el('button', { class: 'btn danger hidden', text: 'Sitzung beenden' });
 
@@ -79,14 +108,15 @@ const setup = el('div', { class: 'cc-setup' }, [
           onClick: async () => {
             try {
               const dir = await api.claude.pickFolder();
-              if (dir) cwdInput.value = dir;
+              if (dir) { cwdInput.value = dir; refreshResumeList(); }
             } catch (err) { notifyError(err.message); }
           }
         }, [svg(ICON_FOLDER, { width: 13, height: 13 })])
       ])
     ]),
     el('div', { class: 'field' }, [el('label', { text: 'Modell' }), modelSelect]),
-    el('div', { class: 'field' }, [el('label', { text: 'Berechtigungen' }), modeSelect])
+    el('div', { class: 'field' }, [el('label', { text: 'Berechtigungen' }), modeSelect]),
+    el('div', { class: 'field' }, [el('label', { text: 'Fortsetzen' }), resumeSelect])
   ]),
   modeNote,
   el('div', { class: 'row gap-8', style: { marginTop: '14px' } }, [startButton, stopButton])
@@ -294,13 +324,17 @@ startButton.addEventListener('click', async () => {
   startButton.setAttribute('aria-disabled', 'true');
   try {
     clear(stream);
+    const resume = resumeSelect.value || null;
     session = await api.claude.start({
       cwd: cwdInput.value,
       model: modelSelect.value,
-      permissionMode: modeSelect.value
+      permissionMode: modeSelect.value,
+      resume
     });
     renderSessionState();
-    addSystem('Sitzung wird gestartet …');
+    addSystem(resume
+      ? 'Frühere Sitzung wird fortgesetzt · der bisherige Verlauf steht Claude zur Verfügung, wird hier aber nicht noch einmal angezeigt'
+      : 'Sitzung wird gestartet …');
     input.focus();
   } catch (err) {
     notifyError(err.message);
@@ -392,6 +426,9 @@ api.claude.onEvent((event) => {
       session = { running: false };
       renderSessionState();
       addSystem('Sitzung beendet');
+      // The session that just ended is the one most likely to be picked up
+      // again, so the list has to know about it before it is needed.
+      refreshResumeList();
       break;
 
     default:
@@ -420,6 +457,7 @@ async function init() {
   }
   modeSelect.value = options.defaults.permissionMode;
   cwdInput.value = options.defaults.cwd;
+  await refreshResumeList();
   applyModeNote();
   modeSelect.addEventListener('change', applyModeNote);
 

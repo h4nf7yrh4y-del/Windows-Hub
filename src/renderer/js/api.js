@@ -41,6 +41,13 @@ export const api = {
     openSettings: call(bridge.display.openSettings),
     onReverted: bridge.display.onReverted
   },
+  schedule: {
+    list: call(bridge.schedule.list),
+    save: call(bridge.schedule.save),
+    remove: call(bridge.schedule.remove),
+    runNow: call(bridge.schedule.runNow),
+    onFired: bridge.schedule.onFired
+  },
   network: {
     overview: call(bridge.network.overview)
   },
@@ -77,6 +84,8 @@ export const api = {
     start: call(bridge.claude.start),
     send: call(bridge.claude.send),
     stopSession: call(bridge.claude.stopSession),
+    history: call(bridge.claude.history),
+    forget: call(bridge.claude.forget),
     interrupt: call(bridge.claude.interrupt),
     windowAction: call(bridge.claude.windowAction),
     onEvent: bridge.claude.onEvent

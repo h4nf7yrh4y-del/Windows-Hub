@@ -35,7 +35,12 @@ const DEFAULTS = {
   // Written while a profile holds system changes, cleared when they are undone.
   // Surviving a crash is the point: a power plan must not stay switched
   // because the hub was killed.
-  tweakSnapshot: null
+  tweakSnapshot: null,
+  // Ids of console sessions, so they can be resumed from the window that
+  // started them. The transcripts themselves belong to Claude Code.
+  claudeSessions: [],
+  // Time-of-day rules that start or stop profiles.
+  schedules: []
 };
 
 let cache = null;

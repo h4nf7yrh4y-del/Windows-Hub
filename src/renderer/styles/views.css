@@ -1468,3 +1468,39 @@
 @media (max-width: 1180px) {
   .net-tables { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* -------------------------------------------------------------- schedule */
+
+.sched-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--accent);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+/* A disabled entry stays readable but stops claiming attention. */
+.sched-row.off { border-left-color: rgba(255, 255, 255, 0.12); opacity: 0.55; }
+
+.day-row { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.day-btn {
+  min-width: 34px;
+  padding: 5px 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.day-btn:hover { color: var(--text); }
+
+.day-btn.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}

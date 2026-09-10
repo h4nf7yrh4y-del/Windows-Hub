@@ -124,6 +124,63 @@ module.exports = [
   },
 
   {
+    name: 'Zeitplan: anlegen, listen, entfernen',
+    async run(t) {
+      await t.view('hub');
+      await t.clickText('#view-hub .btn', 'Zeitplan');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Zeitplan-Dialog' });
+      t.assert(await t.exists('.modal .empty-title'), 'Ohne Einträge steht dort, wofür das gut ist');
+
+      await t.clickText('.modal .btn', 'Eintrag hinzufügen');
+      await t.waitFor(`document.querySelectorAll('.modal').length > 1`, { label: 'Editor-Dialog' });
+      t.eq(await t.count('.modal .day-btn'), 7, 'Sieben Wochentage zur Wahl');
+      t.atLeast(await t.evalExpr(`document.querySelectorAll('.modal .day-btn.active').length`), 1,
+        'Eine sinnvolle Vorauswahl ist gesetzt');
+
+      const set = await t.js(`
+        const modal = [...document.querySelectorAll('.modal')].pop();
+        modal.querySelector('input[type=time]').value = '20:15';
+        return true;
+      `);
+      t.assert(set, 'Uhrzeit lässt sich setzen');
+
+      await t.js(`
+        const modal = [...document.querySelectorAll('.modal')].pop();
+        [...modal.querySelectorAll('.btn')].find((b) => b.textContent.trim() === 'Speichern').click();
+        return true;
+      `);
+      await t.wait(900);
+
+      const stored = await t.evalExpr(`window.hub.schedule.list().then((r) => r.data.entries)`);
+      t.eq(stored.length, 1, 'Der Eintrag ist gespeichert', JSON.stringify(stored));
+      t.eq(stored[0].time, '20:15', 'Die Uhrzeit ist übernommen');
+      t.assert(stored[0].nextRun > Date.now(), 'Der nächste Lauf liegt in der Zukunft');
+      t.assert(String(stored[0].description).includes('20:15'), 'Die Beschreibung nennt die Uhrzeit', stored[0].description);
+
+      // A time that has already passed today must not be pending for today.
+      t.assert(stored[0].nextRun - Date.now() < 8 * 24 * 3600 * 1000,
+        'Der nächste Lauf liegt innerhalb einer Woche');
+
+      await t.wait(400);
+      t.atLeast(await t.count('.sched-row'), 1, 'Die Liste zeigt den Eintrag');
+
+      await t.js(`
+        return window.hub.schedule.list()
+          .then((r) => Promise.all(r.data.entries.map((e) => window.hub.schedule.remove(e.id))))
+          .then(() => true);
+      `);
+      await t.wait(300);
+      t.eq((await t.evalExpr(`window.hub.schedule.list().then((r) => r.data.entries.length)`)), 0,
+        'Einträge lassen sich wieder entfernen');
+
+      await t.js(`
+        for (const node of document.querySelectorAll('.modal-backdrop')) node.remove();
+        return true;
+      `);
+    }
+  },
+
+  {
     name: 'System: Ringe, Diagramme, Kernraster, laufende Werte',
     async run(t) {
       await t.view('system');
@@ -417,6 +474,17 @@ module.exports = [
       await t.wait(400);
       t.eq(await cjs(`document.querySelector('.cc-mode-note').classList.contains('danger')`), true,
         'Der Modus „Alles erlauben" ist als Risiko markiert');
+
+      // Resuming has to be reachable, and has to say so when there is nothing
+      // to resume rather than offering an empty dropdown.
+      const resume = await cjs(`(() => {
+        const selects = [...document.querySelectorAll('.cc-setup select')];
+        const node = selects[selects.length - 1];
+        return { options: node.options.length, first: node.options[0].value, disabled: node.disabled };
+      })()`);
+      t.eq(resume.options, 1, 'Ohne frühere Sitzungen steht nur „Neue Sitzung" zur Wahl');
+      t.eq(resume.first, '', 'Die leere Auswahl bedeutet eine neue Sitzung');
+      t.eq(resume.disabled, true, 'Ohne Auswahl ist die Liste nicht bedienbar');
 
       // The rail entry is an action, not a destination: the hub stays put.
       t.eq(await t.evalExpr(`document.querySelector('.rail-btn.active').dataset.view`), 'hub',

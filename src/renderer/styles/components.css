@@ -130,6 +130,8 @@
 .btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; box-shadow: 0 0 18px rgba(255, 59, 92, 0.35); }
 
 .btn.sm { padding: 5px 11px; font-size: 10px; letter-spacing: 0.14em; }
+/* Used inside dense rows where a full button would push the content out. */
+.btn.xs { padding: 3px 8px; font-size: 9.5px; letter-spacing: 0.12em; }
 .btn.lg { padding: 13px 30px; font-size: 13px; }
 
 .icon-btn {

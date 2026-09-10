@@ -16,6 +16,7 @@ const hotkeys = require('./hotkeys');
 const display = require('./display');
 const winfeatures = require('./winfeatures');
 const network = require('./network');
+const scheduler = require('./scheduler');
 const tweaks = require('./tweaks');
 const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
@@ -239,6 +240,13 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     if (!profile) throw new Error('Profile not found');
     return launcher.stopProfile(profile);
   }, 'profiles:stop'));
+
+  /* -------------------------------------------------------------- schedule */
+
+  ipcMain.handle('schedule:list', wrap(async () => scheduler.list(), 'schedule:list'));
+  ipcMain.handle('schedule:save', wrap(async (entry) => scheduler.save(entry), 'schedule:save'));
+  ipcMain.handle('schedule:remove', wrap(async (id) => scheduler.remove(requireString(id, 'Eintrag')), 'schedule:remove'));
+  ipcMain.handle('schedule:runNow', wrap(async (id) => scheduler.runNow(requireString(id, 'Eintrag')), 'schedule:runNow'));
 
   /* --------------------------------------------------------------- library */
 
@@ -469,6 +477,10 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   ipcMain.handle('claude:start', wrap(async (opts) => claudesession.start(opts || {}), 'claude:start'));
   ipcMain.handle('claude:send', wrap(async (text) => claudesession.send(text), 'claude:send'));
   ipcMain.handle('claude:stop', wrap(async () => claudesession.stop(), 'claude:stop'));
+  ipcMain.handle('claude:history', wrap(async (cwd) =>
+    ({ sessions: claudesession.listHistory(typeof cwd === 'string' ? cwd : null) }), 'claude:history'));
+  ipcMain.handle('claude:forget', wrap(async (id) =>
+    claudesession.forgetSession(requireString(id, 'Sitzung')), 'claude:forget'));
   ipcMain.handle('claude:interrupt', wrap(async () => claudesession.interrupt(), 'claude:interrupt'));
 
   // The console runs in its own window and needs the frame controls itself.

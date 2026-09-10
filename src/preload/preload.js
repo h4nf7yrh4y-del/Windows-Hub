@@ -71,6 +71,8 @@ contextBridge.exposeInMainWorld('hub', {
     start: (opts) => invoke('claude:start', opts),
     send: (text) => invoke('claude:send', text),
     stopSession: () => invoke('claude:stop'),
+    history: (cwd) => invoke('claude:history', cwd),
+    forget: (id) => invoke('claude:forget', id),
     interrupt: () => invoke('claude:interrupt'),
     windowAction: (action) => invoke('claude:window', action),
     onEvent: (handler) => on('claude:event', handler)
@@ -92,6 +94,13 @@ contextBridge.exposeInMainWorld('hub', {
     launch: (id) => invoke('profiles:launch', id),
     stop: (id) => invoke('profiles:stop', id),
     onProgress: (handler) => on('profile:progress', handler)
+  },
+  schedule: {
+    list: () => invoke('schedule:list'),
+    save: (entry) => invoke('schedule:save', entry),
+    remove: (id) => invoke('schedule:remove', id),
+    runNow: (id) => invoke('schedule:runNow', id),
+    onFired: (handler) => on('schedule:fired', handler)
   },
   library: {
     scan: (opts) => invoke('library:scan', opts),

@@ -64,9 +64,28 @@ und Hintergrundbilder entfernt sind.
 
 **Claude-Code-Konsole.** Ein eigenes Fenster mit laufender Sitzung: Ordner, Modell und
 Berechtigungen einstellen, Nachrichten schicken, Antworten im Zeichenfluss mitlesen.
+Frühere Sitzungen lassen sich fortsetzen — Claude Code verwahrt die Verläufe selbst,
+der Hub merkt sich nur, welche davon aus diesem Fenster stammen, in welchem Ordner und
+was zuletzt gesagt wurde, damit aus den Kennungen etwas Wiedererkennbares wird.
 Jeder Werkzeugaufruf erscheint als eigene Karte mit Befehl und Ergebnis, die laufenden
 Kosten stehen in der Kopfzeile. Daneben weiterhin: Erkennung der Befehlszeile, Öffnen
 in einem Terminal und Auswertung des Diagnoseberichts.
+
+**Zeitplan.** Profile lassen sich zu festen Zeiten starten oder beenden: Wochentage
+und Uhrzeit auswählen, fertig. Ein Zeitpunkt, der mehr als fünf Minuten zurückliegt,
+wird übersprungen und nicht nachgeholt — sonst würde ein Spiel starten, nur weil der
+Rechner spät eingeschaltet wurde. Voraussetzung ist, dass der Hub zu dem Zeitpunkt
+läuft; ein Windows-Dienst ist das hier nicht.
+
+**Netzwerk.** Unter *Tasks* zeigt ein eigener Reiter alle Adapter mit Adresse,
+Verbindungsgeschwindigkeit und Durchsatz, darunter eine Auswertung nach Programm und
+die einzelnen offenen Verbindungen. Die Auswertung steht bewusst zuerst: zweihundert
+Zeilen Sockets sagen nichts, „dieses Programm hält vierzig Verbindungen zu elf
+Gegenstellen" schon. Lauschende Sockets sind ausgeblendet, bis man sie anfordert.
+
+**Prozesspriorität.** Die Prozessliste zeigt die Priorität jedes Prozesses und kann
+sie ändern. Echtzeit wird angezeigt, wenn ein Prozess bereits so läuft, aber nicht
+zum Einstellen angeboten.
 
 **Controller-Bedienung.** Der Hub lässt sich vollständig mit einem Gamepad
 bedienen. Steuerkreuz und linker Stick bewegen die Auswahl, A wählt, B geht zurück

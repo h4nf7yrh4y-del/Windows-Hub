@@ -6,6 +6,7 @@ const os = require('os');
 
 const logger = require('./logger');
 const claudecode = require('./claudecode');
+const store = require('./store');
 
 const log = logger.scoped('claude-session');
 
@@ -55,6 +56,65 @@ const MODELS = [
 let session = null;
 let emit = () => {};
 
+/* --------------------------------------------------------------- history */
+
+const MAX_HISTORY = 25;
+
+/**
+ * Remembers the sessions the console has run so they can be picked up again.
+ *
+ * Claude Code keeps its own transcripts and can resume any of them by id; what
+ * it cannot do is tell this window which of them came from here, in which
+ * folder, and what was last said. Without that the resume flag is a feature
+ * nobody can reach, so the ids are written down as they appear.
+ */
+function history() {
+  const state = store.state;
+  if (!Array.isArray(state.claudeSessions)) state.claudeSessions = [];
+  return state.claudeSessions;
+}
+
+function rememberSession(patch) {
+  if (!patch || !patch.id) return;
+  const list = history();
+  const index = list.findIndex((entry) => entry.id === patch.id);
+  const existing = index >= 0 ? list[index] : null;
+  const merged = {
+    id: patch.id,
+    cwd: patch.cwd || (existing && existing.cwd) || '',
+    model: patch.model || (existing && existing.model) || null,
+    permissionMode: patch.permissionMode || (existing && existing.permissionMode) || null,
+    startedAt: (existing && existing.startedAt) || patch.startedAt || Date.now(),
+    updatedAt: Date.now(),
+    turns: patch.turns != null ? patch.turns : (existing ? existing.turns : 0),
+    costUsd: patch.costUsd != null ? patch.costUsd : (existing ? existing.costUsd : 0),
+    summary: patch.summary != null ? patch.summary : (existing ? existing.summary : '')
+  };
+  if (index >= 0) list.splice(index, 1);
+  list.unshift(merged);
+  // The list is a convenience, not an archive; Claude Code keeps the real
+  // transcripts and they stay resumable whether or not they are listed here.
+  if (list.length > MAX_HISTORY) list.length = MAX_HISTORY;
+  store.save();
+}
+
+function listHistory(cwd) {
+  const list = history();
+  const wanted = typeof cwd === 'string' && cwd ? cwd.replace(/[\\/]+$/, '').toLowerCase() : null;
+  return list
+    .filter((entry) => !wanted || String(entry.cwd || '').replace(/[\\/]+$/, '').toLowerCase() === wanted)
+    .map((entry) => ({ ...entry }));
+}
+
+function forgetSession(id) {
+  const list = history();
+  const before = list.length;
+  const kept = list.filter((entry) => entry.id !== id);
+  store.state.claudeSessions = kept;
+  store.save();
+  return { removed: before - kept.length };
+}
+
 function setEmitter(fn) {
   emit = typeof fn === 'function' ? fn : () => {};
 }
@@ -99,6 +159,13 @@ function handleEvent(event) {
         session.tools = Array.isArray(event.tools) ? event.tools : [];
         session.permissionMode = event.permissionMode || session.permissionMode;
         log.info(`Sitzung bereit · ${session.model} · ${session.tools.length} Werkzeuge · ${session.cwd}`);
+        rememberSession({
+          id: session.sessionId,
+          cwd: session.cwd,
+          model: session.model,
+          permissionMode: session.permissionMode,
+          startedAt: session.startedAt
+        });
         emit({ kind: 'session', ...state() });
       } else if (event.subtype === 'status' && event.status) {
         // Transient bookkeeping: useful as a live indicator, noise as a
@@ -154,6 +221,15 @@ function handleEvent(event) {
       session.busy = false;
       session.turns = Number(event.num_turns) || session.turns;
       if (Number.isFinite(event.total_cost_usd)) session.costUsd += event.total_cost_usd;
+      // The last answer is what makes an entry recognisable in a list of ids.
+      rememberSession({
+        id: session.sessionId,
+        cwd: session.cwd,
+        model: session.model,
+        turns: session.turns,
+        costUsd: session.costUsd,
+        summary: typeof event.result === 'string' ? event.result.replace(/\s+/g, ' ').slice(0, 160) : undefined
+      });
       emit({
         kind: 'result',
         ok: !event.is_error,
@@ -334,4 +410,7 @@ function options() {
   };
 }
 
-module.exports = { start, send, stop, interrupt, state, options, setEmitter, PERMISSION_MODES };
+module.exports = {
+  start, send, stop, interrupt, state, options, setEmitter,
+  listHistory, forgetSession, PERMISSION_MODES
+};
