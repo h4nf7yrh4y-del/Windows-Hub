@@ -165,10 +165,10 @@ module.exports = [
   },
 
   {
-    name: 'Tasks: Prozesstabelle, Sortierung, Autostart-Reiter',
+    name: 'Tasks: Prozesstabelle, Sortierung, Netzwerk, Autostart',
     async run(t) {
       await t.view('processes');
-      t.eq(await t.count('.tab-bar .tab'), 2, 'Zwei Reiter: Prozesse und Autostart');
+      t.eq(await t.count('#view-processes .tab-bar .tab'), 3, 'Drei Reiter: Prozesse, Netzwerk, Autostart');
       await t.waitFor(`document.querySelectorAll('#view-processes tbody tr').length > 0`,
         { label: 'Prozesszeilen', timeout: 60000 });
       t.atLeast(await t.count('#view-processes tbody tr'), 3, 'Prozesse werden aufgelistet');
@@ -200,9 +200,29 @@ module.exports = [
       await t.wait(400);
       t.eq(await t.count('#view-processes tbody tr'), total, 'Leere Suche zeigt wieder alles');
 
-      await t.clickText('.tab-bar .tab', 'Autostart');
+      // The priority column is a button per row rather than a dropdown per row;
+      // off Windows there is nothing to set, so it stays plain text.
+      const priority = await t.evalExpr(`window.hub.processes.priorityOptions().then((r) => r.data)`);
+      t.assert(priority && Array.isArray(priority.options) && priority.options.length >= 4,
+        'Die wählbaren Prioritätsstufen kommen aus dem Hauptprozess', JSON.stringify(priority));
+      t.assert(!priority.options.some((o) => o.value === 'realtime'),
+        'Echtzeit wird nicht zum Setzen angeboten');
+      t.eq(await t.evalExpr(
+        `[...document.querySelectorAll('#view-processes thead th')].some((n) => n.textContent === 'Priorität')`
+      ), true, 'Die Tabelle hat eine Prioritätsspalte');
+
+      await t.clickText('#view-processes .tab-bar .tab', 'Netzwerk');
+      await t.waitFor(`!!document.querySelector('.net-panel')`, { label: 'Netzwerkpanel', timeout: 30000 });
+      await t.wait(1500);
+      t.atLeast(await t.count('.net-panel .table'), 2, 'Programme und Verbindungen als eigene Tabellen');
+      t.assert(await t.exists('.net-adapters'), 'Adapterliste wird gebaut');
+      t.assert(((await t.text('.net-panel .proc-toolbar .label')) || '').length > 0,
+        'Die Statuszeile sagt, was zu sehen ist');
+
+      await t.clickText('#view-processes .tab-bar .tab', 'Autostart');
       await t.wait(900);
       t.assert(await t.exists('#view-processes .tab-body'), 'Autostart-Reiter rendert einen Inhalt');
+      t.eq(await t.exists('.net-panel'), false, 'Der Netzwerkreiter wird beim Wechsel abgebaut');
     }
   },
 

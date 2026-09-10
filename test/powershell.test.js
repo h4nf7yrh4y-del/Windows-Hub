@@ -21,6 +21,7 @@ const { execFileSync, spawnSync } = require('child_process');
 const gpu = require('../src/main/gpu');
 const processes = require('../src/main/processes');
 const tweaks = require('../src/main/tweaks');
+const network = require('../src/main/network');
 
 function findPowerShell() {
   const candidates = [process.env.PWSH_PATH, 'pwsh', 'powershell', 'powershell.exe'].filter(Boolean);
@@ -158,6 +159,7 @@ SCRIPTS['tweaks: restart apps'] = tweaks.restartScript([
   { path: String.raw`C:\Users\O'Brien\App\run.exe` }
 ]);
 SCRIPTS['tweaks: find pid'] = tweaks.NAME_TO_PID_SCRIPT("O'Brien");
+SCRIPTS['network: connections'] = network.CONNECTION_SCRIPT;
 
 test('every writable entry stays inside HKCU unless it asks for elevation', () => {
   for (const entry of winfeatures.CATALOGUE) {

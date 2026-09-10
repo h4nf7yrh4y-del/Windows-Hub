@@ -1375,3 +1375,96 @@
   color: var(--text-faint);
   opacity: 0.7;
 }
+
+/* --------------------------------------------- priority cell in the tasks table */
+
+.prio-btn {
+  padding: 1px 7px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.prio-btn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* A process that is not on Normal is worth spotting in a long table. */
+.prio-btn.changed {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* --------------------------------------------------------------- network */
+
+.net-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+}
+
+.net-adapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.net-adapter {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.net-adapter.up { border-left-color: var(--accent); }
+
+.net-adapter-name {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+}
+
+.net-adapter-sub { font-size: 10.5px; color: var(--text-faint); }
+
+.net-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+}
+
+.net-rate {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.net-rate b { color: var(--accent); font-weight: 400; }
+.net-rate.faint { color: var(--text-faint); }
+.net-rate.warn { color: var(--warn); }
+
+/* Two tables side by side while there is room, stacked when there is not. */
+.net-tables {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+}
+
+.net-tables .table-wrap { max-height: 100%; overflow: auto; }
+
+@media (max-width: 1180px) {
+  .net-tables { grid-template-columns: minmax(0, 1fr); }
+}

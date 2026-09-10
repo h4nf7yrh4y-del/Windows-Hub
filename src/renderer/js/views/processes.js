@@ -1,9 +1,10 @@
 import { el, clear, bytes, pct, debounce } from '../util.js';
 import { api } from '../api.js';
 import { state } from '../state.js';
-import { confirmDialog } from '../widgets/modal.js';
+import { confirmDialog, openModal } from '../widgets/modal.js';
 import { notifyError, notifyOk } from '../widgets/toast.js';
 import { createStartupPanel } from './startup.js';
+import { createNetworkPanel } from './network.js';
 
 /**
  * Built-in task manager.
@@ -20,6 +21,7 @@ const COLUMNS = [
   { key: 'memory',        label: 'Speicher',  sortable: true,  align: 'right' },
   { key: 'memoryPercent', label: 'RAM %',     sortable: true,  align: 'right' },
   { key: 'threads',       label: 'Threads',   sortable: true,  align: 'right' },
+  { key: 'priority',      label: 'Priorität', sortable: true,  align: 'right' },
   { key: 'actions',       label: '',          sortable: false, align: 'right' }
 ];
 
@@ -27,6 +29,74 @@ const PROTECTED = new Set([
   'system', 'system idle process', 'registry', 'smss', 'csrss', 'wininit',
   'winlogon', 'services', 'lsass', 'memory compression', 'idle'
 ]);
+
+/**
+ * A dropdown per row would mean four hundred of them in the document, so the
+ * cell is a button that opens a small chooser instead. Which is also honest
+ * about what it does: changing a running program's priority deserves one
+ * deliberate step rather than a stray scroll over a select.
+ */
+async function choosePriority(row, labels, options, afterChange) {
+  const current = row.priority || 'normal';
+  let picked = null;
+
+  const buttons = options.map((option) => el('button', {
+    class: `pick-row${option.value === current ? ' selected' : ''}`,
+    onClick: (event) => {
+      picked = option.value;
+      event.currentTarget.parentElement.querySelectorAll('.pick-row')
+        .forEach((n) => n.classList.remove('selected'));
+      event.currentTarget.classList.add('selected');
+    }
+  }, [
+    el('div', { class: 'stack grow' }, [
+      el('div', { class: 'app-name', text: option.label }),
+      el('div', { class: 'app-target', text: PRIORITY_HINTS[option.value] || '' })
+    ]),
+    option.value === current ? el('span', { class: 'badge accent', text: 'aktuell' }) : null
+  ]));
+
+  openModal({
+    title: `Priorität von „${row.name}"`,
+    width: '460px',
+    render: () => el('div', { class: 'stack gap-12' }, [
+      el('div', { class: 'setting-hint', text:
+        'Gilt nur für diesen Prozess und nur, solange er läuft. Nach einem Neustart des Programms '
+        + 'ist wieder Normal eingestellt. Für ein Spiel dauerhaft: im Profil unter System.' }),
+      el('div', { class: 'stack gap-4' }, buttons),
+      current === 'realtime'
+        ? el('div', { class: 'setting-hint warn', text: 'Dieser Prozess läuft auf Echtzeit. Der Hub bietet das nicht an, kann es aber zurücksetzen.' })
+        : null
+    ]),
+    actions: (close) => [
+      el('div', { class: 'grow' }),
+      el('button', { class: 'btn subtle', text: 'Abbrechen', onClick: () => close() }),
+      el('button', {
+        class: 'btn primary',
+        text: 'Übernehmen',
+        onClick: async () => {
+          if (!picked || picked === current) { close(); return; }
+          try {
+            await api.processes.priority(row.pid, picked);
+            notifyOk(`${row.name}: ${labels[picked] || picked}`);
+            close();
+            afterChange();
+          } catch (err) {
+            notifyError(err.message);
+          }
+        }
+      })
+    ]
+  });
+}
+
+const PRIORITY_HINTS = {
+  low: 'Läuft nur, wenn sonst nichts will. Für Hintergrundarbeit.',
+  belownormal: 'Weicht allem Normalen aus.',
+  normal: 'Standard für so gut wie alles.',
+  abovenormal: 'Bevorzugt, ohne anderes auszuhungern.',
+  high: 'Deutlich bevorzugt. Für ein Spiel, nicht für mehrere Programme.'
+};
 
 export function createProcessesView() {
   let sortKey = 'cpu';
@@ -37,6 +107,11 @@ export function createProcessesView() {
   let timer = null;
   let busy = false;
   let intervalMs = (state.settings && state.settings.processIntervalMs) || 3000;
+  let priorityInfo = { supported: false, options: [], labels: {} };
+
+  api.processes.priorityOptions()
+    .then((info) => { priorityInfo = info; renderRows(); })
+    .catch(() => { /* the column simply stays empty */ });
 
   const tbody = el('tbody');
   const thead = el('thead');
@@ -142,6 +217,18 @@ export function createProcessesView() {
         el('td', { class: 'num', text: bytes(row.memory) }),
         el('td', { class: 'num', text: pct(row.memoryPercent, 1) }),
         el('td', { class: 'num', text: String(row.threads || 0) }),
+        el('td', { class: 'num' }, [
+          priorityInfo.supported
+            ? el('button', {
+              class: `prio-btn${row.priority && row.priority !== 'normal' ? ' changed' : ''}`,
+              title: 'Priorität ändern',
+              onClick: (event) => {
+                event.stopPropagation();
+                choosePriority(row, priorityInfo.labels, priorityInfo.options, poll);
+              }
+            }, [priorityInfo.labels[row.priority] || '—'])
+            : el('span', { class: 'faint', text: priorityInfo.labels[row.priority] || '—' })
+        ]),
         el('td', { class: 'num col-actions' }, [
           el('button', {
             class: 'btn danger sm proc-action',
@@ -211,14 +298,21 @@ export function createProcessesView() {
   let startupPanel = null;
   let activeTab = 'processes';
 
+  let networkPanel = null;
+
   const tabBar = el('div', { class: 'tab-bar' }, [
     el('button', { class: 'tab active', dataset: { tab: 'processes' }, text: 'Prozesse' }),
+    el('button', { class: 'tab', dataset: { tab: 'network' }, text: 'Netzwerk' }),
     el('button', { class: 'tab', dataset: { tab: 'startup' }, text: 'Autostart' })
   ]);
 
   function showTab(id) {
     activeTab = id;
     tabBar.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === id));
+
+    // Each panel polls the system, so the one being left has to be told to
+    // stop rather than merely being detached.
+    if (networkPanel) { networkPanel.dispatchEvent(new CustomEvent('panel:dispose')); networkPanel = null; }
     clear(bodyHost);
 
     if (id === 'processes') {
@@ -227,12 +321,20 @@ export function createProcessesView() {
       // Polling costs a PowerShell round trip, so it only runs on this tab.
       poll();
       restart();
-    } else {
-      procActions.classList.add('hidden');
-      if (timer) { clearInterval(timer); timer = null; }
-      if (!startupPanel) startupPanel = createStartupPanel();
-      bodyHost.appendChild(startupPanel);
+      return;
     }
+
+    procActions.classList.add('hidden');
+    if (timer) { clearInterval(timer); timer = null; }
+
+    if (id === 'network') {
+      networkPanel = createNetworkPanel();
+      bodyHost.appendChild(networkPanel);
+      return;
+    }
+
+    if (!startupPanel) startupPanel = createStartupPanel();
+    bodyHost.appendChild(startupPanel);
   }
 
   tabBar.addEventListener('click', (event) => {
@@ -258,6 +360,9 @@ export function createProcessesView() {
   view.addEventListener('view:unmount', () => {
     if (timer) clearInterval(timer);
     timer = null;
+    // The network panel keeps its own interval and would otherwise poll on
+    // from a view nobody is looking at.
+    if (networkPanel) { networkPanel.dispatchEvent(new CustomEvent('panel:dispose')); networkPanel = null; }
   });
 
   return view;

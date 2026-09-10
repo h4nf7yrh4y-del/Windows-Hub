@@ -15,6 +15,7 @@ const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
 const display = require('./display');
 const winfeatures = require('./winfeatures');
+const network = require('./network');
 const tweaks = require('./tweaks');
 const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
@@ -298,12 +299,21 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   ipcMain.handle('processes:kill', wrap(async (pid) => processes.kill(pid), 'processes:kill'));
   ipcMain.handle('processes:killByName', wrap(async (name) => processes.killByName(name), 'processes:killByName'));
   ipcMain.handle('processes:priority', wrap(async (pid, priority) => processes.setPriority(pid, priority), 'processes:priority'));
+  ipcMain.handle('processes:priorityOptions', wrap(async () => ({
+    supported: process.platform === 'win32',
+    options: processes.SETTABLE_PRIORITIES.map((value) => ({ value, label: processes.PRIORITY_LABELS[value] })),
+    labels: processes.PRIORITY_LABELS
+  }), 'processes:priorityOptions'));
 
   /* -------------------------------------------------------- system tweaks */
 
   ipcMain.handle('tweaks:status', wrap(async () => tweaks.status(), 'tweaks:status'));
   ipcMain.handle('tweaks:powerPlans', wrap(async () => tweaks.listPowerPlans(), 'tweaks:powerPlans'));
   ipcMain.handle('tweaks:revert', wrap(async () => tweaks.revert(), 'tweaks:revert'));
+
+  /* --------------------------------------------------------------- network */
+
+  ipcMain.handle('network:overview', wrap(async () => network.overview(), 'network:overview'));
 
   /* ----------------------------------------------------------------- power */
 

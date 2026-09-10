@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('hub', {
     openSettings: (page) => invoke('display:openSettings', page),
     onReverted: (handler) => on('display:reverted', handler)
   },
+  network: {
+    overview: () => invoke('network:overview')
+  },
   tweaks: {
     status: () => invoke('tweaks:status'),
     powerPlans: () => invoke('tweaks:powerPlans'),
@@ -110,7 +113,8 @@ contextBridge.exposeInMainWorld('hub', {
     running: () => invoke('processes:running'),
     kill: (pid) => invoke('processes:kill', pid),
     killByName: (name) => invoke('processes:killByName', name),
-    priority: (pid, priority) => invoke('processes:priority', pid, priority)
+    priority: (pid, priority) => invoke('processes:priority', pid, priority),
+    priorityOptions: () => invoke('processes:priorityOptions')
   },
   power: {
     perform: (action) => invoke('power:perform', action),

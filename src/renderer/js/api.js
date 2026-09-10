@@ -41,6 +41,9 @@ export const api = {
     openSettings: call(bridge.display.openSettings),
     onReverted: bridge.display.onReverted
   },
+  network: {
+    overview: call(bridge.network.overview)
+  },
   tweaks: {
     status: call(bridge.tweaks.status),
     powerPlans: call(bridge.tweaks.powerPlans),
@@ -116,7 +119,8 @@ export const api = {
     running: call(bridge.processes.running),
     kill: call(bridge.processes.kill),
     killByName: call(bridge.processes.killByName),
-    priority: call(bridge.processes.priority)
+    priority: call(bridge.processes.priority),
+    priorityOptions: call(bridge.processes.priorityOptions)
   },
   power: {
     perform: call(bridge.power.perform),

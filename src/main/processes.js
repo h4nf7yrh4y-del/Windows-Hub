@@ -31,6 +31,9 @@ Get-Process | ForEach-Object {
     cpu     = $_.CPU
     title   = $_.MainWindowTitle
     threads = $_.Threads.Count
+    # A hashtable value may hold an if, but not a try; a protected process
+    # raises on this property and, silenced, simply yields nothing.
+    prio    = if ($_.PriorityClass) { [int]$_.PriorityClass } else { 0 }
     start   = if ($_.StartTime) { $_.StartTime.ToFileTimeUtc() } else { 0 }
   }
 } | ConvertTo-Json -Compress -Depth 2
@@ -77,6 +80,7 @@ async function rawWindows() {
     cpuSeconds: typeof p.cpu === 'number' ? p.cpu : 0,
     title: (p.title || '').trim(),
     threads: Number(p.threads) || 0,
+    priority: PRIORITY_BY_VALUE[Number(p.prio)] || null,
     startedAt: Number(p.start) || 0
   }));
 }
@@ -227,13 +231,47 @@ async function killByName(name, opts = {}) {
   return { ok: true, name: clean };
 }
 
+/**
+ * Windows' ProcessPriorityClass values. Realtime is listed because a process
+ * may already be running at it and the table has to say so, but it is not
+ * offered as something to set: it outranks the kernel's input and audio
+ * threads, and a process that hangs there takes the mouse pointer with it.
+ */
+const PRIORITY_VALUES = {
+  low: 64,
+  belownormal: 16384,
+  normal: 32,
+  abovenormal: 32768,
+  high: 128,
+  realtime: 256
+};
+
+const PRIORITY_BY_VALUE = Object.fromEntries(
+  Object.entries(PRIORITY_VALUES).map(([name, value]) => [value, name])
+);
+
+const PRIORITY_LABELS = {
+  low: 'Niedrig',
+  belownormal: 'Niedriger',
+  normal: 'Normal',
+  abovenormal: 'Höher',
+  high: 'Hoch',
+  realtime: 'Echtzeit'
+};
+
+const SETTABLE_PRIORITIES = ['low', 'belownormal', 'normal', 'abovenormal', 'high'];
+
 async function setPriority(pid, priority) {
-  const map = { low: 64, belownormal: 16384, normal: 32, abovenormal: 32768, high: 128, realtime: 256 };
-  const value = map[String(priority).toLowerCase()];
-  if (!value) throw new Error(`Unknown priority: ${priority}`);
+  const name = String(priority).toLowerCase();
+  const value = PRIORITY_VALUES[name];
+  if (!value) throw new Error(`Unbekannte Priorität: ${priority}`);
   if (!IS_WIN) throw new Error('Priority changes are Windows-only');
-  await runPowerShell(`(Get-Process -Id ${Number(pid)}).PriorityClass=${value}`);
-  return { ok: true };
+  await runPowerShell(`
+$ErrorActionPreference = "Stop"
+$p = Get-Process -Id ${Number(pid)}
+$p.PriorityClass = ${value}
+`);
+  return { ok: true, pid: Number(pid), priority: name };
 }
 
 function reset() {
@@ -243,5 +281,6 @@ function reset() {
 
 module.exports = {
   list, runningNames, normalizeName, kill, killByName, setPriority, reset,
-  runPowerShell, PS_SCRIPT
+  runPowerShell, PS_SCRIPT,
+  PRIORITY_VALUES, PRIORITY_LABELS, SETTABLE_PRIORITIES
 };
