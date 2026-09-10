@@ -232,13 +232,20 @@ module.exports = [
       t.atLeast(await t.count('.proc-action'), 1, 'Beenden-Knopf pro Zeile');
       t.assert(((await t.text('.proc-summary')) || '').length > 0, 'Zusammenfassung unter der Tabelle');
 
-      // Sorting by name must actually reorder.
-      const before = await t.evalExpr(`[...document.querySelectorAll('#view-processes tbody .proc-name')].slice(0,5).map(n => n.textContent)`);
+      // Sorting by name must produce a sorted list. Asserting that the order
+      // *changed* is wrong: on an idle machine every process sits at 0 % CPU,
+      // and the default sort can already happen to be alphabetical.
       await t.clickText('#view-processes thead th', 'Prozess');
-      await t.wait(400);
-      const after = await t.evalExpr(`[...document.querySelectorAll('#view-processes tbody .proc-name')].slice(0,5).map(n => n.textContent)`);
-      t.assert(JSON.stringify(before) !== JSON.stringify(after), 'Sortierung nach Namen ändert die Reihenfolge',
-        JSON.stringify({ before, after }));
+      await t.wait(500);
+      const names = await t.evalExpr(
+        `[...document.querySelectorAll('#view-processes tbody .proc-name')].slice(0, 12).map((n) => n.firstChild.textContent)`
+      );
+      const sorted = names.slice().sort((a, b) => a.localeCompare(b));
+      t.assert(JSON.stringify(names) === JSON.stringify(sorted), 'Nach dem Klick ist die Liste alphabetisch',
+        JSON.stringify(names));
+      t.eq(await t.evalExpr(
+        `[...document.querySelectorAll('#view-processes thead th')].some((n) => n.dataset.sorted)`
+      ), true, 'Die sortierte Spalte ist als solche markiert');
 
       // The filter is the fastest way to find a process and must narrow the list.
       const total = await t.count('#view-processes tbody tr');
@@ -302,7 +309,10 @@ module.exports = [
         return true;
       `);
       if (entered) {
-        await t.wait(1200);
+        // Reading a directory is a filesystem round trip; on a slow machine a
+        // fixed wait is a coin toss.
+        await t.waitFor(`document.querySelectorAll('.fm-crumbs .crumb').length > ${startCrumbs}`,
+          { label: 'längerer Pfad', timeout: 20000 }).catch(() => {});
         t.atLeast(await t.count('.fm-crumbs .crumb'), startCrumbs + 1, 'Ordner öffnen verlängert den Pfad');
       } else {
         t.assert(true, 'Kein Unterordner zum Öffnen vorhanden, Navigation übersprungen');
@@ -326,7 +336,12 @@ module.exports = [
         `vorher ${before}, nachher ${opened}`);
 
       // The overlay must show live values, not an empty frame.
-      const overlayWindow = t.windows().find((w) => w.webContents.getURL().includes('overlay.html'));
+      // A freshly created window reports an empty URL until the load commits.
+      let overlayWindow = null;
+      for (let i = 0; i < 40 && !overlayWindow; i += 1) {
+        overlayWindow = t.windows().find((w) => !w.isDestroyed() && w.webContents.getURL().includes('overlay.html'));
+        if (!overlayWindow) await t.wait(500);
+      }
       t.assert(!!overlayWindow, 'Overlay lädt overlay.html');
       if (overlayWindow) {
         t.watchConsole(overlayWindow.webContents, 'overlay');

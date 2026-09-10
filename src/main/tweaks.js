@@ -79,13 +79,30 @@ $plans = @(Get-CimInstance -Namespace root\cimv2\power -ClassName Win32_PowerPla
 ConvertTo-Json -Compress -Depth 3 -InputObject $plans
 `;
 
-async function listPowerPlans() {
+/**
+ * Reading the power schemes goes through WMI, which is the slowest query in
+ * the whole application: the first access to that namespace can take several
+ * seconds. Two unrelated screens want the same list, and the set of schemes
+ * changes about once a year, so the answer is cached for a minute and the
+ * cache is dropped the moment a plan is switched.
+ */
+let planCache = { at: 0, plans: null };
+const PLAN_CACHE_MS = 60000;
+
+async function listPowerPlans({ force = false } = {}) {
   if (!IS_WIN) return [];
+  if (!force && planCache.plans && Date.now() - planCache.at < PLAN_CACHE_MS) return planCache.plans;
+
   const parsed = parseJson(await processes.runPowerShell(PLANS_SCRIPT, 25000).catch(() => ''));
-  return asArray(parsed).map((row) => {
+  const plans = asArray(parsed).map((row) => {
     const match = /\{([0-9a-f-]+)\}/i.exec(String(row.InstanceID || ''));
     return { guid: match ? match[1] : null, label: row.ElementName, active: !!row.IsActive };
   }).filter((plan) => plan.guid);
+
+  // An empty answer means the query failed or timed out. Caching that would
+  // hide the plans for a minute for no reason.
+  if (plans.length) planCache = { at: Date.now(), plans };
+  return plans;
 }
 
 function setPowerPlanScript(guid) {
@@ -99,6 +116,7 @@ if ($LASTEXITCODE -ne 0) { throw "powercfg meldete Code $LASTEXITCODE" }
 async function setPowerPlan(guid) {
   if (!/^[0-9a-f-]{36}$/i.test(String(guid))) throw new Error('Ungültiger Energieplan');
   await processes.runPowerShell(setPowerPlanScript(guid), 25000);
+  planCache = { at: 0, plans: null };
   return guid;
 }
 
@@ -448,6 +466,7 @@ function status() {
 
 module.exports = {
   PRIORITIES,
+  setPowerPlan,
   defaults,
   sanitize,
   isActive,

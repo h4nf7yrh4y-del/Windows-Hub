@@ -2,6 +2,7 @@
 
 const { shell } = require('electron');
 const { runPowerShell } = require('./processes');
+const tweaks = require('./tweaks');
 
 /**
  * Catalogue of Windows settings and tools that are useful and hard to find.
@@ -500,6 +501,10 @@ async function readStates() {
   const lines = targets.map(({ entry, control }) =>
     `  [PSCustomObject]@{ id = '${esc(entry.id)}'; value = (Get-ItemProperty -LiteralPath '${esc(control.path)}' -Name '${esc(control.name)}' -ErrorAction SilentlyContinue).'${esc(control.name)}' }`);
 
+  // The registry reads are fast; the power schemes are not, and they live in
+  // tweaks where they are cached and shared with the profile editor. Keeping
+  // them out of this script is the difference between a catalogue that appears
+  // at once and one that waits on WMI.
   const script = `
 $ErrorActionPreference = "SilentlyContinue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -508,18 +513,17 @@ $values = @(
 ${lines.join('\n')}
 )
 
-$plans = @(Get-CimInstance -Namespace root\\cimv2\\power -ClassName Win32_PowerPlan |
-  Select-Object ElementName, InstanceID, IsActive)
-
 $classic = Test-Path -LiteralPath '${esc(CLASSIC_MENU_PATH)}'
 
-[PSCustomObject]@{ values = $values; plans = $plans; classic = $classic } | ConvertTo-Json -Compress -Depth 4
+[PSCustomObject]@{ values = $values; classic = $classic } | ConvertTo-Json -Compress -Depth 4
 `;
+
+  const plansPromise = tweaks.listPowerPlans().catch(() => []);
 
   try {
     const out = await runPowerShell(script, 30000);
     const trimmed = (out || '').trim();
-    if (!trimmed) return { values: {}, powerPlans: null, classicMenu: null };
+    if (!trimmed) return { values: {}, powerPlans: await plansPromise, classicMenu: null };
     const parsed = JSON.parse(trimmed);
 
     const values = {};
@@ -528,15 +532,9 @@ $classic = Test-Path -LiteralPath '${esc(CLASSIC_MENU_PATH)}'
       if (row && row.id) values[row.id] = row.value === undefined ? null : row.value;
     }
 
-    const planRows = Array.isArray(parsed.plans) ? parsed.plans : (parsed.plans ? [parsed.plans] : []);
-    const powerPlans = planRows.map((p) => {
-      const match = /\{([0-9a-f-]+)\}/i.exec(String(p.InstanceID || ''));
-      return { guid: match ? match[1] : null, label: p.ElementName, active: !!p.IsActive };
-    }).filter((p) => p.guid);
-
-    return { values, powerPlans, classicMenu: !!parsed.classic };
+    return { values, powerPlans: await plansPromise, classicMenu: !!parsed.classic };
   } catch (_) {
-    return { values: {}, powerPlans: null, classicMenu: null };
+    return { values: {}, powerPlans: await plansPromise.catch(() => []), classicMenu: null };
   }
 }
 
@@ -640,13 +638,13 @@ if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force
   return { ok: true };
 }
 
+/**
+ * Delegated so the cached scheme list is dropped in the same place it is
+ * filled. Switching the plan here and reading a stale "active" flag over
+ * there would be a bug nobody would look for.
+ */
 async function setPowerPlan(guid) {
-  if (!/^[0-9a-f-]{36}$/i.test(String(guid))) throw new Error('Ungültiger Energieplan');
-  await runPowerShell(`
-$ErrorActionPreference = "Stop"
-powercfg /setactive ${guid}
-if ($LASTEXITCODE -ne 0) { throw "powercfg meldete Code $LASTEXITCODE" }
-`, 25000);
+  await tweaks.setPowerPlan(guid);
   return { ok: true, guid };
 }
 
