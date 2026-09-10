@@ -164,9 +164,19 @@ export function normalizeProcessName(name) {
  * launched through a URI have nothing to derive from and stay untracked until
  * the user names one.
  */
+/**
+ * The process a launch entry belongs to.
+ *
+ * Prefers what the main process derived: it knows the protocol handlers and
+ * Store app ids that cannot be worked out from a path, and it is the same
+ * answer that stopping the profile will act on. The local fallback only covers
+ * an entry that has not been through the main process yet, such as one being
+ * edited.
+ */
 export function resolveProcessName(app) {
   if (!app) return null;
   if (app.processName) return normalizeProcessName(app.processName);
+  if (app.resolvedProcess) return normalizeProcessName(app.resolvedProcess);
   const launch = app.launch || {};
   if (launch.type === 'exe' && launch.target) {
     return normalizeProcessName(String(launch.target).split(/[\\/]/).pop());

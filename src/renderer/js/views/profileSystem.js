@@ -137,6 +137,7 @@ async function pickRunning(current, onPick) {
 export function createSystemSection(profile) {
   profile.system = { ...DEFAULTS, ...(profile.system || {}) };
   const system = profile.system;
+  if (!Array.isArray(profile.alsoClose)) profile.alsoClose = [];
 
   /* ------------------------------------------------------------ power plan */
 
@@ -240,6 +241,46 @@ export function createSystemSection(profile) {
 
   renderChips();
 
+  /* ------------------------------------------------ extras closed on stop */
+
+  const alsoHost = el('div', { class: 'row gap-8', style: { flexWrap: 'wrap' } });
+  const alsoInput = el('input', { class: 'input', placeholder: 'Prozessname, z. B. helldivers2' });
+
+  function renderAlso() {
+    clear(alsoHost);
+    if (!profile.alsoClose.length) {
+      alsoHost.appendChild(el('span', { class: 'faint', style: { fontSize: '12px' }, text: 'Nichts zusätzlich' }));
+      return;
+    }
+    for (const name of profile.alsoClose) {
+      alsoHost.appendChild(el('span', { class: 'chip' }, [
+        name,
+        el('button', {
+          class: 'chip-x',
+          title: 'Entfernen',
+          onClick: () => {
+            profile.alsoClose = profile.alsoClose.filter((n) => n !== name);
+            renderAlso();
+          }
+        }, [svg(ICON_X, { width: 10, height: 10 })])
+      ]));
+    }
+  }
+
+  function addAlso() {
+    const name = alsoInput.value.trim().replace(/\.(exe|com|bat|cmd)$/i, '');
+    if (!name) return;
+    if (!profile.alsoClose.some((n) => n.toLowerCase() === name.toLowerCase())) profile.alsoClose.push(name);
+    alsoInput.value = '';
+    renderAlso();
+  }
+
+  alsoInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); addAlso(); }
+  });
+
+  renderAlso();
+
   /* ----------------------------------------------------------------- shell */
 
   return el('div', { class: 'stack gap-12' }, [
@@ -283,6 +324,26 @@ export function createSystemSection(profile) {
         manualInput,
         el('button', { class: 'btn subtle sm', onClick: addManual }, [svg(ICON_PLUS, { width: 13, height: 13 }), 'Hinzufügen'])
       ])
+    ]),
+
+    el('div', { class: 'stack gap-8' }, [
+      el('div', { class: 'row between' }, [
+        el('span', { class: 'label', text: 'Beim Beenden zusätzlich schließen' }),
+        el('button', {
+          class: 'btn subtle sm',
+          text: 'Aus laufenden Programmen',
+          onClick: () => pickRunning(profile.alsoClose, (names) => { profile.alsoClose = names; renderAlso(); })
+        })
+      ]),
+      alsoHost,
+      el('div', { class: 'row gap-8' }, [
+        alsoInput,
+        el('button', { class: 'btn subtle sm', onClick: addAlso }, [svg(ICON_PLUS, { width: 13, height: 13 }), 'Hinzufügen'])
+      ]),
+      el('div', { class: 'setting-hint', text:
+        'Für Programme, die der Hub nicht von selbst zuordnen kann — etwa ein über Steam gestartetes Spiel, '
+        + 'dessen Prozess anders heißt als der Eintrag. Beendet wird unabhängig davon, ob das Programm schon '
+        + 'vor dem Profilstart lief.' })
     ]),
 
     toggleRow(

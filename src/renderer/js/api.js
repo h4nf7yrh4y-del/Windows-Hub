@@ -106,6 +106,7 @@ export const api = {
     reorder: call(bridge.profiles.reorder),
     launch: call(bridge.profiles.launch),
     stop: call(bridge.profiles.stop),
+    stopPlan: call(bridge.profiles.stopPlan),
     onProgress: bridge.profiles.onProgress
   },
   library: {

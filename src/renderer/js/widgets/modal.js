@@ -51,17 +51,23 @@ export function openModal({ title, render, actions, width, onClose }) {
 }
 
 /** Yes/no dialog. Resolves true only when the user confirms. */
-export function confirmDialog({ title, message, confirmLabel = 'Bestätigen', danger = false }) {
+export function confirmDialog({ title, message, confirmLabel = 'Bestätigen', danger = false, width = '460px' }) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
 
     openModal({
       title,
-      width: '460px',
-      render: () => el('div', { class: 'stack gap-8' }, [
-        el('div', { text: message, style: { fontSize: '13.5px', lineHeight: '1.6' } })
-      ]),
+      width,
+      // Blank lines become paragraphs. A confirmation that has to explain
+      // several things — what will be closed, what cannot be — is unreadable
+      // as one block, and textContent would swallow the line breaks anyway.
+      render: () => el('div', { class: 'stack gap-8' }, String(message).split(/\n{2,}/).map((part, index) =>
+        el('div', {
+          text: part,
+          style: { fontSize: index === 0 ? '13.5px' : '12.5px', lineHeight: '1.6', color: index === 0 ? '' : 'var(--text-dim)' }
+        })
+      )),
       actions: (close) => [
         el('button', { class: 'btn subtle', text: 'Abbrechen', onClick: () => { finish(false); close(); } }),
         el('button', {

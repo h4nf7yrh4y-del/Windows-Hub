@@ -85,6 +85,9 @@ module.exports = [
       await t.wait(900);
       t.atLeast(await t.count('.modal .select'), 2, 'Energieplan und Priorität sind wählbar');
       t.atLeast(await t.count('.modal .toggle'), 3, 'Die drei Systemschalter sind da');
+      t.assert(await t.evalExpr(
+        `[...document.querySelectorAll('.modal .label')].some((n) => n.textContent.includes('zusätzlich schließen'))`
+      ), 'Programme ohne Zuordnung lassen sich zum Beenden nachtragen');
 
       // Priority and its target belong together: no target field without a
       // priority to apply it to.
@@ -120,6 +123,36 @@ module.exports = [
 
       await t.view('hub');
       t.eq(await t.count('.card-tweaks'), 1, 'Die Karte zeigt, dass das Profil das System verändert');
+    }
+  },
+
+  {
+    name: 'Profil beenden: der Dialog zeigt, was wirklich geschlossen wird',
+    async run(t) {
+      await t.view('hub');
+
+      // The seeded profile launches everything through protocol handlers, which
+      // is exactly the case that used to contribute nothing to the kill list.
+      const plan = await t.evalExpr(`window.hub.profiles.list()
+        .then((r) => window.hub.profiles.stopPlan(r.data.profiles[0].id))
+        .then((r) => r.data)`);
+      t.assert(plan.names.includes('Spotify'), 'Spotify wird beendet, obwohl es über spotify: startet',
+        JSON.stringify(plan.names));
+      t.assert(plan.names.some((n) => n.startsWith('Discord')), 'Discord ebenso', JSON.stringify(plan.names));
+      t.eq(plan.unresolved.length, 1, 'Das Spiel über steam://rungameid bleibt unzuordenbar', JSON.stringify(plan.unresolved));
+      t.eq(plan.unresolved[0].name, 'Spiel', 'Und es wird namentlich gemeldet');
+
+      // The dialog has to say both halves, otherwise the gap is invisible again.
+      await t.click('.profile-card .card-actions .icon-btn:first-child');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Beenden-Dialog' });
+      const text = (await t.text('.modal')) || '';
+      t.assert(text.includes('Spotify'), 'Der Dialog nennt die Programme, die geschlossen werden');
+      t.assert(text.includes('Spiel'), 'Und die, für die kein Prozess hinterlegt ist');
+      t.assert(text.includes('vor dem Profilstart lief'),
+        'Und dass ein vorher laufendes Programm ebenfalls beendet wird');
+
+      await t.clickText('.modal .btn', 'Abbrechen');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
     }
   },
 

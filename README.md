@@ -520,6 +520,15 @@ umgehen.
 Spiel tatsächlich hochgekommen ist. Die Verzögerungen sind feste Zeiten, keine
 Bedingungen. Bei sehr langsamen Datenträgern musst du die Werte anpassen.
 
+**Beenden schließt alles, was zum Profil gehört.** Ob ein Programm schon vor dem
+Profilstart lief, spielt keine Rolle — solange ein Profil aktiv ist, gehören seine
+Programme dazu, und beim Beenden gehen sie zu. Der Bestätigungsdialog listet vorher
+namentlich auf, was geschlossen wird, und ebenso, wofür kein Prozess ermittelt werden
+konnte. Letzteres betrifft vor allem Spiele über `steam://rungameid/…`: die URI nennt
+ein Spiel, keinen Prozess, und sie auf Steam abzubilden würde den Launcher schließen
+und das Spiel laufen lassen. Solche Einträge bekommen ihren Prozessnamen im Editor
+über **wählen** oder über *System → Beim Beenden zusätzlich schließen*.
+
 **Der Laufstatus braucht einen Prozessnamen.** Bei Programmen, die der Hub direkt
 über eine exe startet, ergibt er sich von selbst. Bei Spielen über `steam://` gibt es
 keinen Pfad, aus dem sich etwas ableiten ließe. Für Steam-Titel rät der Hub die

@@ -48,16 +48,54 @@ async function launchProfile(profile) {
 }
 
 async function stopProfile(profile) {
+  // Asked from the main process rather than worked out here, so what the
+  // dialog promises and what actually gets closed cannot drift apart.
+  let plan = { names: [], unresolved: [] };
+  try {
+    plan = await api.profiles.stopPlan(profile.id);
+  } catch (err) {
+    notifyError(err.message);
+    return;
+  }
+
+  const lines = [
+    plan.names.length
+      ? `Beendet werden: ${plan.names.join(', ')}.`
+      : 'Für dieses Profil ist kein einziges Programm zuordenbar.',
+    'Das geschieht unabhängig davon, ob ein Programm schon vor dem Profilstart lief. Nicht gespeicherter Fortschritt geht verloren.'
+  ];
+
+  if (plan.unresolved.length) {
+    // The old failure was invisible: an entry that resolves to no process name
+    // was silently left out and the hub still reported success.
+    lines.push(
+      `Ohne hinterlegten Prozess und daher nicht zu beenden: ${plan.unresolved.map((u) => u.name).join(', ')}. `
+      + 'Im Profileditor lässt sich der Prozess über „wählen" aus den laufenden Programmen festlegen.'
+    );
+  }
+
   const sure = await confirmDialog({
-    title: 'Profil beenden',
-    message: `Alle Programme aus „${profile.name}" werden hart geschlossen. Nicht gespeicherter Fortschritt geht verloren.`,
+    title: `„${profile.name}" beenden`,
+    message: lines.join('\n\n'),
     confirmLabel: 'Beenden',
-    danger: true
+    danger: true,
+    width: '520px'
   });
   if (!sure) return;
+
   try {
-    await api.profiles.stop(profile.id);
-    notifyOk(`${profile.name} beendet`);
+    const result = await api.profiles.stop(profile.id);
+    const closed = (result.results || []).filter((r) => r.ok && r.matched);
+    const failed = (result.results || []).filter((r) => !r.ok);
+
+    if (failed.length) {
+      notifyError(`${failed.map((f) => f.name).join(', ')} konnte nicht beendet werden: ${failed[0].error}`);
+    } else if (closed.length) {
+      notifyOk(`${profile.name}: ${closed.length} Programm${closed.length === 1 ? '' : 'e'} beendet`);
+    } else {
+      // Saying "stopped" when nothing was running is how the old bug hid.
+      notifyOk(`${profile.name}: es lief nichts mehr`);
+    }
     // Give the processes a moment to disappear before re-reading the list.
     setTimeout(() => refreshRunning(), 1200);
   } catch (err) {

@@ -178,7 +178,16 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   /* -------------------------------------------------------------- profiles */
 
   ipcMain.handle('profiles:list', wrap(async () => ({
-    profiles: store.state.profiles,
+    // Each entry carries the process name the main process would use, so the
+    // running indicator and the stop action agree on what a program is called.
+    // It is derived, never stored: sanitizeApp drops it again on save.
+    profiles: store.state.profiles.map((profile) => ({
+      ...profile,
+      apps: (profile.apps || []).map((app) => ({
+        ...app,
+        resolvedProcess: launcher.namesForApp(app)[0] || null
+      }))
+    })),
     lastProfileId: store.state.lastProfileId
   }), 'profiles:list'));
 
@@ -233,6 +242,15 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     }
     return result;
   }, 'profiles:launch'));
+
+  // The confirmation dialog shows exactly this. A dialog that worked it out
+  // for itself would eventually disagree with what actually happens.
+  ipcMain.handle('profiles:stopPlan', wrap(async (id) => {
+    const profileId = requireString(id, 'Profile id');
+    const profile = store.state.profiles.find((p) => p.id === profileId);
+    if (!profile) throw new Error('Profile not found');
+    return launcher.stopPlan(profile);
+  }, 'profiles:stopPlan'));
 
   ipcMain.handle('profiles:stop', wrap(async (id) => {
     const profileId = requireString(id, 'Profile id');

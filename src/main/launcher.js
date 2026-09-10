@@ -136,25 +136,130 @@ async function launchProfile(profile, emit = () => {}) {
   return { ok: results.every((r) => r.ok), results, tweaks: tweakReport };
 }
 
-/** Closes everything a profile started, by process name. */
-async function stopProfile(profile) {
+/**
+ * Protocol handlers where the scheme is the program itself.
+ *
+ * A profile that starts Spotify through `spotify:` used to contribute no
+ * process name at all, so stopping the profile silently left it running: it
+ * was never skipped, it never appeared in the list. These are the cases where
+ * the scheme reliably identifies the process.
+ */
+const URI_PROCESSES = {
+  spotify: ['Spotify'],
+  discord: ['Discord', 'DiscordPTB', 'DiscordCanary'],
+  slack: ['slack'],
+  steam: ['steam'],
+  'com.epicgames.launcher': ['EpicGamesLauncher'],
+  obsidian: ['Obsidian'],
+  teams: ['ms-teams', 'Teams']
+};
+
+/**
+ * A launcher URI that starts something else is deliberately not resolved.
+ *
+ * `steam://rungameid/553850` names a game, not a process, and mapping it to
+ * Steam would close the launcher and leave the game running — worse than doing
+ * nothing, because it looks like it worked. These are reported as unresolved
+ * so the interface can say which entry needs a process name.
+ */
+const LAUNCHES_SOMETHING_ELSE = /^(steam:\/\/(rungameid|run|launch)|com\.epicgames\.launcher:\/\/apps)/i;
+
+function baseName(value) {
+  return String(value || '').split(/[\\/]/).filter(Boolean).pop() || '';
+}
+
+function stripExtension(value) {
+  return String(value || '').replace(/\.(exe|com|bat|cmd)$/i, '').trim();
+}
+
+/** Best guess at the process name behind one launch entry, or null. */
+function namesForApp(app) {
+  if (!app) return [];
+  if (app.processName) return [stripExtension(app.processName)].filter(Boolean);
+
+  const launch = app.launch || {};
+  const target = expand(launch.target || '');
+
+  if (launch.type === 'exe') {
+    const name = stripExtension(baseName(target));
+    return name ? [name] : [];
+  }
+
+  if (launch.type === 'uri') {
+    if (LAUNCHES_SOMETHING_ELSE.test(target)) return [];
+    const scheme = (/^([a-z0-9.+-]+):/i.exec(target) || [])[1];
+    return scheme ? (URI_PROCESSES[scheme.toLowerCase()] || []) : [];
+  }
+
+  if (launch.type === 'appsfolder') {
+    // A Store app id looks like Publisher.App_hash!AppId; the part after the
+    // exclamation mark is usually what the process is called.
+    const appId = target.split('!').pop();
+    const name = stripExtension(appId);
+    return name && name !== target ? [name] : [];
+  }
+
+  if (launch.type === 'shell') {
+    // The first token of the command line, quoted or not.
+    const first = (/^\s*"([^"]+)"/.exec(target) || [])[1] || target.trim().split(/\s+/)[0];
+    const name = stripExtension(baseName(first));
+    return name ? [name] : [];
+  }
+
+  return [];
+}
+
+/**
+ * What stopping a profile will close, and what it cannot.
+ *
+ * Exported so the confirmation dialog can show exactly this list. A dialog that
+ * computes its own answer would eventually disagree with what actually happens.
+ */
+function stopPlan(profile) {
   if (!profile) throw new Error('Unknown profile');
   const names = new Set();
-  for (const app of profile.apps || []) {
-    const explicit = app.processName;
-    if (explicit) { names.add(explicit); continue; }
-    const target = app.launch && app.launch.type === 'exe' ? app.launch.target : null;
-    if (target) names.add(path.basename(target));
+  const unresolved = [];
+
+  for (const app of (profile.apps || [])) {
+    if (app && app.enabled === false) continue;
+    const resolved = namesForApp(app);
+    if (!resolved.length) {
+      unresolved.push({
+        name: (app && app.name) || 'Unbenannt',
+        type: (app && app.launch && app.launch.type) || 'unbekannt',
+        target: (app && app.launch && app.launch.target) || ''
+      });
+      continue;
+    }
+    for (const name of resolved) names.add(name);
   }
-  for (const extra of profile.alsoClose || []) names.add(extra);
+
+  for (const extra of (profile.alsoClose || [])) {
+    const name = stripExtension(baseName(extra));
+    if (name) names.add(name);
+  }
+
+  return { names: [...names], unresolved };
+}
+
+/**
+ * Closes everything the profile is responsible for.
+ *
+ * Whether a program was already running before the profile started makes no
+ * difference: a profile owns its programs while it is active, so stopping it
+ * closes them either way.
+ */
+async function stopProfile(profile) {
+  if (!profile) throw new Error('Unknown profile');
+  const { names, unresolved } = stopPlan(profile);
 
   const results = [];
   for (const name of names) {
     try {
-      await processes.killByName(name);
-      results.push({ name, ok: true });
+      const outcome = await processes.killByName(name);
+      results.push({ name, ok: true, matched: outcome.matched !== false });
     } catch (err) {
-      results.push({ name, ok: false, error: err.message });
+      results.push({ name, ok: false, matched: false, error: err.message });
     }
   }
 
@@ -167,7 +272,7 @@ async function stopProfile(profile) {
     restored = { reverted: [], failed: [err.message] };
   }
 
-  return { ok: true, results, restored };
+  return { ok: true, results, unresolved, restored };
 }
 
-module.exports = { launchItem, launchProfile, stopProfile, expand };
+module.exports = { launchItem, launchProfile, stopProfile, stopPlan, namesForApp, expand, URI_PROCESSES };

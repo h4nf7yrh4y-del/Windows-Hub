@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('hub', {
     reorder: (ids) => invoke('profiles:reorder', ids),
     launch: (id) => invoke('profiles:launch', id),
     stop: (id) => invoke('profiles:stop', id),
+    stopPlan: (id) => invoke('profiles:stopPlan', id),
     onProgress: (handler) => on('profile:progress', handler)
   },
   schedule: {

@@ -212,23 +212,38 @@ async function kill(pid, { tree = true, force = true } = {}) {
   return { ok: true, pid: id };
 }
 
+/**
+ * Kills every process of that name, whoever started it.
+ *
+ * `matched` says whether anything was actually there. The caller needs the
+ * difference: "closed" and "was not running" are both fine outcomes, but
+ * reporting the second as the first is how a program that quietly survives
+ * looks like a success.
+ */
 async function killByName(name, opts = {}) {
   if (!name || typeof name !== 'string') throw new Error('Invalid process name');
-  const clean = name.replace(/\.exe$/i, '');
+  const clean = name.replace(/\.(exe|com|bat|cmd)$/i, '');
   if (IS_WIN) {
     const args = ['/IM', `${clean}.exe`];
     if (opts.tree !== false) args.push('/T');
     if (opts.force !== false) args.push('/F');
     try {
       await runCommand('taskkill', args);
+      return { ok: true, name: clean, matched: true };
     } catch (err) {
-      // taskkill exits non-zero when nothing matched; that is not a failure here.
-      if (!/not found|nicht gefunden/i.test(err.message)) throw err;
+      // taskkill exits non-zero when nothing matched; that is not a failure.
+      if (/not found|nicht gefunden/i.test(err.message)) {
+        return { ok: true, name: clean, matched: false };
+      }
+      throw err;
     }
-    return { ok: true, name: clean };
   }
-  try { await runCommand('pkill', ['-f', clean]); } catch (_) { /* nothing matched */ }
-  return { ok: true, name: clean };
+  try {
+    await runCommand('pkill', ['-f', clean]);
+    return { ok: true, name: clean, matched: true };
+  } catch (_) {
+    return { ok: true, name: clean, matched: false };
+  }
 }
 
 /**
