@@ -368,11 +368,19 @@ module.exports = [
       await t.wait(1500);
       t.assert(await t.exists('#view-windows .tab-body'), 'Bildschirm-Panel rendert');
 
+      // Reading the monitors goes through a compiled helper. On a cold, slow
+      // machine that compile is the single longest operation in the app, so
+      // this waits rather than assuming.
+      const displays = await t.evalExpr(
+        `window.hub.display.list().then((r) => ({ ok: r.ok, supported: r.ok && r.data.supported, note: r.ok ? r.data.note : r.error }))`
+      );
+      t.assert(displays.ok, 'Die Bildschirmabfrage antwortet', JSON.stringify(displays));
+
       await t.clickText('#view-windows .tab-bar .tab', 'Funktionen');
       // The grid element exists before the catalogue is read, so waiting for it
       // would prove nothing. The filter tabs are built from the loaded data.
       await t.waitFor(`document.querySelectorAll('#view-windows .filter-tabs .filter-tab').length > 0`,
-        { label: 'Funktionsliste', timeout: 60000 });
+        { label: 'Funktionsliste', timeout: 120000 });
       t.atLeast(await t.count('#view-windows .filter-tabs .filter-tab'), 2, 'Filter für die Funktionsliste');
 
       const supported = await t.evalExpr(`window.hub.features.list().then((r) => r.ok && r.data.supported)`);

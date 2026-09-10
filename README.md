@@ -459,6 +459,11 @@ Minuten ohne Auftrag beendet er den Host von selbst.
 
 Als Nebeneffekt bleibt die C#-Hilfsklasse für die Bildschirmsteuerung nach dem
 ersten Laden im Speicher, statt bei jedem Helligkeitsschritt neu geladen zu werden.
+Übersetzt wird sie einmalig beim Start im Hintergrund: `Add-Type` ruft den echten
+C#-Compiler auf, und das ist auf einem kalten Rechner die mit Abstand längste
+Operation der Anwendung. Beim ersten Öffnen der Bildschirmseite wäre sie eine Minute
+Wartezeit — und würde dabei jede andere Systemabfrage blockieren, weil alle dieselbe
+Shell benutzen.
 
 ---
 

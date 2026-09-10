@@ -14,6 +14,7 @@ const claudesession = require('./claudesession');
 const tweaks = require('./tweaks');
 const pshost = require('./pshost');
 const scheduler = require('./scheduler');
+const display = require('./display');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -324,7 +325,19 @@ app.on('ready', () => {
 
   // Start the PowerShell host before anything asks for it, so the first
   // process list is not the one that pays for the runtime loading itself.
-  if (IS_WIN) pshost.warmUp();
+  if (IS_WIN) {
+    pshost.warmUp();
+    // Compiling the monitor helper is a compiler run and is paid once per
+    // version. Doing it now, in the background, keeps it from happening the
+    // first time someone opens the monitor panel — and from blocking every
+    // other system query while it does.
+    display.ensureCompiled()
+      .then((result) => {
+        if (result.ok && !result.cached) log.info(`Bildschirm-Hilfsklasse übersetzt (${result.ms} ms)`);
+        else if (!result.ok) log.warn(`Bildschirm-Hilfsklasse: ${result.reason}`);
+      })
+      .catch((err) => log.warn(`Bildschirm-Hilfsklasse: ${err.message}`));
+  }
 
   scheduler.start((channel, payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);

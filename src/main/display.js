@@ -56,6 +56,46 @@ async function ensureHelper() {
   return helperPaths;
 }
 
+/**
+ * Compiles the helper before anyone asks for it.
+ *
+ * The preamble compiles on first use, and `Add-Type` runs the real C# compiler:
+ * on a cold, slow machine that is tens of seconds, far past the timeout a
+ * display query is given. It then fails, produces no assembly, and the next
+ * call compiles again — while every other system query waits behind it, since
+ * they all share one shell.
+ *
+ * Doing it once at startup with a compiler-sized budget removes both problems,
+ * and the first click on the monitor panel is fast instead of taking a minute.
+ */
+let compiling = null;
+
+async function ensureCompiled() {
+  if (!IS_WIN) return { ok: false, reason: 'Nur unter Windows verfügbar' };
+  if (compiling) return compiling;
+
+  compiling = (async () => {
+    const paths = await ensureHelper();
+    if (fs.existsSync(paths.dllPath)) return { ok: true, cached: true };
+    const started = Date.now();
+    try {
+      // Ten times the budget of a query, because this is a compiler run and
+      // is paid exactly once per version of the helper.
+      await runPowerShell(`${preamble(paths)}
+if ('HubDisplay' -as [type]) { 'ok' } else { throw 'Hilfsklasse konnte nicht geladen werden' }
+`, 180000);
+      return { ok: true, ms: Date.now() - started };
+    } catch (err) {
+      return { ok: false, reason: err.message, ms: Date.now() - started };
+    }
+  })();
+
+  const result = await compiling;
+  // A failure is worth retrying on the next start, not on the next call.
+  compiling = Promise.resolve(result);
+  return result;
+}
+
 function psLiteral(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
@@ -98,6 +138,7 @@ const asArray = (value) => (value === null || value === undefined ? [] : (Array.
 /* ------------------------------------------------------------- enumeration */
 
 async function nativeList(includeModes) {
+  await ensureCompiled();
   const paths = await ensureHelper();
   const out = await runPowerShell(`${preamble(paths)}
 [HubDisplay]::List($${includeModes ? 'true' : 'false'}) | ConvertTo-Json -Compress -Depth 4
@@ -117,6 +158,7 @@ $ErrorActionPreference = "SilentlyContinue"
 }
 
 async function ddcBrightness() {
+  await ensureCompiled();
   const paths = await ensureHelper();
   const out = await runPowerShell(`${preamble(paths)}
 [HubDisplay]::GetBrightness() | ConvertTo-Json -Compress -Depth 3
@@ -213,6 +255,7 @@ $m | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{ Timeout = 1; Br
   const index = Number(target && target.ddcIndex);
   if (!Number.isInteger(index) || index < 0) throw new Error('Dieser Bildschirm meldet keine Helligkeitssteuerung');
 
+  await ensureCompiled();
   const paths = await ensureHelper();
   const out = await runPowerShell(`${preamble(paths)}
 if ([HubDisplay]::SetBrightness(${index}, ${percent})) { "OK" } else { "FAILED" }
@@ -246,6 +289,7 @@ async function setMode(device, width, height, refresh) {
   const r = Math.round(Number(refresh) || 0);
   if (!(w > 0 && h > 0)) throw new Error('Ungültige Auflösung');
 
+  await ensureCompiled();
   const paths = await ensureHelper();
   const out = await runPowerShell(`${preamble(paths)}
 [HubDisplay]::SetMode(${psLiteral(device)}, ${w}, ${h}, ${r})
@@ -320,6 +364,7 @@ async function setPrimary(device) {
   if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
   if (typeof device !== 'string' || !device) throw new Error('Bildschirm fehlt');
 
+  await ensureCompiled();
   const paths = await ensureHelper();
   const out = await runPowerShell(`${preamble(paths)}
 [HubDisplay]::SetPrimary(${psLiteral(device)})
@@ -364,6 +409,7 @@ async function openSettings(page) {
 }
 
 module.exports = {
+  ensureCompiled,
   list, setBrightness, setMode, setModeSafely, cancelRevert, setRevertHandler,
   setPrimary, setProjection, openSettings, PROJECTION, DISP_CHANGE
 };
