@@ -500,7 +500,8 @@ Administratorrechte.** Ohne diese schlägt das Entfernen mit einer Fehlermeldung
 npm run dev     # startet mit geöffneten DevTools
 npm run lint    # prüft alle Quelldateien auf Syntaxfehler
 npm test        # prüft die GPU-Auswertung und die PowerShell-Skripte
-npm run check   # lint und test zusammen
+npm run test:ui # startet die App und bedient jede Ansicht
+npm run check   # lint, test und test:ui zusammen
 npm run pack    # baut ein entpacktes Verzeichnis statt eines Installers
 ```
 
@@ -514,6 +515,23 @@ JSON-Ausgabe gegen den Node-seitigen Parser gehalten. Ohne PowerShell wird diese
 Teil übersprungen; mit `PWSH_PATH` lässt sich ein Binary explizit angeben. Das ist
 wichtig, weil ein Syntaxfehler in einem dieser Skripte unter Windows nicht abstürzt,
 sondern nur ein leeres Ergebnis liefert.
+
+### Oberflächentests
+
+`npm run test:ui` startet die echte Anwendung in einem echten Electron, klickt sich
+durch alle Ansichten und prüft, was dabei entsteht: dass die Profilkarten das gesäte
+Testprofil zeigen, dass sich der Editor öffnen und folgenlos abbrechen lässt, dass die
+Systemwerte sich tatsächlich bewegen, dass ein Overlay ein echtes Fenster aufmacht und
+„Alle schließen" auch die Schalter zurücksetzt, dass jede Ansicht ein zweites Betreten
+überlebt, und dass im Diagnosebericht kein Benutzername steht. Die Konfiguration liegt
+dabei in einem Wegwerfverzeichnis; die eigene Einrichtung wird nicht angefasst.
+
+Unter Linux wird `xvfb` benutzt, falls kein `DISPLAY` gesetzt ist. Fehlt beides, wird
+der Lauf mit einem Hinweis übersprungen statt fehlzuschlagen. Windows-eigene Aufrufe
+scheitern auf einem Linux-Rechner erwartungsgemäß — geprüft wird dort, dass die
+Oberfläche das mit einem Hinweis beantwortet und nicht mit einer leeren Fläche. In der
+CI läuft derselbe Durchlauf zusätzlich auf einem Windows-Runner, und das ist die einzige
+Stelle, an der die Windows-Pfade wirklich ausgeführt werden.
 
 Es gibt bewusst keinen Bundler. Der Renderer besteht aus nativen ES-Modulen, die der
 Browser direkt lädt; eine Änderung ist nach `F5` sichtbar.

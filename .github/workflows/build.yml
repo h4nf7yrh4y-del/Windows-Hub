@@ -25,17 +25,29 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Electron needs a handful of desktop libraries and a display even when
+      # nothing is ever shown. The runner image carries most of them; the
+      # sound library was renamed between Ubuntu releases, hence the fallback.
+      - name: Install system libraries for Electron
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgbm1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2
+
       - name: Install dependencies
         run: npm ci
-        env:
-          # The Electron binary is only needed to run the app, not to test it.
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
       - name: Lint
         run: npm run lint
 
       - name: Unit tests
-        run: node test/gpu.test.js
+        run: npm test
+
+      # Starts the real application under a virtual display and drives every
+      # view. Windows-only calls fail here by design; the point is that the
+      # user interface survives those failures instead of going blank.
+      - name: Renderer smoke tests
+        run: npm run test:ui
 
   build-windows:
     name: Build installer
@@ -58,6 +70,12 @@ jobs:
         # On Windows this also runs every generated PowerShell script through
         # Windows PowerShell itself, which is what the app actually invokes.
         run: npm test
+
+      # The only place the application is ever started on the platform it was
+      # written for. Every Windows-only path — the process list, the display
+      # enumeration, the feature catalogue — runs for real here.
+      - name: Renderer smoke tests
+        run: npm run test:ui
 
       - name: Build installer and portable exe
         run: npm run dist

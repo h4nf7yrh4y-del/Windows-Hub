@@ -52,6 +52,26 @@ function baseName(value) {
   return String(value).split(/[\\/]/).filter(Boolean).pop() || String(value);
 }
 
+/**
+ * Keeps the shape of a path but drops the person out of it.
+ *
+ * The installation and configuration directories are worth seeing in a bug
+ * report — they say whether a build is portable or installed — but on Windows
+ * both sit under C:\Users\<name>, so printing them raw puts the user's name
+ * in a file meant to be handed to someone else.
+ */
+function redactPath(value) {
+  if (value === null || value === undefined) return value;
+  let out = String(value);
+  const home = os.homedir();
+  if (home && out.toLowerCase().startsWith(home.toLowerCase())) {
+    out = `~${out.slice(home.length)}`;
+  }
+  return out
+    .replace(/([A-Za-z]:\\Users\\)[^\\]+/gi, '$1<Benutzer>')
+    .replace(/(\/(?:home|Users)\/)[^/]+/g, '$1<Benutzer>');
+}
+
 function bytes(value) {
   const n = Number(value) || 0;
   if (n < 1024) return `${n} B`;
@@ -121,8 +141,8 @@ async function build() {
     ['Chromium', process.versions.chrome],
     ['Node', process.versions.node],
     ['Paketiert', app.isPackaged ? 'ja' : 'nein (Entwicklungsmodus)'],
-    ['Programmpfad', app.getAppPath()],
-    ['Konfiguration', store.configPath()],
+    ['Programmpfad', redactPath(app.getAppPath())],
+    ['Konfiguration', redactPath(store.configPath())],
     ['Betriebszeit Hub', `${Math.round(process.uptime())} s`]
   ]));
 
@@ -206,7 +226,7 @@ async function build() {
   const logInfo = logger.paths();
   parts.push(section('Protokoll'));
   parts.push(pairs([
-    ['Verzeichnis', logInfo.dir || '—'],
+    ['Verzeichnis', redactPath(logInfo.dir) || '—'],
     ['Dateien', (logInfo.files || []).map((f) => `${f.name} (${bytes(f.size)})`).join(', ') || '—'],
     ['Schreiben deaktiviert', logInfo.disabled ? 'ja' : 'nein']
   ]));

@@ -92,15 +92,15 @@ test('paths() reports the files it keeps', () => {
 console.log('\nDiagnose-Bericht');
 
 // diagnostics.js pulls in electron, so only the pure part is exercised here.
-const { sanitizeConfig } = (() => {
+const { sanitizeConfig, redactPath } = (() => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src/main/diagnostics.js'), 'utf8');
   // Starts at baseName, which sanitizeConfig depends on, and stops before the
   // first function that needs Electron.
   const start = source.indexOf('function baseName');
   const end = source.indexOf('async function probe');
   const body = source.slice(start, end);
-  const factory = new Function('path', `${body}; return { sanitizeConfig };`);
-  return factory(path);
+  const factory = new Function('path', 'os', `${body}; return { sanitizeConfig, redactPath };`);
+  return factory(path, os);
 })();
 
 const SAMPLE = {
@@ -152,6 +152,43 @@ test('settings and hotkeys are carried through', () => {
 test('an empty configuration does not throw', () => {
   assert.doesNotThrow(() => sanitizeConfig({}));
   assert.strictEqual(sanitizeConfig({}).profileCount, 0);
+});
+
+/* ------------------------------------------------------------ path redaction */
+
+console.log('\nPfad-Bereinigung');
+
+test('a Windows user directory loses the user name', () => {
+  assert.strictEqual(
+    redactPath('C:\\Users\\Alexander\\AppData\\Local\\Programs\\Windows Hub'),
+    'C:\\Users\\<Benutzer>\\AppData\\Local\\Programs\\Windows Hub'
+  );
+});
+
+test('the case of the drive letter and of Users does not matter', () => {
+  assert.strictEqual(
+    redactPath('c:\\users\\Alexander\\Desktop'),
+    'c:\\users\\<Benutzer>\\Desktop'
+  );
+});
+
+test('a POSIX home directory loses the user name', () => {
+  assert.strictEqual(redactPath('/home/someone-else/apps/hub'), '/home/<Benutzer>/apps/hub');
+  assert.strictEqual(redactPath('/Users/someone-else/Desktop'), '/Users/<Benutzer>/Desktop');
+});
+
+test('the own home directory is shortened rather than masked', () => {
+  assert.strictEqual(redactPath(path.join(os.homedir(), 'x', 'y')), `~${path.sep}x${path.sep}y`);
+});
+
+test('a path without a user directory is untouched', () => {
+  assert.strictEqual(redactPath('D:\\Games\\Steam'), 'D:\\Games\\Steam');
+  assert.strictEqual(redactPath('/opt/hub'), '/opt/hub');
+});
+
+test('null and undefined survive without becoming the string "null"', () => {
+  assert.strictEqual(redactPath(null), null);
+  assert.strictEqual(redactPath(undefined), undefined);
 });
 
 /* ------------------------------------------------------ config migration */

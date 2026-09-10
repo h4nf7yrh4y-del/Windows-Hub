@@ -14,7 +14,8 @@
     "dist": "electron-builder --win --x64 --publish never",
     "pack": "electron-builder --win --x64 --dir --publish never",
     "test": "node test/gpu.test.js && node test/status.test.js && node test/diagnostics.test.js && node test/powershell.test.js",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm test && npm run test:ui",
+    "test:ui": "node test/ui/run.js"
   },
   "dependencies": {
     "systeminformation": "^5.33.8"
