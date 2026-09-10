@@ -432,6 +432,61 @@ module.exports = [
   },
 
   {
+    name: 'Zweiter Bildschirm: Fenster, Inhalt, Schalter',
+    async run(t) {
+      const status = await t.evalExpr(`window.hub.dashboard.status().then((r) => r.data)`);
+      t.assert(Array.isArray(status.displays) && status.displays.length >= 1,
+        'Die Bildschirme werden aufgezählt', JSON.stringify(status.displays));
+      t.eq(status.open, false, 'Ohne Zutun ist das Dashboard zu');
+
+      // On a single-screen machine the board would open on top of the hub,
+      // which is not a feature — the button says so by staying away.
+      t.eq(await t.evalExpr(`document.querySelector('#btn-dashboard').classList.contains('hidden')`),
+        status.onlyOneDisplay, 'Der Knopf erscheint nur mit zweitem Bildschirm');
+
+      const before = t.windows().length;
+      await t.evalExpr(`window.hub.dashboard.open()`);
+      let board = null;
+      for (let i = 0; i < 40 && !board; i += 1) {
+        board = t.windows().find((w) => !w.isDestroyed() && w.webContents.getURL().includes('dashboard.html'));
+        if (!board) await t.wait(500);
+      }
+      t.assert(!!board, 'Das Dashboard-Fenster geht auf', `Fenster vorher ${before}`);
+      if (!board) return;
+
+      t.watchConsole(board.webContents, 'dashboard');
+      await t.wait(2500);
+
+      const content = await board.webContents.executeJavaScript(`(() => ({
+        panels: document.querySelectorAll('.dash-panel').length,
+        rings: document.querySelectorAll('.dash-rings .ring').length,
+        clock: (document.querySelector('.dash-clock-time') || {}).textContent || '',
+        canvases: document.querySelectorAll('.dash-graph canvas').length,
+        profiles: document.querySelectorAll('.dash-profile').length
+      }))()`, true);
+
+      t.atLeast(content.panels, 5, 'Alle Bereiche werden gebaut', JSON.stringify(content));
+      t.eq(content.rings, 3, 'CPU, RAM und GPU als Ringe');
+      t.assert(/^\d{2}:\d{2}$/.test(content.clock.trim()), 'Die Uhr läuft', content.clock);
+      t.atLeast(content.canvases, 2, 'Verläufe für CPU und Netzwerk');
+      t.atLeast(content.profiles, 1, 'Das gesäte Profil erscheint auf dem zweiten Schirm');
+
+      // It must keep receiving values even though it never has focus.
+      const samples = await board.webContents.executeJavaScript(`new Promise((resolve) => {
+        let count = 0;
+        const stop = window.hub.metrics.onSample(() => { count += 1; });
+        setTimeout(() => { stop(); resolve(count); }, 3200);
+      })`, true);
+      t.atLeast(samples, 2, 'Der Messstrom erreicht auch das zweite Fenster', `nur ${samples} Messungen`);
+
+      await t.evalExpr(`window.hub.dashboard.close()`);
+      await t.wait(1200);
+      t.eq(t.windows().some((w) => !w.isDestroyed() && w.webContents.getURL().includes('dashboard.html')), false,
+        'Und lässt sich wieder schließen');
+    }
+  },
+
+  {
     name: 'Bibliothek: Suche und Leerzustand',
     async run(t) {
       await t.view('library');
@@ -447,7 +502,14 @@ module.exports = [
     name: 'Einstellungen: Panels, Schalter, Tastenkürzel, Diagnose',
     async run(t) {
       await t.view('settings');
-      t.atLeast(await t.count('.settings-cols .panel'), 4, 'Alle Einstellungsgruppen sind da');
+      t.atLeast(await t.count('.settings-cols .panel'), 5, 'Alle Einstellungsgruppen sind da');
+      t.assert(await t.evalExpr(
+        `[...document.querySelectorAll('.panel-title')].some((n) => n.textContent === 'Bildschirme')`
+      ), 'Die Bildschirmwahl hat einen eigenen Bereich');
+      t.assert(await t.evalExpr(`(() => {
+        const row = [...document.querySelectorAll('.setting-row')].find((r) => r.textContent.includes('Hub auf Bildschirm'));
+        return !!(row && row.querySelector('select') && row.querySelector('select').options.length >= 1);
+      })()`), 'Der Monitor für den Hub lässt sich wählen');
       t.atLeast(await t.count('.settings-cols .toggle'), 6, 'Schalter werden gerendert');
       t.atLeast(await t.count('.settings-cols .setting-row'), 8, 'Einstellungszeilen mit Beschriftung');
       t.assert(((await t.text('#view-settings .view-sub')) || '').includes('hub-config.json'),

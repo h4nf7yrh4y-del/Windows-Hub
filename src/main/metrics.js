@@ -218,11 +218,11 @@ function start(handler, opts = {}) {
   stop();
   sampleCpu(); // prime the delta
   fastTimer = setInterval(() => {
-    if (subscribers + extraSubscribers <= 0) return;
+    if (activeConsumers() <= 0) return;
     try { onSample(fastSample()); } catch (err) { console.error('[metrics]', err.message); }
   }, fastMs);
   slowTimer = setInterval(() => {
-    if (subscribers + extraSubscribers <= 0) return;
+    if (activeConsumers() <= 0) return;
     collectSlow({ includeGpu: opts.includeGpu !== false });
   }, slowMs);
   collectSlow({ includeGpu: opts.includeGpu !== false });
@@ -239,16 +239,23 @@ function subscribe() { subscribers += 1; return subscribers; }
 function unsubscribe() { subscribers = Math.max(0, subscribers - 1); return subscribers; }
 
 /**
- * Consumers outside the main window, currently the floating overlays. Tracked
- * separately so closing the hub window does not stop a stream the overlays are
- * still rendering.
+ * Consumers outside the main window: the floating overlays and the
+ * second-screen dashboard. Tracked separately so closing the hub window does
+ * not stop a stream they are still rendering, and counted per source, because
+ * one absolute number would mean whichever of them reported last erased the
+ * other's claim on the collector.
  */
-let extraSubscribers = 0;
-function setExtraSubscribers(count) {
-  extraSubscribers = Math.max(0, Number(count) || 0);
-  return extraSubscribers;
+const extra = new Map();
+function setExtraSubscribers(source, count) {
+  extra.set(String(source), Math.max(0, Number(count) || 0));
+  return extraSubscribers();
 }
-function activeConsumers() { return subscribers + extraSubscribers; }
+function extraSubscribers() {
+  let total = 0;
+  for (const value of extra.values()) total += value;
+  return total;
+}
+function activeConsumers() { return subscribers + extraSubscribers(); }
 
 module.exports = {
   start, stop, subscribe, unsubscribe, setExtraSubscribers, activeConsumers,

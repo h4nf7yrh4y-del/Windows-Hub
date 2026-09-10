@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'" />
+  <title>Windows Hub · Dashboard</title>
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/effects.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles/dashboard.css" />
+</head>
+<body class="dash-body">
+  <div id="fx-layer" aria-hidden="true">
+    <div class="fx-grid"></div>
+    <div class="fx-vignette"></div>
+  </div>
+  <main id="dash-root"></main>
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

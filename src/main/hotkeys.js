@@ -26,6 +26,10 @@ const ACTIONS = {
   openClaude: {
     label: 'Claude-Code-Konsole öffnen',
     default: ''
+  },
+  toggleDashboard: {
+    label: 'Dashboard auf dem zweiten Bildschirm',
+    default: ''
   }
 };
 

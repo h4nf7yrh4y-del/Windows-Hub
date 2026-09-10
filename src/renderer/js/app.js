@@ -161,6 +161,38 @@ function buildRail() {
 
 /* ------------------------------------------------------------- top bar UI */
 
+/**
+ * The second-screen button.
+ *
+ * Only shown once a second monitor exists: on a single-screen machine the
+ * dashboard would open on top of the hub, which is not a feature.
+ */
+async function bindDashboardButton() {
+  const button = $('#btn-dashboard');
+  if (!button) return;
+
+  const paint = (status) => {
+    const useful = status && !status.onlyOneDisplay;
+    button.classList.toggle('hidden', !useful);
+    button.classList.toggle('active', !!(status && status.open));
+    button.title = status && status.open
+      ? `Dashboard auf „${status.displayLabel}" schließen`
+      : `Dashboard auf „${status && status.displayLabel}" öffnen`;
+  };
+
+  try {
+    paint(await api.dashboard.status());
+  } catch (_) { /* leave it hidden */ }
+
+  api.dashboard.onChanged((status) => paint(status));
+  button.addEventListener('click', async () => {
+    try {
+      await api.dashboard.toggle();
+      paint(await api.dashboard.status());
+    } catch (err) { notifyError(err.message); }
+  });
+}
+
 function bindTopbar() {
   $('#btn-minimize').addEventListener('click', () => api.window.minimize().catch(() => {}));
   $('#btn-fullscreen').addEventListener('click', () => api.window.toggleFullscreen().catch(() => {}));

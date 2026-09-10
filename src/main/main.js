@@ -15,6 +15,8 @@ const tweaks = require('./tweaks');
 const pshost = require('./pshost');
 const scheduler = require('./scheduler');
 const display = require('./display');
+const screens = require('./screens');
+const dashboard = require('./dashboard');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -110,8 +112,15 @@ function createWindow() {
   mainWindow.loadURL('hub://app/index.html');
 
   mainWindow.once('ready-to-show', () => {
+    // Which monitor the hub belongs on. Placing it before filling the screen
+    // matters: a window that is already fullscreen ignores setBounds, so the
+    // order decides whether the choice has any effect at all.
+    const target = screens.resolve(settings.hubDisplay || null);
+    if (target.display.id !== screen.getPrimaryDisplay().id || settings.hubDisplay) {
+      screens.placeWindow(mainWindow, target.display, { fullscreen: false });
+    }
     if (settings.kiosk) mainWindow.setKiosk(true);
-    else if (settings.startFullscreen) mainWindow.setFullScreen(true);
+    else if (settings.startFullscreen) screens.placeWindow(mainWindow, target.display, { fullscreen: true });
     mainWindow.show();
     mainWindow.focus();
     if (IS_DEV) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -244,6 +253,7 @@ function toggleOverlays() {
     overlays.closeAll();
   } else {
     overlays.restore();
+  dashboard.restore();
     // Nothing was ever enabled: give the key something to do rather than
     // leaving the user wondering whether it worked.
     if (overlays.count() === 0) {
@@ -266,7 +276,8 @@ function registerShortcuts() {
   const results = hotkeys.init({
     toggleHub: toggleWindow,
     toggleOverlays,
-    openClaude: () => createClaudeWindow()
+    openClaude: () => createClaudeWindow(),
+    toggleDashboard: () => dashboard.toggle()
   });
   for (const result of results) {
     if (!result.ok) console.warn(`[hotkeys] ${result.action}: ${result.reason}`);
@@ -299,7 +310,17 @@ app.on('ready', () => {
     preload: path.join(__dirname, '..', 'preload', 'preload.js'),
     // Overlays are consumers of the metrics stream in their own right, so the
     // collector must keep running even when the hub window is hidden.
-    onChange: (count) => metrics.setExtraSubscribers(count)
+    onChange: (count) => metrics.setExtraSubscribers('overlays', count)
+  });
+
+  dashboard.init({
+    preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+    onChange: (open) => {
+      metrics.setExtraSubscribers('dashboard', open ? 1 : 0);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('dashboard:changed', dashboard.status());
+      }
+    }
   });
 
   metrics.start((sample) => {
@@ -307,6 +328,7 @@ app.on('ready', () => {
       mainWindow.webContents.send('metrics:sample', sample);
     }
     overlays.broadcast('metrics:sample', sample);
+    dashboard.send('metrics:sample', sample);
   }, {
     fastMs: settings.metricsIntervalMs,
     slowMs: settings.slowMetricsIntervalMs,
@@ -369,6 +391,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   overlays.closeAll();
+  dashboard.close();
   try { claudesession.stop(); } catch (_) { /* nothing running */ }
   // Releases the display blocker synchronously. The rest of the revert needs
   // PowerShell and cannot finish inside a quit handler, which is exactly why

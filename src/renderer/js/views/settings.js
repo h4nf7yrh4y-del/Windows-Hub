@@ -386,6 +386,104 @@ export function createSettingsView() {
 
   renderHotkeys();
 
+  /* ------------------------------------------------------------ monitors */
+
+  // A second monitor is the difference between a launcher you have to alt-tab
+  // to and one you can glance at, so this is one panel: where the hub lives,
+  // and what the other screen shows.
+  const hubDisplaySelect = el('select', { class: 'select' });
+  const dashDisplaySelect = el('select', { class: 'select' });
+  const dashButton = el('button', { class: 'btn primary sm', text: 'Dashboard öffnen' });
+  const screenNote = el('div', { class: 'setting-hint' });
+  const dashAutoToggle = el('div', { class: 'toggle', role: 'switch', 'aria-checked': 'false' });
+
+  let screenInfo = { displays: [] };
+  let dashInfo = { open: false, displays: [] };
+
+  function describeDisplay(display) {
+    const size = `${display.bounds.width}\u00d7${display.bounds.height}`;
+    const marks = [display.primary ? 'Haupt' : null, display.internal ? 'intern' : null].filter(Boolean);
+    return `${display.label} \u00b7 ${size}${marks.length ? ` \u00b7 ${marks.join(', ')}` : ''}`;
+  }
+
+  function fillDisplays(select, displays, selectedId) {
+    clear(select);
+    for (const display of displays) {
+      select.appendChild(el('option', { value: String(display.id), text: describeDisplay(display) }));
+    }
+    if (selectedId !== null && selectedId !== undefined) select.value = String(selectedId);
+  }
+
+  async function renderScreens() {
+    try {
+      screenInfo = await api.screens.list();
+      dashInfo = await api.dashboard.status();
+    } catch (err) {
+      screenNote.textContent = err.message;
+      return;
+    }
+
+    fillDisplays(hubDisplaySelect, screenInfo.displays, screenInfo.hubDisplayId);
+    fillDisplays(dashDisplaySelect, dashInfo.displays, dashInfo.displayId);
+    dashAutoToggle.setAttribute('aria-checked', String(!!dashInfo.autoOpen));
+    dashButton.textContent = dashInfo.open ? 'Dashboard schlie\u00dfen' : 'Dashboard \u00f6ffnen';
+    dashButton.classList.toggle('danger', dashInfo.open);
+    dashButton.classList.toggle('primary', !dashInfo.open);
+
+    const notes = [];
+    if (screenInfo.displays.length < 2) {
+      notes.push('Es ist nur ein Bildschirm angeschlossen. Das Dashboard \u00f6ffnet sich dann auf demselben.');
+    }
+    // Display ids change when a monitor is unplugged or the machine reboots,
+    // so a pinned choice can go stale; saying so beats moving silently.
+    if (screenInfo.hubDisplayMissing) {
+      notes.push('Der f\u00fcr den Hub gew\u00e4hlte Bildschirm ist nicht mehr angeschlossen, es wird der Hauptbildschirm benutzt.');
+    }
+    if (dashInfo.displayMissing) {
+      notes.push('Der f\u00fcr das Dashboard gew\u00e4hlte Bildschirm fehlt ebenfalls.');
+    }
+    if (!notes.length) {
+      notes.push('Die Wahl gilt ab sofort; der Hub wechselt den Bildschirm ohne Neustart.');
+    }
+    screenNote.textContent = notes.join(' ');
+  }
+
+  hubDisplaySelect.addEventListener('change', async () => {
+    try {
+      await api.screens.setHubDisplay(Number(hubDisplaySelect.value));
+      toast('Hub verschoben', 'ok');
+    } catch (err) { notifyError(err.message); }
+    renderScreens();
+  });
+
+  dashDisplaySelect.addEventListener('change', async () => {
+    try {
+      await api.dashboard.setDisplay(Number(dashDisplaySelect.value));
+    } catch (err) { notifyError(err.message); }
+    renderScreens();
+  });
+
+  dashButton.addEventListener('click', async () => {
+    try {
+      await api.dashboard.toggle();
+    } catch (err) { notifyError(err.message); }
+    renderScreens();
+  });
+
+  dashAutoToggle.addEventListener('click', async () => {
+    const next = dashAutoToggle.getAttribute('aria-checked') !== 'true';
+    dashAutoToggle.setAttribute('aria-checked', String(next));
+    try {
+      await api.dashboard.setAutoOpen(next);
+    } catch (err) {
+      dashAutoToggle.setAttribute('aria-checked', String(!next));
+      notifyError(err.message);
+    }
+  });
+
+  renderScreens();
+
+
   /* ------------------------------------------------------------- gamepad */
 
   // Says which controller the browser actually sees. "It does not work" is
@@ -423,6 +521,32 @@ export function createSettingsView() {
         toggleRow('Kiosk-Modus', 'Blockiert das Verlassen des Vollbilds. Beenden weiterhin über Strg+Umschalt+Q.', 'kiosk'),
         toggleRow('Beim Profilstart minimieren', 'Der Hub tritt in den Hintergrund, sobald ein Profil gestartet wird.', 'minimizeOnLaunch'),
         toggleRow('Boot-Animation', 'Die Startsequenz beim Öffnen des Hubs.', 'bootAnimation')
+      ]),
+
+      panel('Bildschirme', [
+        el('div', { class: 'setting-row' }, [
+          el('div', {}, [
+            el('div', { class: 'setting-label', text: 'Hub auf Bildschirm' }),
+            el('div', { class: 'setting-hint', text: 'Wo der Hub sich öffnet und ins Vollbild geht.' })
+          ]),
+          hubDisplaySelect
+        ]),
+        el('div', { class: 'setting-row' }, [
+          el('div', {}, [
+            el('div', { class: 'setting-label', text: 'Dashboard auf Bildschirm' }),
+            el('div', { class: 'setting-hint', text: 'Formatfüllende Anzeige mit Systemwerten, Profilen und Prozessen.' })
+          ]),
+          dashDisplaySelect
+        ]),
+        el('div', { class: 'setting-row' }, [
+          el('div', {}, [
+            el('div', { class: 'setting-label', text: 'Dashboard mit dem Hub starten' }),
+            el('div', { class: 'setting-hint', text: 'Öffnet es automatisch beim Start, ohne den Fokus zu nehmen.' })
+          ]),
+          dashAutoToggle
+        ]),
+        el('div', { class: 'row gap-8', style: { marginTop: '4px' } }, [dashButton]),
+        screenNote
       ]),
 
       panel('Tastenkürzel', [

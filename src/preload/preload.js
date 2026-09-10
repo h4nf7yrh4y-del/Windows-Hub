@@ -26,6 +26,19 @@ contextBridge.exposeInMainWorld('hub', {
     close: () => invoke('window:close'),
     reveal: () => invoke('window:reveal')
   },
+  screens: {
+    list: () => invoke('screens:list'),
+    setHubDisplay: (id) => invoke('window:setDisplay', id)
+  },
+  dashboard: {
+    status: () => invoke('dashboard:status'),
+    toggle: () => invoke('dashboard:toggle'),
+    open: () => invoke('dashboard:open'),
+    close: () => invoke('dashboard:close'),
+    setDisplay: (id) => invoke('dashboard:setDisplay', id),
+    setAutoOpen: (value) => invoke('dashboard:setAutoOpen', value),
+    onChanged: (handler) => on('dashboard:changed', handler)
+  },
   display: {
     list: () => invoke('display:list'),
     brightness: (target, value) => invoke('display:brightness', target, value),

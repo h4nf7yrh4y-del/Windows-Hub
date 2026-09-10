@@ -27,7 +27,9 @@ const DEFAULTS = {
     minimizeOnLaunch: true,
     confirmExit: true,
     showGpu: true,
-    gamepad: true
+    gamepad: true,
+    // Which monitor the hub opens on; null means the primary one.
+    hubDisplay: null
   },
   profiles: [],
   library: { customApps: [] },
@@ -40,7 +42,9 @@ const DEFAULTS = {
   // started them. The transcripts themselves belong to Claude Code.
   claudeSessions: [],
   // Time-of-day rules that start or stop profiles.
-  schedules: []
+  schedules: [],
+  // Second-screen board: whether it is open, and on which monitor.
+  dashboard: { enabled: false, display: null, autoOpen: false }
 };
 
 let cache = null;

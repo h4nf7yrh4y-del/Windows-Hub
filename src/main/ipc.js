@@ -17,6 +17,8 @@ const display = require('./display');
 const winfeatures = require('./winfeatures');
 const network = require('./network');
 const scheduler = require('./scheduler');
+const screens = require('./screens');
+const dashboard = require('./dashboard');
 const tweaks = require('./tweaks');
 const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
@@ -144,6 +146,40 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     app.quit();
     return true;
   }, 'window:close'));
+
+  /* ------------------------------------------------------------- monitors */
+
+  ipcMain.handle('screens:list', wrap(async () => {
+    const settings = store.getSettings();
+    const hub = screens.resolve(settings.hubDisplay || null);
+    return {
+      displays: screens.list(),
+      hubDisplayId: hub.display.id,
+      // True when the monitor the hub was pinned to is no longer connected.
+      hubDisplayMissing: !!settings.hubDisplay && hub.match === 'fallback'
+    };
+  }, 'screens:list'));
+
+  ipcMain.handle('window:setDisplay', wrap(async (displayId) => {
+    const target = screens.list().find((d) => d.id === displayId);
+    if (!target) throw new Error('Dieser Bildschirm ist nicht vorhanden');
+    const { display } = screens.resolve({ id: target.id, label: target.label, x: target.bounds.x, y: target.bounds.y });
+    store.setSettings({ hubDisplay: screens.remember(display) });
+    const win = getWindow();
+    if (win && !win.isDestroyed()) {
+      screens.placeWindow(win, display, { fullscreen: win.isFullScreen() });
+    }
+    return { displayId: display.id, label: display.label };
+  }, 'window:setDisplay'));
+
+  /* ------------------------------------------------------------ dashboard */
+
+  ipcMain.handle('dashboard:status', wrap(async () => dashboard.status(), 'dashboard:status'));
+  ipcMain.handle('dashboard:toggle', wrap(async () => ({ open: dashboard.toggle() }), 'dashboard:toggle'));
+  ipcMain.handle('dashboard:open', wrap(async () => { dashboard.open(); return dashboard.status(); }, 'dashboard:open'));
+  ipcMain.handle('dashboard:close', wrap(async () => { dashboard.close(); return dashboard.status(); }, 'dashboard:close'));
+  ipcMain.handle('dashboard:setDisplay', wrap(async (displayId) => dashboard.setDisplay(displayId), 'dashboard:setDisplay'));
+  ipcMain.handle('dashboard:setAutoOpen', wrap(async (value) => dashboard.setAutoOpen(!!value), 'dashboard:setAutoOpen'));
 
   /* -------------------------------------------------------------- settings */
 

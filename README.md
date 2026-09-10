@@ -87,6 +87,21 @@ Gegenstellen" schon. Lauschende Sockets sind ausgeblendet, bis man sie anfordert
 sie ändern. Echtzeit wird angezeigt, wenn ein Prozess bereits so läuft, aber nicht
 zum Einstellen angeboten.
 
+**Zwei Bildschirme.** Der Hub lässt sich festlegen, auf welchem Monitor er startet
+und ins Vollbild geht. Dazu kommt ein eigenes Fenster für den zweiten Bildschirm: eine
+formatfüllende Anzeige mit Uhr, Auslastung, Datenträgern, Profilen und den aktivsten
+Prozessen — gedacht zum Hinschauen, nicht zum Bedienen. Es hat keine Navigation, keine
+Dialoge und nimmt beim Öffnen bewusst nicht den Fokus, damit es einem Spiel auf dem
+ersten Bildschirm nicht dazwischenfunkt. Zu erreichen über den Knopf oben rechts, der
+nur erscheint, wenn wirklich ein zweiter Monitor angeschlossen ist, über *Setup →
+Bildschirme* oder über ein eigenes Tastenkürzel.
+
+Die Zuordnung der Monitore ist dabei etwas mehr als eine gespeicherte Nummer: Windows
+vergibt Bildschirm-IDs neu, wenn ein Monitor abgezogen wird oder der Rechner neu
+startet. Gespeichert werden deshalb ID, Name und Position, und beim Start wird in
+dieser Reihenfolge gesucht. Ist der gewählte Monitor gar nicht mehr da, benutzt der Hub
+den Hauptbildschirm und sagt es in den Einstellungen, statt kommentarlos umzuziehen.
+
 **Controller-Bedienung.** Der Hub lässt sich vollständig mit einem Gamepad
 bedienen. Steuerkreuz und linker Stick bewegen die Auswahl, A wählt, B geht zurück
 oder schließt einen Dialog, LB und RB wechseln die Ansicht, Y schaltet die Overlays,

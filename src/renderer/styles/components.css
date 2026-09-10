@@ -149,6 +149,13 @@
 .icon-btn:hover { color: var(--accent); border-color: var(--hairline); background: rgba(255, 255, 255, 0.03); }
 .icon-btn.danger:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 
+/* A toggle that is currently on, e.g. the second-screen board. */
+.icon-btn.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 /* ----------------------------------------------------------------- inputs */
 
 .field { display: flex; flex-direction: column; gap: 6px; }

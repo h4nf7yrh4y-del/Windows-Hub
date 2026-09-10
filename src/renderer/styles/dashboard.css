@@ -1,0 +1,245 @@
+/*
+ * Second-screen board.
+ *
+ * Sized to be read from across a desk rather than operated up close: fewer,
+ * larger numbers, no hover states, nothing that invites a click. The panels
+ * scale with the viewport so the same layout works on a 24-inch monitor beside
+ * a desk and a television across a room.
+ */
+
+.dash-body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: var(--font-body);
+  --dash-gap: clamp(10px, 1.1vw, 20px);
+}
+
+#dash-root {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
+  height: 100vh;
+  padding: var(--dash-gap);
+  box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------------ head */
+
+.dash-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.dash-brand { display: flex; align-items: baseline; gap: 10px; }
+
+.dash-brand-mark {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2vw, 34px);
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.dash-brand-sub {
+  font-size: clamp(10px, 0.8vw, 13px);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.dash-clock { text-align: right; }
+
+.dash-clock-time {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 4.4vw, 78px);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-clock-sec {
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 1.2vw, 22px);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-clock-date {
+  font-size: clamp(10px, 0.9vw, 15px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------ grid */
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: var(--dash-gap);
+  flex: 1;
+  min-height: 0;
+}
+
+.dash-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+  padding: clamp(10px, 1vw, 18px);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.dash-panel.span-2 { grid-column: span 2; }
+
+.dash-panel-title {
+  font-family: var(--font-display);
+  font-size: clamp(9px, 0.75vw, 12px);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* A single-monitor width would otherwise squeeze five panels into one row. */
+@media (max-width: 1400px) {
+  .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-panel.span-2 { grid-column: span 2; }
+}
+
+/* ---------------------------------------------------------------- gauges */
+
+.dash-rings {
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+}
+
+.dash-rings .ring { width: clamp(90px, 9vw, 165px); }
+
+.dash-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dash-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: clamp(10px, 0.78vw, 13px);
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.dash-detail b { color: var(--accent); font-weight: 400; }
+
+.dash-graph { flex: 1; min-height: 60px; }
+.dash-graph.tall { min-height: 120px; }
+.dash-graph canvas { width: 100%; height: 100%; display: block; }
+
+/* ----------------------------------------------------------------- disks */
+
+.dash-disks { display: flex; flex-direction: column; gap: 9px; overflow: auto; }
+
+.dash-disk-name {
+  font-size: clamp(11px, 0.85vw, 14px);
+  letter-spacing: 0.04em;
+}
+
+.dash-disk-pct {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 0.85vw, 14px);
+  color: var(--text-dim);
+}
+
+.dash-bar {
+  height: 5px;
+  margin: 4px 0 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dash-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s ease;
+}
+
+.dash-bar i.warn { background: var(--warn); }
+.dash-bar i.danger { background: var(--danger); }
+
+.dash-disk-sub { font-size: clamp(9px, 0.7vw, 12px); color: var(--text-faint); }
+
+/* -------------------------------------------------------------- profiles */
+
+.dash-profiles { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+
+.dash-profile {
+  padding: 8px 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dash-profile.running { border-left-color: var(--ok); }
+.dash-profile.partial { border-left-color: var(--warn); }
+
+.dash-profile-name {
+  font-family: var(--font-display);
+  font-size: clamp(12px, 1vw, 17px);
+  letter-spacing: 0.05em;
+}
+
+.dash-profile-state {
+  font-size: clamp(9px, 0.7vw, 12px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.dash-profile.running .dash-profile-state { color: var(--ok); }
+.dash-profile.partial .dash-profile-state { color: var(--warn); }
+
+.dash-profile-apps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+.dash-chip {
+  padding: 2px 7px;
+  font-size: clamp(9px, 0.68vw, 11.5px);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.dash-chip.live {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+/* Dashed, exactly as in the hub: unknown is not the same as stopped. */
+.dash-chip.untracked { border-style: dashed; opacity: 0.6; }
+
+/* ------------------------------------------------------------- processes */
+
+.dash-table { font-size: clamp(10px, 0.8vw, 13.5px); }
+.dash-table th { font-size: clamp(8.5px, 0.65vw, 11px); }
+.dash-table td { padding: 4px 8px; }
+.dash-panel .table-wrap { overflow: auto; min-height: 0; }
+
+.dash-empty {
+  padding: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-faint);
+}

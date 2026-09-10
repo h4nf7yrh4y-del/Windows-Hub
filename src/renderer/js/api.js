@@ -31,6 +31,19 @@ export const api = {
     close: call(bridge.window.close),
     reveal: call(bridge.window.reveal)
   },
+  screens: {
+    list: call(bridge.screens.list),
+    setHubDisplay: call(bridge.screens.setHubDisplay)
+  },
+  dashboard: {
+    status: call(bridge.dashboard.status),
+    toggle: call(bridge.dashboard.toggle),
+    open: call(bridge.dashboard.open),
+    close: call(bridge.dashboard.close),
+    setDisplay: call(bridge.dashboard.setDisplay),
+    setAutoOpen: call(bridge.dashboard.setAutoOpen),
+    onChanged: bridge.dashboard.onChanged
+  },
   display: {
     list: call(bridge.display.list),
     brightness: call(bridge.display.brightness),
