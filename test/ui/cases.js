@@ -450,6 +450,10 @@ module.exports = [
       t.watchConsole(board.webContents, 'dashboard');
       await t.waitIn(board, `document.querySelectorAll('.dash-panel').length >= 5`,
         { label: 'Dashboard-Inhalt' });
+      // The profile rows appear as soon as the profile list is read, without
+      // waiting for the far slower "what is running" query.
+      await t.waitIn(board, `document.querySelectorAll('.dash-profile').length >= 1`,
+        { label: 'Profile auf dem Dashboard', timeout: 30000 });
 
       const content = await board.webContents.executeJavaScript(`(() => ({
         panels: document.querySelectorAll('.dash-panel').length,

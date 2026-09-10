@@ -303,17 +303,31 @@ function drainToOneShot() {
  * rejected: the callers all treat an empty answer as "not available here",
  * which is the same thing a failed query means.
  */
-function run(script, timeout = DEFAULT_TIMEOUT) {
+function run(script, timeout = DEFAULT_TIMEOUT, { background = false } = {}) {
   if (disabled) return runOnce(script, timeout);
   return new Promise((resolve, reject) => {
-    queue.push({
+    const job = {
       id: crypto.randomBytes(4).toString('hex'),
       script,
       timeout,
+      background,
       resolve,
       reject,
       timer: null
-    });
+    };
+
+    // There is one pipe, so a queue is a priority question. Background polling
+    // — the GPU counters and the "what is running" check — runs whether or not
+    // anyone is looking, and on a machine slow enough for the queue to build
+    // up it would otherwise sit in front of the thing the user just clicked.
+    // Anything the user asked for goes ahead of it.
+    if (background) {
+      queue.push(job);
+    } else {
+      const firstBackground = queue.findIndex((entry) => entry.background);
+      if (firstBackground === -1) queue.push(job);
+      else queue.splice(firstBackground, 0, job);
+    }
     pump();
   });
 }

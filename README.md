@@ -463,6 +463,13 @@ eigenen Gültigkeitsbereich hat, bleibt von einem Auftrag nichts beim nächsten
 übrig. Gemessen mit PowerShell 7 unter Linux: drei Abfragen über den Host
 15 Millisekunden, dieselben drei mit je einem eigenen Start 806.
 
+Weil es nur eine Leitung gibt, ist die Warteschlange eine Frage der Reihenfolge.
+Die Hintergrundabfragen — GPU-Zähler und die Prüfung, welche Programme laufen —
+laufen auf einem Zeitgeber, ob jemand hinsieht oder nicht. Sie stellen sich deshalb
+hinten an, und alles, was du gerade angeklickt hast, überholt sie. Auf einem
+ausgelasteten Rechner ist das der Unterschied zwischen einer Oberfläche, die
+reagiert, und einer, die hinter drei Messungen wartet.
+
 Fehler laufen bewusst über dieselbe Ausgabe wie das Ergebnis und nicht über die
 Fehlerausgabe: zwischen den beiden Kanälen gibt es keine garantierte Reihenfolge,
 und eine Fehlermeldung, die nach der Endmarkierung eintrifft, würde dem Aufrufer

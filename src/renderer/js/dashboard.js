@@ -257,16 +257,27 @@ function build() {
 let processTimer = null;
 let statusTimer = null;
 
+/**
+ * Profiles first, live state second.
+ *
+ * The profile list comes from a file and is instant; finding out which
+ * programs are running needs a system query that can take a minute on a busy
+ * machine. Waiting for both before drawing anything left the second screen
+ * blank for exactly as long as the slow half took — which is the same mistake
+ * the file manager's sidebar made.
+ */
 async function refreshProfiles() {
   try {
     const data = await api.profiles.list();
     profiles = data.profiles || [];
+    renderProfiles();
   } catch (_) { /* keep what we have */ }
+
   try {
     const data = await api.processes.running();
     running = new Set((data.names || []).map(normalise));
-  } catch (_) { /* keep what we have */ }
-  renderProfiles();
+    renderProfiles();
+  } catch (_) { /* the profiles stay on screen without their live state */ }
 }
 
 async function refreshProcesses() {
@@ -290,8 +301,10 @@ async function init() {
   const snapshot = await api.metrics.snapshot().catch(() => null);
   if (snapshot) renderMetrics(snapshot);
 
-  await refreshProfiles();
-  await refreshProcesses();
+  // Neither of these blocks the board from appearing: both need system
+  // queries, and an empty screen while they run is the worst of both.
+  refreshProfiles();
+  refreshProcesses();
 
   // Slower than the hub's own table: nobody reads a second screen at 3 s.
   processTimer = setInterval(refreshProcesses, 6000);

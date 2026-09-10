@@ -285,7 +285,7 @@ function aggregate(engineRows, memoryRows) {
 
 async function readCounters() {
   if (!IS_WIN || counterSupported === false) return null;
-  const parsed = parseJson(await runPowerShell(SAMPLE_SCRIPT, 20000));
+  const parsed = parseJson(await runPowerShell(SAMPLE_SCRIPT, 20000, { background: true }));
   if (!parsed) {
     counterSupported = false;
     return null;

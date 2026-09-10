@@ -49,8 +49,8 @@ Get-Process | ForEach-Object {
  * The contract is the same as before: a script that throws rejects, a script
  * that writes nothing resolves with an empty string.
  */
-function runPowerShell(script, timeout = 40000) {
-  return pshost.run(script, timeout);
+function runPowerShell(script, timeout = 40000, opts = {}) {
+  return pshost.run(script, timeout, opts);
 }
 
 function runCommand(cmd, args, timeout = 15000) {
@@ -174,7 +174,7 @@ async function runningNames() {
       const out = await runCommand('ps', ['-eo', 'comm=', '--no-headers']);
       return [...new Set(out.split('\n').map((l) => l.trim()).filter(Boolean))];
     }
-    const out = await runPowerShell(NAMES_SCRIPT, 40000);
+    const out = await runPowerShell(NAMES_SCRIPT, 40000, { background: true });
     const trimmed = (out || '').trim();
     if (!trimmed) return [];
     let parsed;

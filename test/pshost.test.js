@@ -146,6 +146,36 @@ function jobLineChecks() {
     assert.ok(pshost.status().running, 'the host should be back up');
   });
 
+  await test('a user request overtakes queued background polling', async () => {
+    // One pipe means a queue, and a queue means a priority question. The
+    // background pollers run whether or not anyone is looking; the thing the
+    // user just clicked must not wait behind three of them.
+    const order = [];
+    const slow = "Start-Sleep -Milliseconds 700; 'erst'";
+    const jobs = [
+      pshost.run(slow).then(() => order.push('läuft-schon')),
+      pshost.run("'a'", 20000, { background: true }).then(() => order.push('hintergrund-1')),
+      pshost.run("'b'", 20000, { background: true }).then(() => order.push('hintergrund-2')),
+      pshost.run("'c'").then(() => order.push('vordergrund'))
+    ];
+    await Promise.all(jobs);
+
+    assert.strictEqual(order[0], 'läuft-schon', 'a job already running is never interrupted');
+    assert.strictEqual(order[1], 'vordergrund', `the user request should come next, got ${order.join(' → ')}`);
+    assert.deepStrictEqual(order.slice(2), ['hintergrund-1', 'hintergrund-2'],
+      'and the background jobs keep their own order among themselves');
+  });
+
+  await test('background jobs alone keep the order they were queued in', async () => {
+    const order = [];
+    await Promise.all([
+      pshost.run("Start-Sleep -Milliseconds 400; '1'", 20000, { background: true }).then(() => order.push(1)),
+      pshost.run("'2'", 20000, { background: true }).then(() => order.push(2)),
+      pshost.run("'3'", 20000, { background: true }).then(() => order.push(3))
+    ]);
+    assert.deepStrictEqual(order, [1, 2, 3]);
+  });
+
   await test('a hung job fails on time and the host recovers', async () => {
     await assert.rejects(
       pshost.run('Start-Sleep -Seconds 30', 1200),
