@@ -1,6 +1,7 @@
 import { el, clear, bytes } from '../util.js';
 import { toAccelerator, formatAccelerator } from '../keys.js';
 import { api } from '../api.js';
+import { setGamepadEnabled, gamepadState } from '../gamepad.js';
 import { state, saveSettings, applyTheme } from '../state.js';
 import { confirmDialog, openModal } from '../widgets/modal.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
@@ -385,6 +386,25 @@ export function createSettingsView() {
 
   renderHotkeys();
 
+  /* ------------------------------------------------------------- gamepad */
+
+  // Says which controller the browser actually sees. "It does not work" is
+  // almost always "Windows never reported a pad", and that is worth showing.
+  const gamepadLine = el('div', { class: 'setting-hint', style: { marginTop: '8px' } });
+
+  function renderGamepad() {
+    const info = gamepadState();
+    if (!info.pads.length) {
+      gamepadLine.textContent = 'Kein Controller erkannt. Windows meldet ein Gerät erst, wenn eine Taste gedrückt wurde.';
+      return;
+    }
+    gamepadLine.textContent = info.pads
+      .map((p) => `${p.id} · ${p.buttons} Tasten${p.mapping === 'standard' ? '' : ' · abweichende Belegung'}`)
+      .join(' | ');
+  }
+
+  renderGamepad();
+
   const view = el('section', { class: 'view', id: 'view-settings' }, [
     el('div', { class: 'view-head' }, [
       el('div', {}, [
@@ -407,6 +427,11 @@ export function createSettingsView() {
 
       panel('Tastenkürzel', [
         hotkeyHost,
+        toggleRow('Gamepad-Steuerung', 'Steuerkreuz und linker Stick bewegen die Auswahl, A wählt, B geht zurück, '
+          + 'LB und RB wechseln die Ansicht, Y schaltet die Overlays, Start das Vollbild.', 'gamepad', {
+          onChange: (value) => setGamepadEnabled(value)
+        }),
+        gamepadLine,
         el('div', { class: 'setting-hint', style: { marginTop: '12px', lineHeight: '1.65' },
           text: 'Jede Kombination braucht mindestens Strg, Alt oder Shift, sonst würde die Taste in allen anderen Programmen verschluckt. '
             + 'Über einem Spiel im echten Vollbildmodus kann Windows das Hub-Fenster nicht nach vorne holen; im randlosen Fenstermodus funktioniert es. '
@@ -511,6 +536,19 @@ export function createSettingsView() {
       ])
     ])
   ]);
+
+  // The view is rebuilt on every visit, so the listeners have to go with it.
+  view.addEventListener('view:mount', () => {
+    window.addEventListener('gamepadconnected', renderGamepad);
+    window.addEventListener('gamepaddisconnected', renderGamepad);
+    renderGamepad();
+  });
+  view.addEventListener('view:unmount', () => {
+    window.removeEventListener('gamepadconnected', renderGamepad);
+    window.removeEventListener('gamepaddisconnected', renderGamepad);
+  });
+  window.addEventListener('gamepadconnected', renderGamepad);
+  window.addEventListener('gamepaddisconnected', renderGamepad);
 
   return view;
 }

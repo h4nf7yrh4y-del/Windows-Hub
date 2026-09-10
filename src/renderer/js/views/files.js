@@ -232,6 +232,7 @@ export function createFilesView() {
       const row = el('tr', {
         class: selection.has(entry.path) ? 'selected' : '',
         title: entry.path,
+        dataset: { focusable: 'true' },
         onClick: (event) => handleSelect(entry, event, list),
         onDblClick: () => activate(entry)
       }, [

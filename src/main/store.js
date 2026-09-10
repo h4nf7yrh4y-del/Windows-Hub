@@ -26,7 +26,8 @@ const DEFAULTS = {
     processIntervalMs: 3000,
     minimizeOnLaunch: true,
     confirmExit: true,
-    showGpu: true
+    showGpu: true,
+    gamepad: true
   },
   profiles: [],
   library: { customApps: [] },

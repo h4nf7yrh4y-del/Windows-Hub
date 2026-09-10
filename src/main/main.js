@@ -288,7 +288,8 @@ app.on('ready', () => {
     getWindow: () => mainWindow,
     applyAutostart,
     revealWindow,
-    openClaudeWindow: createClaudeWindow
+    openClaudeWindow: createClaudeWindow,
+    toggleOverlays
   });
 
   overlays.init({

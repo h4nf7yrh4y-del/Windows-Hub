@@ -14,6 +14,7 @@ import { createWindowsView } from './views/windows.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
+import { initGamepad, setGamepadEnabled } from './gamepad.js';
 
 /* ------------------------------------------------------------------ views */
 
@@ -291,6 +292,10 @@ async function init() {
 
   bindMetrics();
   bindTopbar();
+  initGamepad({
+    onToggleOverlays: () => api.overlays.toggle().catch((err) => notifyError(err.message))
+  });
+  setGamepadEnabled(!settings || settings.gamepad !== false);
   startClock();
   bindShortcuts();
   buildRail();

@@ -150,6 +150,7 @@ export const api = {
     set: call(bridge.overlays.set),
     update: call(bridge.overlays.update),
     closeAll: call(bridge.overlays.closeAll),
+    toggle: call(bridge.overlays.toggle),
     onChanged: bridge.overlays.onChanged
   }
 };

@@ -144,6 +144,7 @@ contextBridge.exposeInMainWorld('hub', {
     set: (type, enabled) => invoke('overlays:set', type, enabled),
     update: (type, patch) => invoke('overlays:update', type, patch),
     closeAll: () => invoke('overlays:closeAll'),
+    toggle: () => invoke('overlays:toggle'),
     onChanged: (handler) => on('overlays:changed', handler)
   },
   // Used only by overlay windows, about themselves.

@@ -68,6 +68,20 @@ Jeder Werkzeugaufruf erscheint als eigene Karte mit Befehl und Ergebnis, die lau
 Kosten stehen in der Kopfzeile. Daneben weiterhin: Erkennung der Befehlszeile, Öffnen
 in einem Terminal und Auswertung des Diagnoseberichts.
 
+**Controller-Bedienung.** Der Hub lässt sich vollständig mit einem Gamepad
+bedienen. Steuerkreuz und linker Stick bewegen die Auswahl, A wählt, B geht zurück
+oder schließt einen Dialog, LB und RB wechseln die Ansicht, Y schaltet die Overlays,
+Start das Vollbild, der rechte Stick scrollt lange Listen. Solange ein Controller
+benutzt wird, erscheint unten eine Leiste mit der Belegung; die erste Mausbewegung
+blendet sie samt Auswahlrahmen wieder aus.
+
+Die Auswahl bewegt sich räumlich, nicht in Dokumentreihenfolge: nach rechts wird das
+Element gewählt, das rechts liegt, wobei ausgerichtete Kandidaten Vorrang vor schräg
+liegenden haben. Nötig ist das, weil hier fast nichts ein natives Bedienelement ist —
+Profilkarten, Schalter und Tabellenzeilen sind anklickbare Container, die eine
+Tabulator-Reihenfolge überspringen würde. Abfragen tut der Hub den Controller nur,
+solange einer angemeldet ist; ohne Gerät läuft keine Schleife.
+
 **Globale Tastenkürzel.** Ein Kürzel holt den Hub aus jedem Programm heraus nach
 vorne, ein zweites blendet alle Overlays ein und aus. Beide sind frei belegbar.
 
@@ -203,6 +217,22 @@ Im Dateimanager zusätzlich:
 | `F2` | Umbenennen |
 | `Rücktaste` | Eine Ebene nach oben |
 | `Enter` im Suchfeld | Rekursiv ab dem aktuellen Ordner suchen |
+
+Mit einem Controller:
+
+| Taste | Wirkung |
+|---|---|
+| Steuerkreuz / linker Stick | Auswahl bewegen |
+| `A` | Auswählen |
+| `B` | Zurück, Dialog schließen |
+| `LB` / `RB` | Ansicht wechseln |
+| `Y` | Overlays ein- und ausblenden |
+| `Start` | Vollbild umschalten |
+| Rechter Stick | Lange Listen scrollen |
+
+Abschaltbar unter **Setup → Tastenkürzel**. Dort steht auch, welchen Controller
+der Hub gerade sieht — Windows meldet ein Gerät erst, wenn eine Taste gedrückt wurde,
+und „geht nicht" heißt fast immer, dass diese Meldung nie kam.
 
 ---
 

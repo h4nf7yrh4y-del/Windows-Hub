@@ -408,6 +408,65 @@ module.exports = [
   },
 
   {
+    name: 'Gamepad: Richtungswahl und Einstellungszeile',
+    async run(t) {
+      await t.view('settings');
+      const row = await t.evalExpr(`(() => {
+        const node = [...document.querySelectorAll('.setting-row')].find((r) => r.textContent.includes('Gamepad'));
+        return node ? { toggle: !!node.querySelector('.toggle'), hint: node.textContent.includes('LB und RB') } : null;
+      })()`);
+      t.assert(row && row.toggle, 'Die Gamepad-Steuerung lässt sich abschalten', JSON.stringify(row));
+      t.assert(row && row.hint, 'Die Belegung steht neben dem Schalter');
+      t.assert(await t.evalExpr(
+        `[...document.querySelectorAll('.setting-hint')].some((n) => n.textContent.includes('Kein Controller erkannt'))`
+      ), 'Ohne Controller steht dort, warum nichts passiert');
+
+      // The direction picker is the only real algorithm in the module, and it
+      // is the part that decides whether pressing right in a grid feels right.
+      const picks = await t.evalExpr(`(async () => {
+        const mod = await import('hub://app/js/gamepad.js');
+        const pick = mod._internals.pickInDirection;
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:0;top:0;width:600px;height:600px;z-index:-1';
+        document.body.appendChild(host);
+        const at = (x, y, name) => {
+          const n = document.createElement('div');
+          n.dataset.name = name;
+          n.style.cssText = 'position:absolute;width:60px;height:40px;left:' + x + 'px;top:' + y + 'px';
+          host.appendChild(n);
+          return n;
+        };
+        const mid   = at(250, 250, 'mid');
+        const up    = at(250, 150, 'up');
+        const down  = at(250, 350, 'down');
+        const left  = at(100, 250, 'left');
+        const right = at(400, 250, 'right');
+        // Closer in raw distance than "down", but far off the axis.
+        const skew  = at(430, 330, 'skew');
+        const all = [mid, up, down, left, right, skew];
+        const name = (n) => (n ? n.dataset.name : null);
+        const out = {
+          up: name(pick(mid, 'up', all)),
+          down: name(pick(mid, 'down', all)),
+          left: name(pick(mid, 'left', all)),
+          right: name(pick(mid, 'right', all)),
+          fromLeftGoingRight: name(pick(left, 'right', all)),
+          nothingAbove: name(pick(up, 'up', all))
+        };
+        host.remove();
+        return out;
+      })()`);
+
+      t.eq(picks.up, 'up', 'Nach oben wird der obere Nachbar gewählt');
+      t.eq(picks.down, 'down', 'Nach unten gewinnt der ausgerichtete vor dem schrägen Kandidaten');
+      t.eq(picks.left, 'left', 'Nach links wird der linke Nachbar gewählt');
+      t.eq(picks.right, 'right', 'Nach rechts wird der rechte Nachbar gewählt');
+      t.eq(picks.fromLeftGoingRight, 'mid', 'Von links nach rechts kommt zuerst die Mitte');
+      t.eq(picks.nothingAbove, null, 'Über dem obersten Element liegt nichts');
+    }
+  },
+
+  {
     name: 'Jede Ansicht überlebt zweimaliges Betreten',
     async run(t) {
       // Views that stay mounted tear down their listeners on unmount; the

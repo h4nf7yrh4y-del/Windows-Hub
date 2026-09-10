@@ -126,6 +126,9 @@ export function createProcessesView() {
       const isProtected = PROTECTED.has(row.name.toLowerCase());
       const tr = el('tr', {
         class: row.pid === selectedPid ? 'selected' : '',
+        // Marks the row as something a controller may land on; the decorative
+        // rows in other tables must not be reachable that way.
+        dataset: { focusable: 'true' },
         onClick: () => { selectedPid = row.pid; renderRows(); }
       }, [
         el('td', {}, [

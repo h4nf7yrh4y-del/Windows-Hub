@@ -93,7 +93,7 @@ function sanitizeProfile(raw) {
   };
 }
 
-function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow }) {
+function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow, toggleOverlays }) {
   const send = (channel, payload) => {
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -323,6 +323,14 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   }, 'overlays:update'));
 
   ipcMain.handle('overlays:closeAll', wrap(async () => overlays.disableAll(), 'overlays:closeAll'));
+
+  // Same behaviour as the global hotkey, so a controller and a keyboard cannot
+  // end up with two different ideas of what "toggle" means.
+  ipcMain.handle('overlays:toggle', wrap(async () => {
+    if (typeof toggleOverlays !== 'function') throw new Error('Nicht verfügbar');
+    toggleOverlays();
+    return { open: overlays.count() };
+  }, 'overlays:toggle'));
 
   // An overlay closing itself. The type comes from the window's own URL rather
   // than from the payload, so one overlay cannot close another.
