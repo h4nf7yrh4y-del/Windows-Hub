@@ -72,6 +72,58 @@ module.exports = [
   },
 
   {
+    name: 'Profileditor: Systemreiter speichert die Einstellungen',
+    async run(t) {
+      await t.view('hub');
+      // The pencil on the card, which is how a profile is edited; a click on
+      // the card itself is reserved for launching it.
+      await t.click('.profile-card .card-actions .icon-btn:last-child');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Editor-Dialog' });
+      t.eq(await t.count('.modal .tab-bar .tab'), 2, 'Der Editor hat zwei Reiter');
+
+      await t.clickText('.modal .tab-bar .tab', 'System');
+      await t.wait(900);
+      t.atLeast(await t.count('.modal .select'), 2, 'Energieplan und Priorität sind wählbar');
+      t.atLeast(await t.count('.modal .toggle'), 3, 'Die drei Systemschalter sind da');
+
+      // Priority and its target belong together: no target field without a
+      // priority to apply it to.
+      t.eq(await t.evalExpr(
+        `[...document.querySelectorAll('.modal .input')].some((i) => i.placeholder.includes('automatisch'))`
+      ), true, 'Zielprogramm für die Priorität vorhanden');
+
+      const set = await t.js(`
+        const selects = [...document.querySelectorAll('.modal .select')];
+        const priority = selects.find((s) => [...s.options].some((o) => o.value === 'high'));
+        if (!priority) return null;
+        priority.value = 'high';
+        priority.dispatchEvent(new Event('change'));
+        const input = [...document.querySelectorAll('.modal .input')].find((i) => i.placeholder && i.placeholder.includes('Prozessname'));
+        input.value = 'helldivers2.exe';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        return { priority: priority.value, chips: document.querySelectorAll('.modal .chip').length };
+      `);
+      t.assert(set && set.priority === 'high', 'Priorität lässt sich wählen', JSON.stringify(set));
+      t.eq(set ? set.chips : 0, 1, 'Ein eingetippter Prozessname wird zum Chip');
+
+      await t.clickText('.modal .btn', 'Speichern');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
+      await t.wait(500);
+
+      // The extension has to survive the round trip through the sanitizer.
+      const stored = await t.evalExpr(
+        `window.hub.profiles.list().then((r) => r.data.profiles[0].system)`
+      );
+      t.eq(stored && stored.priority, 'high', 'Priorität ist gespeichert', JSON.stringify(stored));
+      t.assert(stored && stored.closeApps.includes('helldivers2'),
+        'Der Prozessname ist ohne .exe gespeichert', JSON.stringify(stored && stored.closeApps));
+
+      await t.view('hub');
+      t.eq(await t.count('.card-tweaks'), 1, 'Die Karte zeigt, dass das Profil das System verändert');
+    }
+  },
+
+  {
     name: 'System: Ringe, Diagramme, Kernraster, laufende Werte',
     async run(t) {
       await t.view('system');

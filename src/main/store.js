@@ -30,7 +30,11 @@ const DEFAULTS = {
   },
   profiles: [],
   library: { customApps: [] },
-  lastProfileId: null
+  lastProfileId: null,
+  // Written while a profile holds system changes, cleared when they are undone.
+  // Surviving a crash is the point: a power plan must not stay switched
+  // because the hub was killed.
+  tweakSnapshot: null
 };
 
 let cache = null;

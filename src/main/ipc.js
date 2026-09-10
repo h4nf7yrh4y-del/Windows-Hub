@@ -15,6 +15,7 @@ const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
 const display = require('./display');
 const winfeatures = require('./winfeatures');
+const tweaks = require('./tweaks');
 const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
 const claudesession = require('./claudesession');
@@ -85,6 +86,7 @@ function sanitizeProfile(raw) {
     apps: Array.isArray(raw.apps) ? raw.apps.map(sanitizeApp) : [],
     alsoClose: Array.isArray(raw.alsoClose) ? raw.alsoClose.filter((x) => typeof x === 'string') : [],
     minimizeOnLaunch: raw.minimizeOnLaunch !== false,
+    system: tweaks.sanitize(raw.system),
     createdAt: Number(raw.createdAt) || Date.now(),
     lastLaunched: Number(raw.lastLaunched) || 0,
     launchCount: Number(raw.launchCount) || 0
@@ -296,6 +298,12 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   ipcMain.handle('processes:kill', wrap(async (pid) => processes.kill(pid), 'processes:kill'));
   ipcMain.handle('processes:killByName', wrap(async (name) => processes.killByName(name), 'processes:killByName'));
   ipcMain.handle('processes:priority', wrap(async (pid, priority) => processes.setPriority(pid, priority), 'processes:priority'));
+
+  /* -------------------------------------------------------- system tweaks */
+
+  ipcMain.handle('tweaks:status', wrap(async () => tweaks.status(), 'tweaks:status'));
+  ipcMain.handle('tweaks:powerPlans', wrap(async () => tweaks.listPowerPlans(), 'tweaks:powerPlans'));
+  ipcMain.handle('tweaks:revert', wrap(async () => tweaks.revert(), 'tweaks:revert'));
 
   /* ----------------------------------------------------------------- power */
 

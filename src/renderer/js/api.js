@@ -41,6 +41,11 @@ export const api = {
     openSettings: call(bridge.display.openSettings),
     onReverted: bridge.display.onReverted
   },
+  tweaks: {
+    status: call(bridge.tweaks.status),
+    powerPlans: call(bridge.tweaks.powerPlans),
+    revert: call(bridge.tweaks.revert)
+  },
   features: {
     list: call(bridge.features.list),
     set: call(bridge.features.set),

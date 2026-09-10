@@ -36,6 +36,11 @@ contextBridge.exposeInMainWorld('hub', {
     openSettings: (page) => invoke('display:openSettings', page),
     onReverted: (handler) => on('display:reverted', handler)
   },
+  tweaks: {
+    status: () => invoke('tweaks:status'),
+    powerPlans: () => invoke('tweaks:powerPlans'),
+    revert: () => invoke('tweaks:revert')
+  },
   features: {
     list: () => invoke('features:list'),
     set: (id, value) => invoke('features:set', id, value),

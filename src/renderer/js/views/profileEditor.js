@@ -3,6 +3,7 @@ import { openModal, confirmDialog } from '../widgets/modal.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { api } from '../api.js';
 import { state, loadProfiles, loadLibrary, refreshRunning } from '../state.js';
+import { createSystemSection } from './profileSystem.js';
 
 const ICON_TRASH = 'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13';
 const ICON_PLUS = 'M12 5v14M5 12h14';
@@ -392,7 +393,7 @@ export function openProfileEditor(existing, onSaved) {
   };
   ctx.renderApps();
 
-  const body = el('div', { class: 'stack gap-16' }, [
+  const basics = el('div', { class: 'stack gap-16' }, [
     el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' } }, [
       el('div', { class: 'field' }, [el('label', { text: 'Profilname' }), nameInput]),
       el('div', { class: 'field' }, [el('label', { text: 'Untertitel' }), taglineInput])
@@ -465,6 +466,24 @@ export function openProfileEditor(existing, onSaved) {
       })
     ])
   ]);
+
+  // Two tabs rather than one long scroll: the system settings are the half a
+  // user touches once, and burying the save button under them helps nobody.
+  const systemSection = createSystemSection(profile);
+  const tabHost = el('div', { style: { minHeight: '380px' } }, [basics]);
+  const tabBar = el('div', { class: 'tab-bar' }, [
+    el('button', { class: 'tab active', dataset: { tab: 'basics' }, text: 'Programme' }),
+    el('button', { class: 'tab', dataset: { tab: 'system' }, text: 'System' })
+  ]);
+
+  tabBar.addEventListener('click', (event) => {
+    const button = event.target.closest('.tab');
+    if (!button) return;
+    tabBar.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === button));
+    clear(tabHost).appendChild(button.dataset.tab === 'system' ? systemSection : basics);
+  });
+
+  const body = el('div', { class: 'stack gap-12' }, [tabBar, tabHost]);
 
   openModal({
     title: existing ? 'Profil bearbeiten' : 'Neues Profil',

@@ -5,6 +5,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const { shell } = require('electron');
 const processes = require('./processes');
+const tweaks = require('./tweaks');
 
 /**
  * Launches single apps and whole profiles.
@@ -91,6 +92,18 @@ async function launchProfile(profile, emit = () => {}) {
 
   emit({ phase: 'start', total: steps.length, profileId: profile.id, profileName: profile.name });
 
+  // The machine is prepared before the first program starts: closing a browser
+  // after the game is already loading would fight it for the disk.
+  let tweakReport = null;
+  if (tweaks.isActive(profile.system)) {
+    try {
+      tweakReport = await tweaks.apply(profile, emit);
+      emit({ phase: 'tweaks', report: tweakReport });
+    } catch (err) {
+      emit({ phase: 'tweaks', report: { applied: [], failed: [err.message] } });
+    }
+  }
+
   for (let i = 0; i < steps.length; i += 1) {
     const step = steps[i];
     if (step.delayMs) {
@@ -113,7 +126,14 @@ async function launchProfile(profile, emit = () => {}) {
   }
 
   emit({ phase: 'finished', total: steps.length, results });
-  return { ok: results.every((r) => r.ok), results };
+
+  // The priority is set once the program exists, which can be a minute after
+  // the launch step returned. Nothing waits for it.
+  tweaks.applyLatePriority(profile)
+    .then((outcome) => { if (outcome && outcome.applied) emit({ phase: 'priority', ...outcome }); })
+    .catch(() => { /* reported through the log */ });
+
+  return { ok: results.every((r) => r.ok), results, tweaks: tweakReport };
 }
 
 /** Closes everything a profile started, by process name. */
@@ -137,7 +157,17 @@ async function stopProfile(profile) {
       results.push({ name, ok: false, error: err.message });
     }
   }
-  return { ok: true, results };
+
+  // Whatever the profile changed about the machine is undone here, whether or
+  // not every program actually closed.
+  let restored = null;
+  try {
+    restored = await tweaks.revert({ profileId: profile.id });
+  } catch (err) {
+    restored = { reverted: [], failed: [err.message] };
+  }
+
+  return { ok: true, results, restored };
 }
 
 module.exports = { launchItem, launchProfile, stopProfile, expand };

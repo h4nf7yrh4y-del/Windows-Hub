@@ -20,6 +20,7 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const gpu = require('../src/main/gpu');
 const processes = require('../src/main/processes');
+const tweaks = require('../src/main/tweaks');
 
 function findPowerShell() {
   const candidates = [process.env.PWSH_PATH, 'pwsh', 'powershell', 'powershell.exe'].filter(Boolean);
@@ -145,6 +146,18 @@ Set-ItemProperty -LiteralPath '${winfeatures.esc(c.path)}' -Name '${winfeatures.
     SCRIPTS[`feature action: ${name}`] = action.script;
   }
 }
+
+/* -------------------------------------------------- profile system tweaks -- */
+
+// Process names come from the user, so the quoting is the part worth proving.
+SCRIPTS['tweaks: power plans'] = tweaks.PLANS_SCRIPT;
+SCRIPTS['tweaks: set power plan'] = tweaks.setPowerPlanScript('8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c');
+SCRIPTS['tweaks: close apps'] = tweaks.closeScript(['chrome', 'Teams', "O'Brien Sync", 'Grüße']);
+SCRIPTS['tweaks: restart apps'] = tweaks.restartScript([
+  { path: String.raw`C:\Program Files\Google\Chrome\chrome.exe` },
+  { path: String.raw`C:\Users\O'Brien\App\run.exe` }
+]);
+SCRIPTS['tweaks: find pid'] = tweaks.NAME_TO_PID_SCRIPT("O'Brien");
 
 test('every writable entry stays inside HKCU unless it asks for elevation', () => {
   for (const entry of winfeatures.CATALOGUE) {
@@ -292,6 +305,20 @@ for (const [name, script] of Object.entries(SCRIPTS)) {
     assert.strictEqual(result, 'CLEAN', `parser reported:\n       ${result}`);
   });
 }
+
+// The close/restart pair hands its result back as JSON, and the empty case is
+// the one that used to break: a pipeline collapses an empty array to nothing,
+// which the Node side would then read as "unparsable" instead of "nothing ran".
+test('closing nothing yields an empty JSON array, not empty output', () => {
+  const out = run(tweaks.closeScript(['gibt-es-sicher-nicht-zzz'])).trim();
+  assert.strictEqual(out, '[]');
+  assert.deepStrictEqual(JSON.parse(out), []);
+});
+
+test('restarting nothing yields an empty JSON array too', () => {
+  const out = run(tweaks.restartScript([{ path: '/gibt/es/nicht/zzz' }])).trim();
+  assert.strictEqual(out, '[]');
+});
 
 test('registry paths keep their backslashes', () => {
   assert.ok(gpu.STATIC_SCRIPT.includes('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\'),

@@ -11,6 +11,7 @@ const { registerIpc } = require('./ipc');
 const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
 const claudesession = require('./claudesession');
+const tweaks = require('./tweaks');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -318,6 +319,10 @@ app.on('ready', () => {
 
   registerShortcuts();
 
+  // A power plan the hub switched must not outlive the hub. If a snapshot is
+  // still on disk, the last run ended without getting to undo it.
+  tweaks.restoreAfterCrash().catch((err) => log.error(`Systemzustand: ${err.message}`));
+
   // Keep the stored autostart flag and the real login item in sync on boot.
   if (IS_WIN) {
     const current = app.getLoginItemSettings({ path: process.execPath, args: ['--autostart'] });
@@ -341,6 +346,10 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   overlays.closeAll();
   try { claudesession.stop(); } catch (_) { /* nothing running */ }
+  // Releases the display blocker synchronously. The rest of the revert needs
+  // PowerShell and cannot finish inside a quit handler, which is exactly why
+  // the snapshot is on disk and gets picked up on the next start.
+  try { tweaks.keepAwake(false); } catch (_) { /* nothing held */ }
 });
 
 app.on('will-quit', () => {

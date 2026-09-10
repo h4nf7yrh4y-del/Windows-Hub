@@ -51,6 +51,26 @@ export class LaunchOverlay {
     return this;
   }
 
+  /**
+   * One extra row above the programs for everything the profile does to the
+   * machine. It only appears when a profile actually asks for something, so a
+   * plain profile keeps the same overlay it always had.
+   */
+  _prep(cls, icon, text, note) {
+    if (!this.prepNode) {
+      this.prepNode = el('div', { class: 'lo-step pending' }, [
+        el('span', { class: 'lo-icon', text: '·' }),
+        el('span', { text: 'Systemzustand' }),
+        el('span', { class: 'lo-note', text: '' })
+      ]);
+      this.stepsHost.insertBefore(this.prepNode, this.stepsHost.firstChild);
+    }
+    this.prepNode.className = `lo-step ${cls}`;
+    this.prepNode.querySelector('.lo-icon').textContent = icon;
+    this.prepNode.children[1].textContent = text;
+    if (note !== undefined) this.prepNode.querySelector('.lo-note').textContent = note;
+  }
+
   _setStep(index, cls, icon, note) {
     const node = this.stepNodes.get(index);
     if (!node) return;
@@ -64,6 +84,28 @@ export class LaunchOverlay {
     if (this.total) this.bar.style.width = `${Math.min(100, ((done + (event.phase === 'done' ? 1 : 0)) / this.total) * 100)}%`;
 
     switch (event.phase) {
+      case 'tweak':
+        if (event.step === 'close') {
+          this._prep('active', '>', 'Hintergrundprogramme beenden', `${(event.names || []).length} Namen`);
+        } else if (event.step === 'power') {
+          this._prep('active', '>', 'Energieplan umstellen', '');
+        }
+        this.sub.textContent = 'Bereite das System vor';
+        break;
+      case 'tweaks': {
+        const report = event.report || { applied: [], failed: [] };
+        const failed = report.failed || [];
+        this._prep(
+          failed.length ? 'failed' : 'done',
+          failed.length ? '✕' : '✓',
+          'Systemzustand',
+          failed.length ? failed[0] : (report.applied || []).join(' · ')
+        );
+        break;
+      }
+      case 'priority':
+        this.sub.textContent = `Priorität ${event.priority} für ${event.name} gesetzt`;
+        break;
       case 'wait':
         this._setStep(event.index, 'active', '~', `warte ${(event.waitMs / 1000).toFixed(1)}s`);
         this.sub.textContent = `Warte auf Zeitfenster für ${event.step.name}`;

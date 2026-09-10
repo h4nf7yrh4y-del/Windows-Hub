@@ -17,6 +17,27 @@ seines Splash-Screens von Discord überlagert wird. Jedes Profil hat eine eigene
 Akzentfarbe und optional ein Hintergrundbild; beim Start färbt sich die gesamte
 Oberfläche in dieser Farbe ein.
 
+**Systemzustand pro Profil.** Ein Profil startet nicht nur Programme, es richtet auch
+den Rechner darauf ein. Im Reiter **System** des Profileditors lassen sich vier Dinge
+festlegen: ein Energieplan, der beim Start aktiviert und beim Beenden wieder
+zurückgestellt wird; eine höhere Prozesspriorität für das Spiel, gesetzt erst dann,
+wenn der Prozess tatsächlich auftaucht — ein über Steam gestartetes Spiel erscheint
+Sekunden später und unter eigenem Namen; eine Liste von Hintergrundprogrammen, die vor
+dem Start geschlossen und danach optional wieder gestartet werden; und ein Schalter,
+der Bildschirmschoner und Energiesparmodus aussetzt.
+
+Geschlossen wird in zwei Stufen: erst die höfliche Aufforderung, dann nach zweieinhalb
+Sekunden hart. Ein Browser, der sofort abgeschossen wird, verliert seine Tabs und meldet
+beim nächsten Start einen Absturz. Der Pfad jedes beendeten Programms wird vorher
+gemerkt, damit es sich neu starten lässt.
+
+Alles, was ein Profil am System ändert, wird vor der Änderung in die Konfigurationsdatei
+geschrieben. Wird der Hub abgeschossen, während ein Profil läuft, findet der nächste
+Start diesen Vermerk und stellt den vorherigen Zustand wieder her — ein Energieplan darf
+nicht deshalb umgestellt bleiben, weil ein Launcher abgestürzt ist. Die Prioritätsstufe
+*Echtzeit* wird bewusst nicht angeboten: sie verdrängt die Eingabe- und Audio-Threads
+des Kernels, und ein Spiel, das dann hängt, nimmt den Mauszeiger mit.
+
 **Laufstatus.** Jede Profilkarte zeigt, ob ihre Programme gerade laufen: grün für
 alles, gelb für teilweise, grau für gestoppt. Die einzelnen Einträge sind ebenso
 markiert, sodass du siehst, ob nur Discord fehlt oder das Spiel selbst. Der Hub prüft
@@ -142,7 +163,9 @@ Das Ergebnis liegt in `release/` als `WindowsHub-<version>-setup.exe` und
 4. Verzögerungen setzen. Bewährt hat sich: Musik bei 0 ms, Chat bei 2000 ms,
    Spiel bei 4000 ms.
 5. **Hub beim Start minimieren** aktiviert lassen.
-6. Unter **Setup** den Punkt **Mit Windows starten** einschalten.
+6. Im Reiter **System** optional Energieplan, Priorität und die Programme
+   festlegen, die vorher zu sollen.
+7. Unter **Setup** den Punkt **Mit Windows starten** einschalten.
 
 Die Reihenfolge in der Startsequenz lässt sich per Drag-and-drop ändern.
 

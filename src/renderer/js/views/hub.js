@@ -71,6 +71,17 @@ const STATUS_LABELS = {
   unknown: null
 };
 
+/** Short description of a profile's system changes, or null when it has none. */
+function systemSummary(profile) {
+  const system = profile.system || {};
+  const parts = [];
+  if (system.powerPlan) parts.push('Energieplan');
+  if (system.priority && system.priority !== 'normal') parts.push('Priorität');
+  if ((system.closeApps || []).length) parts.push(`${system.closeApps.length} Programme werden beendet`);
+  if (system.keepAwake) parts.push('Bildschirm bleibt an');
+  return parts.length ? parts.join(' · ') : null;
+}
+
 function profileCard(profile, index) {
   const accent = profile.accent || colorFromString(profile.name);
   const status = profileStatus(profile, state.running);
@@ -122,7 +133,12 @@ function profileCard(profile, index) {
         }, [svg(ICON_EDIT, { width: 15, height: 15 })])
       ])
     ]),
-    el('div', { class: 'card-meta', text: `${(profile.apps || []).length} Programme · ${profile.launchCount || 0}× · ${relativeTime(profile.lastLaunched)}` })
+    el('div', { class: 'card-meta' }, [
+      `${(profile.apps || []).length} Programme · ${profile.launchCount || 0}× · ${relativeTime(profile.lastLaunched)}`,
+      // Says at a glance that starting this profile changes more than which
+      // programs are open.
+      systemSummary(profile) ? el('span', { class: 'card-tweaks', title: systemSummary(profile) }, ['SYS']) : null
+    ])
   ]);
 
   // Fill icon into the play glyph without a stroke artifact.
