@@ -266,11 +266,11 @@ function pump() {
     stop();
     const hung = current;
     current = null;
-    consecutiveFailures += 1;
-    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-      disabled = true;
-      log.warn('Host wird für diese Sitzung nicht mehr benutzt, es wird wieder einzeln gestartet');
-    }
+    // Deliberately not counted towards abandoning the host. A timeout says
+    // that one script is slow, not that the host is broken — the Windows CI
+    // runner has a WMI query that never returns, and three of those used to
+    // condemn a perfectly working process and push everything back onto cold
+    // starts for the rest of the session.
     hung.reject(new Error(`PowerShell hat nach ${hung.timeout} ms nicht geantwortet`));
     pump();
   }, job.timeout);

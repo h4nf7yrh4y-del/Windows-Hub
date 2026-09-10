@@ -518,12 +518,20 @@ $classic = Test-Path -LiteralPath '${esc(CLASSIC_MENU_PATH)}'
 [PSCustomObject]@{ values = $values; classic = $classic } | ConvertTo-Json -Compress -Depth 4
 `;
 
+  // The catalogue must not wait indefinitely on the power schemes. Whatever
+  // has not arrived within this budget is left out of this read and fills the
+  // cache for the next one; the alternative is a screen that stays blank
+  // because one WMI provider is unwell.
   const plansPromise = tweaks.listPowerPlans().catch(() => []);
+  const plansSoon = Promise.race([
+    plansPromise,
+    new Promise((resolve) => setTimeout(() => resolve(null), 6000))
+  ]).then((plans) => (plans && plans.length ? plans : tweaks.cachedPowerPlans()));
 
   try {
     const out = await runPowerShell(script, 30000);
     const trimmed = (out || '').trim();
-    if (!trimmed) return { values: {}, powerPlans: await plansPromise, classicMenu: null };
+    if (!trimmed) return { values: {}, powerPlans: await plansSoon, classicMenu: null };
     const parsed = JSON.parse(trimmed);
 
     const values = {};
@@ -532,9 +540,9 @@ $classic = Test-Path -LiteralPath '${esc(CLASSIC_MENU_PATH)}'
       if (row && row.id) values[row.id] = row.value === undefined ? null : row.value;
     }
 
-    return { values, powerPlans: await plansPromise, classicMenu: !!parsed.classic };
+    return { values, powerPlans: await plansSoon, classicMenu: !!parsed.classic };
   } catch (_) {
-    return { values: {}, powerPlans: await plansPromise.catch(() => []), classicMenu: null };
+    return { values: {}, powerPlans: await plansSoon.catch(() => []), classicMenu: null };
   }
 }
 

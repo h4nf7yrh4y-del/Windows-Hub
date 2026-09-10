@@ -87,22 +87,46 @@ ConvertTo-Json -Compress -Depth 3 -InputObject $plans
  * cache is dropped the moment a plan is switched.
  */
 let planCache = { at: 0, plans: null };
+let planFailedAt = 0;
+let planInFlight = null;
 const PLAN_CACHE_MS = 60000;
+const PLAN_RETRY_MS = 30000;
+// A machine that needs more than this to list five power schemes has a broken
+// WMI provider, not a slow one. Waiting longer only blocks the queue.
+const PLAN_TIMEOUT_MS = 12000;
 
 async function listPowerPlans({ force = false } = {}) {
   if (!IS_WIN) return [];
   if (!force && planCache.plans && Date.now() - planCache.at < PLAN_CACHE_MS) return planCache.plans;
+  // A failed read is remembered too, briefly. Without that, a provider that
+  // hangs is asked again on every screen and occupies the shell each time.
+  if (!force && planFailedAt && Date.now() - planFailedAt < PLAN_RETRY_MS) return planCache.plans || [];
+  if (planInFlight) return planInFlight;
 
-  const parsed = parseJson(await processes.runPowerShell(PLANS_SCRIPT, 25000).catch(() => ''));
-  const plans = asArray(parsed).map((row) => {
-    const match = /\{([0-9a-f-]+)\}/i.exec(String(row.InstanceID || ''));
-    return { guid: match ? match[1] : null, label: row.ElementName, active: !!row.IsActive };
-  }).filter((plan) => plan.guid);
+  planInFlight = (async () => {
+    const parsed = parseJson(await processes.runPowerShell(PLANS_SCRIPT, PLAN_TIMEOUT_MS).catch((err) => {
+      log.warn(`Energiepläne nicht lesbar: ${err.message}`);
+      return '';
+    }));
+    const plans = asArray(parsed).map((row) => {
+      const match = /\{([0-9a-f-]+)\}/i.exec(String(row.InstanceID || ''));
+      return { guid: match ? match[1] : null, label: row.ElementName, active: !!row.IsActive };
+    }).filter((plan) => plan.guid);
 
-  // An empty answer means the query failed or timed out. Caching that would
-  // hide the plans for a minute for no reason.
-  if (plans.length) planCache = { at: Date.now(), plans };
-  return plans;
+    if (plans.length) {
+      planCache = { at: Date.now(), plans };
+      planFailedAt = 0;
+    } else {
+      planFailedAt = Date.now();
+    }
+    return plans;
+  })();
+
+  try {
+    return await planInFlight;
+  } finally {
+    planInFlight = null;
+  }
 }
 
 function setPowerPlanScript(guid) {
@@ -117,6 +141,7 @@ async function setPowerPlan(guid) {
   if (!/^[0-9a-f-]{36}$/i.test(String(guid))) throw new Error('Ungültiger Energieplan');
   await processes.runPowerShell(setPowerPlanScript(guid), 25000);
   planCache = { at: 0, plans: null };
+  planFailedAt = 0;
   return guid;
 }
 
@@ -464,9 +489,15 @@ function status() {
   };
 }
 
+/** Whatever the last successful read produced, without asking again. */
+function cachedPowerPlans() {
+  return planCache.plans || [];
+}
+
 module.exports = {
   PRIORITIES,
   setPowerPlan,
+  cachedPowerPlans,
   defaults,
   sanitize,
   isActive,

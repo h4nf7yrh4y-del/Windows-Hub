@@ -135,6 +135,17 @@ function jobLineChecks() {
     assert.ok(pshost.status().running, 'the host should still be alive');
   });
 
+  await test('a slow script does not get the host abandoned', async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await assert.rejects(pshost.run('Start-Sleep -Seconds 30', 900), /nicht geantwortet/);
+    }
+    assert.strictEqual(pshost.status().disabled, false,
+      'four slow scripts in a row say nothing about the host itself');
+    const after = await pshost.run("'noch immer da'");
+    assert.strictEqual(after.trim(), 'noch immer da');
+    assert.ok(pshost.status().running, 'the host should be back up');
+  });
+
   await test('a hung job fails on time and the host recovers', async () => {
     await assert.rejects(
       pshost.run('Start-Sleep -Seconds 30', 1200),
