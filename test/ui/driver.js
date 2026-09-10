@@ -190,9 +190,66 @@ function makeToolkit(win) {
   );
   const exists = (selector) => evalExpr(`!!document.querySelector(${JSON.stringify(selector)})`);
 
+  /**
+   * Waits for a window whose URL contains `needle`.
+   *
+   * A freshly created window reports an empty URL until its load commits, and
+   * on a slow machine that can take seconds. Every fixed pause here was a coin
+   * toss; this is the same wait written honestly.
+   */
+  async function waitForWindow(needle, { timeout = 20000, interval = 400 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const found = BrowserWindow.getAllWindows()
+        .find((w) => !w.isDestroyed() && w.webContents.getURL().includes(needle));
+      if (found) return found;
+      if (Date.now() >= deadline) return null;
+      await wait(interval);
+    }
+  }
+
+  /** The opposite: waits until no window matches any more. */
+  async function waitForNoWindow(needle, { timeout = 15000, interval = 400 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const found = BrowserWindow.getAllWindows()
+        .find((w) => !w.isDestroyed() && w.webContents.getURL().includes(needle));
+      if (!found) return true;
+      if (Date.now() >= deadline) return false;
+      await wait(interval);
+    }
+  }
+
+  /**
+   * waitFor, but inside another window's page.
+   *
+   * Any truthy result is the answer and is handed back, including a string —
+   * treating a string as a failure marker would make "wait until this element
+   * has text" impossible to express, which is exactly what it is needed for.
+   * A page that throws is recorded and retried until the deadline.
+   */
+  const FAILED = Symbol('failed');
+
+  async function waitIn(target, expr, { timeout = 20000, interval = 300, label } = {}) {
+    const deadline = Date.now() + timeout;
+    let last;
+    for (;;) {
+      let error = null;
+      last = await target.webContents.executeJavaScript(`(${expr})`, true)
+        .catch((err) => { error = err.message; return FAILED; });
+      if (last !== FAILED && last) return last;
+      if (Date.now() >= deadline) {
+        const seen = last === FAILED ? `Fehler: ${error}` : JSON.stringify(last);
+        throw new Failure(`Zeitüberschreitung beim Warten auf ${label || expr} (zuletzt: ${seen})`);
+      }
+      await wait(interval);
+    }
+  }
+
   return {
     win, js, evalExpr, waitFor, assert, eq, atLeast,
     view, click, clickText, count, text, exists, wait, checks,
+    waitForWindow, waitForNoWindow, waitIn,
     windows: () => BrowserWindow.getAllWindows(),
     dataDir
   };

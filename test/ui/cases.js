@@ -309,8 +309,8 @@ module.exports = [
       ), true, 'Die Tabelle hat eine Prioritätsspalte');
 
       await t.clickText('#view-processes .tab-bar .tab', 'Netzwerk');
-      await t.waitFor(`!!document.querySelector('.net-panel')`, { label: 'Netzwerkpanel', timeout: 30000 });
-      await t.wait(1500);
+      await t.waitFor(`document.querySelectorAll('.net-panel .table').length >= 2`,
+        { label: 'Netzwerkpanel', timeout: 40000 });
       t.atLeast(await t.count('.net-panel .table'), 2, 'Programme und Verbindungen als eigene Tabellen');
       t.assert(await t.exists('.net-adapters'), 'Adapterliste wird gebaut');
       t.assert(((await t.text('.net-panel .proc-toolbar .label')) || '').length > 0,
@@ -363,30 +363,26 @@ module.exports = [
 
       const before = t.windows().length;
       await t.click('.overlay-grid .toggle');
-      await t.wait(1800);
-      const opened = t.windows().length;
-      t.atLeast(opened, before + 1, 'Ein Overlay-Fenster wird tatsächlich geöffnet',
-        `vorher ${before}, nachher ${opened}`);
 
-      // The overlay must show live values, not an empty frame.
-      // A freshly created window reports an empty URL until the load commits.
-      let overlayWindow = null;
-      for (let i = 0; i < 40 && !overlayWindow; i += 1) {
-        overlayWindow = t.windows().find((w) => !w.isDestroyed() && w.webContents.getURL().includes('overlay.html'));
-        if (!overlayWindow) await t.wait(500);
-      }
-      t.assert(!!overlayWindow, 'Overlay lädt overlay.html');
+      const overlayWindow = await t.waitForWindow('overlay.html');
+      t.assert(!!overlayWindow, 'Ein Overlay-Fenster wird tatsächlich geöffnet', `Fenster vorher ${before}`);
       if (overlayWindow) {
         t.watchConsole(overlayWindow.webContents, 'overlay');
-        await t.wait(1800);
-        const body = await overlayWindow.webContents.executeJavaScript('document.body.textContent', true);
-        t.assert(/\d/.test(body || ''), 'Overlay zeigt Zahlen an', JSON.stringify((body || '').slice(0, 80)));
+        // The overlay must show live values, not an empty frame — and the
+        // first value arrives with the next sample, not on load.
+        const body = await t.waitIn(overlayWindow,
+          `(function () { var t = document.body.textContent; return /\\d/.test(t) ? t : false; })()`,
+          { label: 'Werte im Overlay' }).catch(() => '');
+        t.assert(/\d/.test(body || ''), 'Overlay zeigt Zahlen an', JSON.stringify(String(body).slice(0, 80)));
       }
 
       await t.clickText('#view-overlays .btn', 'Alle schließen');
-      await t.wait(1500);
-      t.eq(t.windows().some((w) => w.webContents.getURL().includes('overlay.html')), false,
-        'Alle schließen entfernt die Fenster');
+      t.eq(await t.waitForNoWindow('overlay.html'), true, 'Alle schließen entfernt die Fenster');
+      // The switches are repainted after the call returns, not with the click.
+      await t.waitFor(
+        `[...document.querySelectorAll('.overlay-grid .toggle')].every((n) => n.getAttribute('aria-checked') !== 'true')`,
+        { label: 'zurückgesetzte Schalter' }
+      ).catch(() => {});
       t.eq(await t.evalExpr(
         `[...document.querySelectorAll('.overlay-grid .toggle')].some((n) => n.getAttribute('aria-checked') === 'true')`
       ), false, 'Alle schließen setzt auch die Schalter zurück');
@@ -398,7 +394,8 @@ module.exports = [
     async run(t) {
       await t.view('windows');
       t.eq(await t.count('#view-windows .tab-bar .tab'), 2, 'Zwei Reiter');
-      await t.wait(1500);
+      await t.waitFor(`document.querySelectorAll('#view-windows .tab-body > *').length > 0`,
+        { label: 'Bildschirm-Panel', timeout: 40000 });
       t.assert(await t.exists('#view-windows .tab-body'), 'Bildschirm-Panel rendert');
 
       // Reading the monitors goes through a compiled helper. On a cold, slow
@@ -446,16 +443,13 @@ module.exports = [
 
       const before = t.windows().length;
       await t.evalExpr(`window.hub.dashboard.open()`);
-      let board = null;
-      for (let i = 0; i < 40 && !board; i += 1) {
-        board = t.windows().find((w) => !w.isDestroyed() && w.webContents.getURL().includes('dashboard.html'));
-        if (!board) await t.wait(500);
-      }
+      const board = await t.waitForWindow('dashboard.html');
       t.assert(!!board, 'Das Dashboard-Fenster geht auf', `Fenster vorher ${before}`);
       if (!board) return;
 
       t.watchConsole(board.webContents, 'dashboard');
-      await t.wait(2500);
+      await t.waitIn(board, `document.querySelectorAll('.dash-panel').length >= 5`,
+        { label: 'Dashboard-Inhalt' });
 
       const content = await board.webContents.executeJavaScript(`(() => ({
         panels: document.querySelectorAll('.dash-panel').length,
@@ -480,9 +474,7 @@ module.exports = [
       t.atLeast(samples, 2, 'Der Messstrom erreicht auch das zweite Fenster', `nur ${samples} Messungen`);
 
       await t.evalExpr(`window.hub.dashboard.close()`);
-      await t.wait(1200);
-      t.eq(t.windows().some((w) => !w.isDestroyed() && w.webContents.getURL().includes('dashboard.html')), false,
-        'Und lässt sich wieder schließen');
+      t.eq(await t.waitForNoWindow('dashboard.html'), true, 'Und lässt sich wieder schließen');
     }
   },
 
@@ -490,7 +482,8 @@ module.exports = [
     name: 'Bibliothek: Suche und Leerzustand',
     async run(t) {
       await t.view('library');
-      await t.wait(1200);
+      await t.waitFor(`!!document.querySelector('.lib-grid') || !!document.querySelector('#view-library .empty')`,
+        { label: 'Bibliothek', timeout: 40000 });
       t.assert(await t.exists('.lib-grid') || await t.exists('#view-library .empty'),
         'Bibliothek rendert Raster oder Leerzustand');
       t.assert(await t.exists('#view-library .input'), 'Suchfeld vorhanden');
@@ -567,14 +560,15 @@ module.exports = [
       await t.view('hub');
       const before = t.windows().length;
       await t.click('.rail-btn[data-view="claude"]');
-      await t.wait(2500);
-      const consoleWindow = t.windows().find((w) => w.webContents.getURL().includes('claude.html'));
+
+      const consoleWindow = await t.waitForWindow('claude.html');
       t.assert(!!consoleWindow, 'Konsolenfenster wurde geöffnet', `Fenster vorher ${before}`);
       if (!consoleWindow) return;
+      await t.waitIn(consoleWindow, `document.querySelectorAll('.cc-setup select').length >= 2`,
+        { label: 'Konsolen-Bedienelemente' });
 
       t.watchConsole(consoleWindow.webContents, 'claude');
       const cjs = (code) => consoleWindow.webContents.executeJavaScript(`(${code})`, true);
-      await t.wait(900);
 
       t.atLeast(await cjs(`document.querySelectorAll('.cc-setup select').length`), 2,
         'Modell- und Modusauswahl vorhanden');
