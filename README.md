@@ -528,6 +528,18 @@ normale Fenster und über Spiele im randlosen Fenstermodus nach vorne. Im exklus
 Vollbildmodus verweigert Windows das, dieselbe Grenze wie bei den Overlays. Das
 Kürzel selbst wird trotzdem ausgelöst, du siehst nur nichts davon.
 
+**Der Zeitplan braucht einen laufenden Hub.** Er ist ein Timer im Programm, kein
+Windows-Dienst und keine geplante Aufgabe. Ist der Hub zu, passiert nichts, und ein
+verpasster Zeitpunkt wird bewusst nicht nachgeholt.
+
+**Die Prozesspriorität überlebt keinen Neustart des Programms.** Sie hängt am
+laufenden Prozess. Für ein Spiel, das jedes Mal bevorzugt werden soll, ist die
+Einstellung im Profil unter *System* der richtige Ort.
+
+**Die Verbindungsliste zeigt nur TCP.** UDP kennt keinen Verbindungszustand, und eine
+Liste offener UDP-Endpunkte hätte kaum Aussagekraft. Auch bleibt es bei Adressen: der
+Hub löst keine Namen auf, das wären hunderte DNS-Abfragen für eine Anzeige.
+
 **Werkzeuge haben keinen Schalter, und das ist kein Versäumnis.** Geräte-Manager,
 Ereignisanzeige, Datenträgerbereinigung und die anderen elf sind Programme, keine
 Einstellungen. Sie sind im Katalog als Werkzeug gekennzeichnet, damit die fehlende
