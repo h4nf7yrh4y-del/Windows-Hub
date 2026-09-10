@@ -139,12 +139,17 @@ module.exports = [
       })()`);
       t.eq(stretched, false, 'Panels behalten ihre eigene Höhe');
 
-      // The whole point of the view: the numbers move.
-      const first = await t.evalExpr(`document.querySelector('.core-val') ? document.querySelector('.core-grid').textContent : null`);
-      await t.wait(2600);
-      const second = await t.evalExpr(`document.querySelector('.core-val') ? document.querySelector('.core-grid').textContent : null`);
-      t.assert(first !== null && second !== null, 'Kernauslastung wird gerendert');
-      t.assert(first !== second, 'Werte aktualisieren sich im Sekundentakt', `${first} === ${second}`);
+      t.atLeast(await t.count('.core-val'), 1, 'Kernauslastung wird gerendert');
+
+      // The whole point of the view is that it keeps updating. Asserting that
+      // the rendered text differs would fail on a machine whose cores really
+      // are pinned at 100 % for three seconds, so count the samples instead.
+      const samples = await t.evalExpr(`new Promise((resolve) => {
+        let count = 0;
+        const stop = window.hub.metrics.onSample(() => { count += 1; });
+        setTimeout(() => { stop(); resolve(count); }, 3200);
+      })`);
+      t.atLeast(samples, 2, 'Der Messstrom liefert weiter Werte', `nur ${samples} Messungen in 3,2 s`);
 
       // A graph that only paints at the right edge was a real bug once.
       const painted = await t.evalExpr(`(() => {
@@ -165,7 +170,7 @@ module.exports = [
       await t.view('processes');
       t.eq(await t.count('.tab-bar .tab'), 2, 'Zwei Reiter: Prozesse und Autostart');
       await t.waitFor(`document.querySelectorAll('#view-processes tbody tr').length > 0`,
-        { label: 'Prozesszeilen', timeout: 20000 });
+        { label: 'Prozesszeilen', timeout: 60000 });
       t.atLeast(await t.count('#view-processes tbody tr'), 3, 'Prozesse werden aufgelistet');
       t.atLeast(await t.count('.proc-action'), 1, 'Beenden-Knopf pro Zeile');
       t.assert(((await t.text('.proc-summary')) || '').length > 0, 'Zusammenfassung unter der Tabelle');
@@ -207,7 +212,7 @@ module.exports = [
       await t.view('files');
       t.atLeast(await t.count('.fm-sidebar .fm-side-btn'), 1, 'Seitenleiste hat Ziele');
       await t.waitFor(`document.querySelectorAll('#view-files tbody tr').length > 0`,
-        { label: 'Dateiliste', timeout: 20000 });
+        { label: 'Dateiliste', timeout: 60000 });
       const startCrumbs = await t.count('.fm-crumbs .crumb');
       t.atLeast(startCrumbs, 1, 'Pfad wird als Brotkrumen gezeigt');
 
@@ -272,8 +277,10 @@ module.exports = [
       t.assert(await t.exists('#view-windows .tab-body'), 'Bildschirm-Panel rendert');
 
       await t.clickText('#view-windows .tab-bar .tab', 'Funktionen');
-      await t.waitFor(`!!document.querySelector('.feature-grid') || !!document.querySelector('#view-windows .empty')`,
-        { label: 'Funktionsliste', timeout: 20000 });
+      // The grid element exists before the catalogue is read, so waiting for it
+      // would prove nothing. The filter tabs are built from the loaded data.
+      await t.waitFor(`document.querySelectorAll('#view-windows .filter-tabs .filter-tab').length > 0`,
+        { label: 'Funktionsliste', timeout: 60000 });
       t.atLeast(await t.count('#view-windows .filter-tabs .filter-tab'), 2, 'Filter für die Funktionsliste');
 
       const supported = await t.evalExpr(`window.hub.features.list().then((r) => r.ok && r.data.supported)`);

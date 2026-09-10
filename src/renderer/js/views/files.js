@@ -128,10 +128,11 @@ export function createFilesView() {
 
   async function loadSidebar() {
     clear(sidebar);
-    const [drives, quick] = await Promise.all([
-      api.files.drives().catch(() => []),
-      api.files.quickLocations().catch(() => [])
-    ]);
+    // The quick locations come from Electron itself and are instant; the drive
+    // list needs a system query that can take seconds on a busy machine.
+    // Waiting for both would leave the sidebar blank for that whole time.
+    const drivesPromise = api.files.drives().catch(() => []);
+    const quick = await api.files.quickLocations().catch(() => []);
 
     if (quick.length) {
       sidebar.appendChild(el('div', { class: 'fm-side-title', text: 'Schnellzugriff' }));
@@ -143,11 +144,24 @@ export function createFilesView() {
       }
     }
 
-    if (drives.length) {
-      sidebar.appendChild(el('div', { class: 'fm-side-title', text: 'Laufwerke' }));
+    const drivesTitle = el('div', { class: 'fm-side-title', text: 'Laufwerke' });
+    const drivesHost = el('div', { class: 'fm-side-drives' }, [
+      el('div', { class: 'fm-side-pending', text: 'wird gelesen …' })
+    ]);
+    sidebar.appendChild(drivesTitle);
+    sidebar.appendChild(drivesHost);
+
+    const drives = await drivesPromise;
+    // The sidebar may have been rebuilt or torn down while the query ran.
+    if (!drivesHost.isConnected) return;
+    clear(drivesHost);
+
+    if (!drives.length) {
+      drivesHost.appendChild(el('div', { class: 'fm-side-pending', text: 'keine gefunden' }));
+    } else {
       for (const drive of drives) {
         const usedPct = drive.size ? ((drive.size - drive.free) / drive.size) * 100 : 0;
-        sidebar.appendChild(el('button', {
+        drivesHost.appendChild(el('button', {
           class: 'fm-side-btn drive',
           title: `${drive.path} · ${bytes(drive.free)} frei von ${bytes(drive.size)}`,
           onClick: () => navigate(drive.path)

@@ -43,7 +43,16 @@ Get-Process | ForEach-Object {
  * scripts, embedded quotes and non-ASCII text all survive intact, and nothing
  * has to be escaped for the Windows command-line parser on the way through.
  */
-function runPowerShell(script, timeout = 15000) {
+/**
+ * 40 seconds, not 15.
+ *
+ * A cold powershell.exe loads the .NET runtime before it reads a single line,
+ * and on a machine that is busy — which is precisely when someone opens a task
+ * manager — that alone can take tens of seconds. A timeout that fires leaves
+ * the process list empty with no explanation, which is worse than waiting.
+ * The startup cost itself is the reason a long-lived host process exists.
+ */
+function runPowerShell(script, timeout = 40000) {
   const encoded = Buffer.from(String(script), 'utf16le').toString('base64');
   return new Promise((resolve, reject) => {
     execFile(
@@ -178,7 +187,7 @@ async function runningNames() {
       const out = await runCommand('ps', ['-eo', 'comm=', '--no-headers']);
       return [...new Set(out.split('\n').map((l) => l.trim()).filter(Boolean))];
     }
-    const out = await runPowerShell(NAMES_SCRIPT, 15000);
+    const out = await runPowerShell(NAMES_SCRIPT, 40000);
     const trimmed = (out || '').trim();
     if (!trimmed) return [];
     let parsed;

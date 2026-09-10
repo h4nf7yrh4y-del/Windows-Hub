@@ -141,8 +141,8 @@ async function build() {
     ['Chromium', process.versions.chrome],
     ['Node', process.versions.node],
     ['Paketiert', app.isPackaged ? 'ja' : 'nein (Entwicklungsmodus)'],
-    ['Programmpfad', redactPath(app.getAppPath())],
-    ['Konfiguration', redactPath(store.configPath())],
+    ['Programmpfad', app.getAppPath()],
+    ['Konfiguration', store.configPath()],
     ['Betriebszeit Hub', `${Math.round(process.uptime())} s`]
   ]));
 
@@ -226,7 +226,7 @@ async function build() {
   const logInfo = logger.paths();
   parts.push(section('Protokoll'));
   parts.push(pairs([
-    ['Verzeichnis', redactPath(logInfo.dir) || '—'],
+    ['Verzeichnis', logInfo.dir || '—'],
     ['Dateien', (logInfo.files || []).map((f) => `${f.name} (${bytes(f.size)})`).join(', ') || '—'],
     ['Schreiben deaktiviert', logInfo.disabled ? 'ja' : 'nein']
   ]));
@@ -235,7 +235,12 @@ async function build() {
   parts.push(tail.length ? tail.map((l) => `  ${l}`).join('\n') : '  (leer)');
 
   parts.push(`\n${line()}\nEnde des Berichts\n`);
-  return parts.join('\n');
+
+  // A final pass over the whole text rather than trusting every call site to
+  // remember. A user directory can arrive from anywhere — a library path, a
+  // temporary directory, a stack trace in the log tail — and the one field
+  // nobody thought about is exactly the one that ends up in a pasted report.
+  return redactPath(parts.join('\n'));
 }
 
 /** Writes the report next to the logs and returns its path. */
