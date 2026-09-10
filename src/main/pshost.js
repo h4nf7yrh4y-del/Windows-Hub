@@ -38,6 +38,29 @@ const PREAMBLE = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Progr
 // attached. They are not part of any answer.
 const ANSI = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 
+/**
+ * Windows PowerShell writes its error and warning records to stderr as a CLIXML
+ * document when nothing is attached to a console, which is always the case
+ * here. Reporting that blob as the error message produced the memorable
+ * "Error: #< CLIXML" in the logs.
+ */
+const CLIXML = /^#<\s*CLIXML[\s\S]*$/;
+
+// A prompt would only appear if a host decided it was interactive after all.
+// It has never been seen, but it would land in the middle of someone's JSON.
+const PROMPT_LINE = /^PS [A-Za-z]:\\[^\n]*>\s*$/gm;
+
+function clean(text) {
+  return String(text).replace(ANSI, '').replace(PROMPT_LINE, '');
+}
+
+/** The part of stderr worth showing a user, if any. */
+function usefulError(stderr, fallback) {
+  const text = clean(stderr).trim();
+  if (!text || CLIXML.test(text)) return fallback;
+  return text;
+}
+
 const DEFAULT_TIMEOUT = 30000;
 const IDLE_SHUTDOWN_MS = 5 * 60 * 1000;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -101,8 +124,8 @@ function runOnce(script, timeout) {
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
       { timeout, maxBuffer: 24 * 1024 * 1024, windowsHide: true },
       (err, stdout, stderr) => {
-        if (err && !stdout) return reject(new Error(stderr || err.message));
-        resolve(String(stdout).replace(ANSI, ''));
+        if (err && !stdout) return reject(new Error(usefulError(stderr, err.message)));
+        resolve(clean(stdout));
       }
     );
   });
@@ -140,7 +163,7 @@ function stop() {
 }
 
 function onData(chunk) {
-  buffer += String(chunk).replace(ANSI, '');
+  buffer += clean(chunk);
   if (!current) { buffer = ''; return; }
 
   const marker = sentinel(current.id);
@@ -193,7 +216,7 @@ function start() {
 
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => {
-    const text = String(chunk).replace(ANSI, '').trim();
+    const text = usefulError(chunk, '');
     if (text) log.debug(`stderr: ${text.slice(0, 400)}`);
   });
 
@@ -320,4 +343,4 @@ function status() {
   };
 }
 
-module.exports = { run, runOnce, warmUp, dispose, status, _jobLine: jobLine, ANSI };
+module.exports = { run, runOnce, warmUp, dispose, status, _jobLine: jobLine, _clean: clean, _usefulError: usefulError };

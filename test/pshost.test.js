@@ -67,6 +67,21 @@ function jobLineChecks() {
 
   await test('a job is one line and carries its own sentinel', jobLineChecks);
 
+  await test('CLIXML noise on stderr is not reported as the error', () => {
+    const clixml = '#< CLIXML\r\n<Objs Version="1.1.0.1"><S S="Error">boom</S></Objs>';
+    assert.strictEqual(pshost._usefulError(clixml, 'echter Grund'), 'echter Grund',
+      'Windows PowerShell serialises its error stream as CLIXML when no console is attached');
+    assert.strictEqual(pshost._usefulError('wirklich kaputt', 'egal'), 'wirklich kaputt');
+    assert.strictEqual(pshost._usefulError('   ', 'ersatz'), 'ersatz');
+  });
+
+  await test('terminal escapes and stray prompts are stripped from output', () => {
+    assert.strictEqual(pshost._clean('\u001b[?1h[\"a\"]\u001b[?1l'), '["a"]');
+    assert.strictEqual(pshost._clean('PS D:\\a\\repo> \n{"x":1}').trim(), '{"x":1}');
+    // A line that merely mentions a path must survive.
+    assert.ok(pshost._clean('C:\\Users\\x> nichts').includes('C:\\Users\\x> nichts'));
+  });
+
   await test('a simple script comes back as text', async () => {
     const out = await pshost.run("'hallo'");
     assert.strictEqual(out.trim(), 'hallo');
