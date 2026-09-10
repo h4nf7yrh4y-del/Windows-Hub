@@ -2,6 +2,7 @@
 
 const { execFile } = require('child_process');
 const os = require('os');
+const pshost = require('./pshost');
 
 /**
  * Task-manager backend.
@@ -36,35 +37,17 @@ Get-Process | ForEach-Object {
 `;
 
 /**
- * Runs a PowerShell script via -EncodedCommand.
+ * Every PowerShell query in the app goes through here.
  *
- * The script is handed over as base64 UTF-16LE rather than as a -Command
- * string, which removes every quoting and line-break hazard: multi-line
- * scripts, embedded quotes and non-ASCII text all survive intact, and nothing
- * has to be escaped for the Windows command-line parser on the way through.
- */
-/**
- * 40 seconds, not 15.
- *
- * A cold powershell.exe loads the .NET runtime before it reads a single line,
- * and on a machine that is busy — which is precisely when someone opens a task
- * manager — that alone can take tens of seconds. A timeout that fires leaves
- * the process list empty with no explanation, which is worse than waiting.
- * The startup cost itself is the reason a long-lived host process exists.
+ * The script used to be handed to a freshly started powershell.exe as base64
+ * UTF-16LE, which solved the quoting problem but paid for a process start each
+ * time. It now goes to a host that is already running and is fed the same
+ * base64, so the quoting guarantees are unchanged and the start is paid once.
+ * The contract is the same as before: a script that throws rejects, a script
+ * that writes nothing resolves with an empty string.
  */
 function runPowerShell(script, timeout = 40000) {
-  const encoded = Buffer.from(String(script), 'utf16le').toString('base64');
-  return new Promise((resolve, reject) => {
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-      { timeout, maxBuffer: 24 * 1024 * 1024, windowsHide: true },
-      (err, stdout, stderr) => {
-        if (err && !stdout) return reject(new Error(stderr || err.message));
-        resolve(stdout);
-      }
-    );
-  });
+  return pshost.run(script, timeout);
 }
 
 function runCommand(cmd, args, timeout = 15000) {

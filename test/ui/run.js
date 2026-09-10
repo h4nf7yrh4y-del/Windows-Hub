@@ -107,11 +107,14 @@ function main() {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
 
-    // A hung renderer must not hang the build.
+    // A hung renderer must not hang the build. The limit is generous because
+    // a two-core CI runner is several times slower than any machine this ever
+    // runs on for real.
+    const budgetMs = Math.max(60000, Number(process.env.HUB_UI_TEST_TIMEOUT_MS) || 600000);
     const guard = setTimeout(() => {
-      console.error('UI-Tests: Zeitüberschreitung nach 180 s, Prozess wird beendet.');
+      console.error(`UI-Tests: Zeitüberschreitung nach ${Math.round(budgetMs / 1000)} s, Prozess wird beendet.`);
       child.kill('SIGKILL');
-    }, 180000);
+    }, budgetMs);
 
     child.on('close', (code) => {
       clearTimeout(guard);

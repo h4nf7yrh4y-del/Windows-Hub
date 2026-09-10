@@ -12,6 +12,7 @@ const overlays = require('./overlays');
 const hotkeys = require('./hotkeys');
 const claudesession = require('./claudesession');
 const tweaks = require('./tweaks');
+const pshost = require('./pshost');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -320,6 +321,10 @@ app.on('ready', () => {
 
   registerShortcuts();
 
+  // Start the PowerShell host before anything asks for it, so the first
+  // process list is not the one that pays for the runtime loading itself.
+  if (IS_WIN) pshost.warmUp();
+
   // A power plan the hub switched must not outlive the hub. If a snapshot is
   // still on disk, the last run ended without getting to undo it.
   tweaks.restoreAfterCrash().catch((err) => log.error(`Systemzustand: ${err.message}`));
@@ -355,6 +360,7 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   log.info('Hub wird beendet');
+  pshost.dispose();
   hotkeys.dispose();
   globalShortcut.unregisterAll();
   metrics.stop();

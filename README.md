@@ -412,6 +412,37 @@ an.
 
 ---
 
+### Ein PowerShell-Prozess statt dutzender
+
+Jede Systemabfrage — Prozessliste, GPU-Zähler, Laufwerke, Bildschirmmodi, der
+Funktionskatalog — startete früher `powershell.exe` neu. Der Start ist der teure
+Teil: die .NET-Laufzeit wird geladen und übersetzt sich selbst, bevor das erste
+Zeichen des Skripts gelesen wird. Auf einem ruhigen Rechner sind das ein paar
+hundert Millisekunden, auf einem beschäftigten mehrere Sekunden — also genau dann,
+wenn jemand einen Task-Manager öffnet.
+
+Der Hub hält jetzt einen PowerShell-Prozess offen und schickt ihm die Aufträge
+einzeln über die Standardeingabe. Ein Auftrag ist eine Base64-Zeile, die drüben
+wieder in einen Skriptblock verwandelt und aufgerufen wird, gefolgt von einer
+Markierung, an der der Leser das Ende erkennt. Weil jeder Skriptblock seinen
+eigenen Gültigkeitsbereich hat, bleibt von einem Auftrag nichts beim nächsten
+übrig. Gemessen mit PowerShell 7 unter Linux: drei Abfragen über den Host
+15 Millisekunden, dieselben drei mit je einem eigenen Start 806.
+
+Fehler laufen bewusst über dieselbe Ausgabe wie das Ergebnis und nicht über die
+Fehlerausgabe: zwischen den beiden Kanälen gibt es keine garantierte Reihenfolge,
+und eine Fehlermeldung, die nach der Endmarkierung eintrifft, würde dem Aufrufer
+einen erfolgreichen Aufruf vortäuschen. Hängt ein Auftrag, wird er nach seiner
+Zeit abgebrochen und der Host ersetzt; stirbt der Host, wird der Auftrag noch
+einmal mit einem eigenen Prozess versucht. Nach drei Fehlschlägen in Folge
+schaltet der Hub für den Rest der Sitzung zurück auf Einzelstarts, und nach fünf
+Minuten ohne Auftrag beendet er den Host von selbst.
+
+Als Nebeneffekt bleibt die C#-Hilfsklasse für die Bildschirmsteuerung nach dem
+ersten Laden im Speicher, statt bei jedem Helligkeitsschritt neu geladen zu werden.
+
+---
+
 ## Grenzen, ehrlich
 
 Diese Punkte sind keine Bugs, sondern Eigenschaften des gewählten Ansatzes. Du

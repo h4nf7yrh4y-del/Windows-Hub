@@ -7,6 +7,7 @@ const path = require('path');
 const { app, dialog, shell } = require('electron');
 
 const logger = require('./logger');
+const pshost = require('./pshost');
 const store = require('./store');
 const metrics = require('./metrics');
 const gpu = require('./gpu');
@@ -221,6 +222,17 @@ async function build() {
   parts.push('  Persönliche Pfade und Hintergrundbilder sind entfernt.');
   parts.push('');
   parts.push(JSON.stringify(sanitizeConfig(state), null, 2).split('\n').map((l) => `  ${l}`).join('\n'));
+
+  /* ---------------------------------------------------------- powershell */
+  const host = pshost.status();
+  parts.push(section('PowerShell-Host'));
+  parts.push(pairs([
+    ['Programm', host.binary],
+    ['Läuft', host.running ? 'ja' : 'nein'],
+    ['Wartende Aufträge', host.queued],
+    ['Abgeschaltet', host.disabled ? 'ja, es wird einzeln gestartet' : 'nein'],
+    ['Fehler in Folge', host.consecutiveFailures]
+  ]));
 
   /* ------------------------------------------------------------------ log */
   const logInfo = logger.paths();
