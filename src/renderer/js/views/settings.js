@@ -5,6 +5,7 @@ import { setGamepadEnabled, gamepadState } from '../gamepad.js';
 import { state, saveSettings, applyTheme } from '../state.js';
 import { confirmDialog, openModal } from '../widgets/modal.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
+import { THEMES, matchTheme, themePatch } from '../themes.js';
 
 const PRESET_ACCENTS = ['#00f0ff', '#ff2e88', '#ffb400', '#26e08a', '#8b5cf6', '#ff6b35', '#4d9fff', '#ff0044'];
 
@@ -77,6 +78,49 @@ export function createSettingsView() {
   const info = state.appInfo || {};
 
   /* ------------------------------------------------------------ appearance */
+
+  /* -------------------------------------------------------------- themes */
+
+  const themeHost = el('div', { class: 'theme-grid' });
+
+  function renderThemes() {
+    clear(themeHost);
+    const current = matchTheme(state.settings);
+    for (const theme of THEMES) {
+      themeHost.appendChild(el('button', {
+        class: `theme-card${current && current.id === theme.id ? ' active' : ''}`,
+        style: { '--t1': theme.accent, '--t2': theme.accent2 },
+        title: theme.hint,
+        onClick: async () => {
+          try {
+            await saveSettings(themePatch(theme));
+            renderThemes();
+            syncEffectToggles();
+            toast(`Thema „${theme.label}"`, 'ok');
+          } catch (err) { notifyError(err.message); }
+        }
+      }, [
+        el('span', { class: 'theme-swatch' }, [
+          el('i', { style: { background: theme.accent } }),
+          el('i', { style: { background: theme.accent2 } })
+        ]),
+        el('span', { class: 'theme-name', text: theme.label }),
+        el('span', { class: 'theme-hint truncate', text: theme.hint })
+      ]));
+    }
+  }
+
+  // A theme sets the effect switches too, so they have to follow along.
+  function syncEffectToggles() {
+    for (const [key, label] of [['scanlines', 'Scanlines'], ['grid', 'Rasterhintergrund']]) {
+      const row = [...document.querySelectorAll('#view-settings .setting-row')]
+        .find((r) => r.textContent.includes(label));
+      const toggle = row && row.querySelector('.toggle');
+      if (toggle) toggle.setAttribute('aria-checked', String(state.settings[key] !== false));
+    }
+  }
+
+  renderThemes();
 
   const colorInput = el('input', { type: 'color', value: state.settings.accent });
   const swatches = el('div', { class: 'accent-swatches' }, PRESET_ACCENTS.map((color) => el('button', {
@@ -563,6 +607,11 @@ export function createSettingsView() {
       ]),
 
       panel('Darstellung', [
+        el('div', { class: 'setting-label', style: { marginBottom: '8px' }, text: 'Thema' }),
+        themeHost,
+        el('div', { class: 'setting-hint', style: { margin: '8px 0 16px' }, text:
+          'Ein Thema setzt beide Akzentfarben und die Effekte zusammen. Einzeln lässt sich '
+          + 'darunter weiterhin alles verstellen; dann ist kein Thema mehr ausgewählt.' }),
         el('div', { class: 'setting-row' }, [
           el('div', {}, [
             el('div', { class: 'setting-label', text: 'Primäre Akzentfarbe' }),

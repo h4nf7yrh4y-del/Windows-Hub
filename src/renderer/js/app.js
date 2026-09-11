@@ -232,7 +232,14 @@ function bindTopbar() {
     countTo(ramValue, ram, { format: asPercent });
     ramBar.style.width = `${ram}%`;
 
-    const gpu = (sample.slow && sample.slow.gpu || [])[0];
+    // The background reacts to what the machine is doing. It costs nothing —
+    // the numbers are already here — and it means the hub looks busy when the
+    // machine is, which is the whole point of having it on a second screen.
+    const gpuLoad = (sample.slow && sample.slow.gpu || [])[0];
+    const load = Math.max(cpu, ram * 0.6, gpuLoad && gpuLoad.load != null ? gpuLoad.load : 0);
+    document.documentElement.style.setProperty('--load', (load / 100).toFixed(3));
+
+    const gpu = gpuLoad;
     if (gpu && gpu.load != null) {
       gpuWrap.classList.remove('hidden');
       countTo(gpuValue, gpu.load, { format: asPercent });

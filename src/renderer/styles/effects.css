@@ -245,3 +245,41 @@
 
 :root[data-reduce-motion='true'] .fx-grid,
 :root[data-reduce-motion='true'] .fx-horizon { translate: none; }
+
+/*
+ * Load-reactive ambience.
+ *
+ * --load is set once per metrics sample, between 0 and 1. The effects lean on
+ * it rather than animating on their own, so the background is calm on an idle
+ * machine and alive on a busy one without a single extra timer. The transition
+ * is long on purpose: this should register at the edge of vision, not pulse.
+ */
+:root { --load: 0; }
+
+.fx-horizon {
+  opacity: calc(0.45 + var(--load) * 0.55);
+  transition: opacity 2.4s linear;
+}
+
+.fx-grid {
+  opacity: calc(0.5 + var(--load) * 0.4);
+  transition: opacity 2.4s linear;
+}
+
+/* The sweep speeds up under load, which is the only part that is meant to be
+   noticed — and only just. */
+.fx-sweep { animation-duration: calc(9s - var(--load) * 3.5s); }
+
+#fx-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 118%,
+    color-mix(in srgb, var(--accent) calc(var(--load) * 16%), transparent),
+    transparent 65%);
+  transition: background 2.4s linear;
+}
+
+:root[data-reduce-motion="true"] .fx-sweep { animation: none; }
+:root[data-reduce-motion="true"] #fx-layer::after { background: none; }

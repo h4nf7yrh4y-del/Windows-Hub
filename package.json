@@ -13,7 +13,7 @@
     "lint": "node --check src/main/main.js && node scripts/syntax-check.js",
     "dist": "electron-builder --win --x64 --publish never",
     "pack": "electron-builder --win --x64 --dir --publish never",
-    "test": "node test/gpu.test.js && node test/status.test.js && node test/launcher.test.js && node test/screens.test.js && node test/palette.test.js && node test/tweaks.test.js && node test/scheduler.test.js && node test/diagnostics.test.js && node test/pshost.test.js && node test/powershell.test.js",
+    "test": "node test/gpu.test.js && node test/status.test.js && node test/launcher.test.js && node test/screens.test.js && node test/palette.test.js && node test/themes.test.js && node test/tweaks.test.js && node test/scheduler.test.js && node test/diagnostics.test.js && node test/pshost.test.js && node test/powershell.test.js",
     "check": "npm run lint && npm test && npm run test:ui",
     "test:ui": "node test/ui/run.js"
   },

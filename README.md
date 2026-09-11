@@ -87,6 +87,19 @@ Gegenstellen" schon. Lauschende Sockets sind ausgeblendet, bis man sie anfordert
 sie ändern. Echtzeit wird angezeigt, wenn ein Prozess bereits so läuft, aber nicht
 zum Einstellen angeboten.
 
+**Themen und reagierende Effekte.** Sechs fertige Farbsätze — Cyberpunk, Synthwave,
+Matrix, Ember, Ice, Mono — die beide Akzentfarben und die Effekte zusammen setzen.
+Beide Farben einzeln zu wählen war schon vorher möglich, aber ein Paar zu finden, das
+zusammenpasst, ist Arbeit und keine Einstellung. Wer doch selbst mischt, ist danach auf
+keinem Thema mehr, und die Oberfläche zeigt das auch so.
+
+Der Hintergrund reagiert auf die Auslastung: Raster und Horizont werden mit steigender
+Last kräftiger, der Lichtstreifen schneller. Das kostet nichts, weil die Messwerte
+ohnehin jede Sekunde eintreffen, und es sorgt dafür, dass der Hub auf einem zweiten
+Bildschirm beschäftigt aussieht, wenn der Rechner es ist. Die Übergänge sind bewusst
+lang — das soll am Rand des Blickfelds ankommen, nicht blinken. Bei aktivierter
+Bewegungsreduktion bleibt alles ruhig.
+
 **Medienwiedergabe.** Der Hub zeigt, was gerade läuft — Titel, Interpret, Fortschritt —
 und hat Knöpfe für Zurück, Pause und Weiter. Gelesen wird die systemweite
 Mediensitzung von Windows, also dieselbe Quelle wie die Lautstärkeanzeige und die

@@ -596,6 +596,27 @@ module.exports = [
       await t.wait(400);
 
       t.atLeast(await t.count('#view-settings .btn'), 4, 'Diagnose- und Konfigurationsknöpfe vorhanden');
+
+      // A theme sets both accents and the effect switches in one go.
+      t.atLeast(await t.count('.theme-card'), 4, 'Fertige Themen stehen zur Wahl');
+      t.eq(await t.count('.theme-card.active'), 1, 'Genau eines ist als aktiv markiert');
+
+      const before = await t.evalExpr(`getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()`);
+      await t.js(`
+        const cards = [...document.querySelectorAll('.theme-card')];
+        const other = cards.find((c) => !c.classList.contains('active'));
+        other.click();
+        return true;
+      `);
+      await t.wait(600);
+      const after = await t.evalExpr(`getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()`);
+      t.assert(before !== after, 'Ein Klick auf ein Thema färbt die Oberfläche um', `${before} → ${after}`);
+      t.eq(await t.count('.theme-card.active'), 1, 'Und die Markierung wandert mit');
+
+      // The background leans on the live load rather than animating on its own.
+      const loadVar = await t.evalExpr(`getComputedStyle(document.documentElement).getPropertyValue('--load').trim()`);
+      t.assert(loadVar !== '' && Number(loadVar) >= 0 && Number(loadVar) <= 1,
+        'Die Hintergrundeffekte bekommen die aktuelle Auslastung', JSON.stringify(loadVar));
     }
   },
 
