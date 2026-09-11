@@ -15,6 +15,7 @@ import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
 import { initGamepad, setGamepadEnabled } from './gamepad.js';
+import { createPalette } from './palette.js';
 
 /* ------------------------------------------------------------------ views */
 
@@ -194,6 +195,9 @@ async function bindDashboardButton() {
 }
 
 function bindTopbar() {
+  const paletteButton = $('#btn-palette');
+  if (paletteButton) paletteButton.addEventListener('click', () => openPalette());
+
   $('#btn-minimize').addEventListener('click', () => api.window.minimize().catch(() => {}));
   $('#btn-fullscreen').addEventListener('click', () => api.window.toggleFullscreen().catch(() => {}));
   $('#btn-close').addEventListener('click', async () => {
@@ -251,8 +255,16 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
+let openPalette = () => {};
+
 function bindShortcuts() {
   document.addEventListener('keydown', (event) => {
+    // Ctrl+K is the one binding people try without being told.
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.key === 'k' || event.key === 'K')) {
+      event.preventDefault();
+      openPalette();
+      return;
+    }
     if (event.altKey && !event.ctrlKey && !event.shiftKey) {
       const index = Number(event.key) - 1;
       if (index >= 0 && index < VIEWS.length) {
@@ -321,6 +333,8 @@ async function init() {
 
   const versionNode = $('#brand-version');
   if (versionNode && state.appInfo) versionNode.textContent = `v${state.appInfo.version}`;
+
+  openPalette = createPalette({ showView });
 
   bindMetrics();
   bindTopbar();

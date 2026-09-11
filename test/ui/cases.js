@@ -39,6 +39,66 @@ module.exports = [
   },
 
   {
+    name: 'Befehlspalette: öffnen, suchen, ausführen',
+    async run(t) {
+      await t.view('hub');
+
+      // The binding people try without being told.
+      await t.js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));`);
+      await t.waitFor(`!!document.querySelector('.pal')`, { label: 'Palette' });
+
+      t.assert(await t.exists('.pal-input'), 'Die Palette hat ein Eingabefeld');
+      t.atLeast(await t.count('.pal-row'), 8, 'Ohne Eingabe stehen die Aktionen bereit');
+
+      // Four hundred installed programs would drown the useful defaults.
+      t.eq(await t.evalExpr(`[...document.querySelectorAll('.pal-row .pal-kind')].some((n) => n.textContent === 'Programm')`),
+        false, 'Programme erscheinen erst, wenn danach gesucht wird');
+
+      const typed = await t.js(`
+        const input = document.querySelector('.pal-input');
+        input.value = 'hd2';
+        input.dispatchEvent(new Event('input'));
+        return true;
+      `);
+      t.assert(typed, 'Eingabe möglich');
+      await t.wait(300);
+
+      t.eq(await t.evalExpr(`(document.querySelector('.pal-row .pal-title') || {}).textContent || null`),
+        'Helldivers 2', 'Die Anfangsbuchstaben finden das Profil');
+      t.eq(await t.evalExpr(`document.querySelector('.pal-row').classList.contains('active')`), true,
+        'Der erste Treffer ist vorgewählt');
+
+      // Arrow keys move the selection without touching the text.
+      await t.js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));`);
+      await t.wait(200);
+      t.eq(await t.evalExpr(`[...document.querySelectorAll('.pal-row')].findIndex((r) => r.classList.contains('active'))`),
+        1, 'Pfeiltasten bewegen die Auswahl');
+
+      await t.js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));`);
+      await t.waitFor(`!document.querySelector('.pal')`, { label: 'geschlossene Palette' });
+
+      // The handle in the top bar has to open the same thing.
+      await t.click('#btn-palette');
+      await t.waitFor(`!!document.querySelector('.pal')`, { label: 'Palette über den Knopf' });
+
+      // Running an entry closes the palette and does what it says.
+      await t.js(`
+        const input = document.querySelector('.pal-input');
+        input.value = 'system';
+        input.dispatchEvent(new Event('input'));
+        return true;
+      `);
+      await t.wait(300);
+      await t.js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));`);
+      await t.waitFor(`!document.querySelector('.pal')`, { label: 'Palette nach Ausführung' });
+      await t.waitFor(`document.querySelector('.rail-btn.active').dataset.view === 'system'`,
+        { label: 'gewechselte Ansicht' });
+      t.eq(await t.evalExpr(`document.querySelector('.rail-btn.active').dataset.view`), 'system',
+        'Enter führt den gewählten Eintrag aus');
+    }
+  },
+
+  {
     name: 'Hub: Profilkarten und Anlegen-Kachel',
     async run(t) {
       await t.view('hub');

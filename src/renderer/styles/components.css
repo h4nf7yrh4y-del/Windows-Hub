@@ -553,3 +553,167 @@ input[type='color'] {
   .gp-active .gp-focus::after { animation: none; }
   .gp-hints { transition: none; }
 }
+
+/* ------------------------------------------------------- command palette */
+
+/*
+ * Deliberately not a modal: it sits above everything, takes the keyboard and
+ * gets out of the way again. Anchored high rather than centred, because the
+ * eye is already at the top of the screen when you reach for a search box.
+ */
+.pal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgba(2, 4, 8, 0.62);
+  backdrop-filter: blur(3px);
+  animation: fade-in 130ms var(--ease-out) both;
+}
+
+.pal-backdrop.closing { animation: fade-in 130ms var(--ease-out) reverse both; }
+
+.pal {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 92vw);
+  max-height: 66vh;
+  background: linear-gradient(180deg, rgba(11, 18, 32, 0.98), rgba(7, 11, 18, 0.98));
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--hairline));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6),
+              0 0 0 1px rgba(0, 0, 0, 0.4),
+              0 0 40px color-mix(in srgb, var(--accent) 14%, transparent);
+  animation: pal-in 180ms var(--ease-out) both;
+}
+
+@keyframes pal-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--accent);
+}
+
+.pal-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.pal-input::placeholder { color: var(--text-faint); }
+
+.pal-kbd,
+.pal-legend kbd {
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-faint);
+  border: 1px solid var(--hairline);
+}
+
+.pal-list { overflow: auto; padding: 6px; min-height: 0; }
+
+.pal-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.pal-row.active {
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  border-left-color: var(--accent);
+}
+
+.pal-icon { display: inline-flex; color: var(--text-faint); }
+.pal-row.active .pal-icon { color: var(--accent); }
+
+/* The kind is readable from the colour before the label is read. */
+.pal-icon.profile { color: var(--ok); }
+.pal-icon.action  { color: var(--accent-2); }
+.pal-icon.feature { color: var(--warn); }
+
+.pal-title { font-size: 13.5px; }
+.pal-hint { font-size: 11.5px; color: var(--text-faint); }
+
+.pal-kind {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+
+.pal-empty { padding: 30px; text-align: center; color: var(--text-dim); }
+
+.pal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--hairline);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.pal-legend { display: flex; gap: 14px; }
+.pal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pal, .pal-backdrop { animation: none; }
+}
+
+/* The palette's handle in the top bar. */
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 18px;
+  padding: 5px 10px 5px 9px;
+  color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: color var(--dur), border-color var(--dur), background var(--dur);
+}
+
+.topbar-search svg { width: 13px; height: 13px; }
+.topbar-search span { font-size: 11.5px; }
+
+.topbar-search kbd {
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--hairline);
+}
+
+.topbar-search:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+@media (max-width: 1200px) {
+  .topbar-search span { display: none; }
+}

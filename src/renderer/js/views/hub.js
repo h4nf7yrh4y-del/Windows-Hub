@@ -237,4 +237,11 @@ export function createHubView() {
   return host;
 }
 
-export { render as renderHub, launchProfile };
+/** Stops a profile by id, for callers that have no card to click. */
+async function stopProfileByName(profileId) {
+  const profile = state.profiles.find((p) => p.id === profileId);
+  if (!profile) throw new Error('Profil nicht gefunden');
+  await stopProfile(profile);
+}
+
+export { render as renderHub, launchProfile, stopProfileByName };

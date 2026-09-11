@@ -87,6 +87,14 @@ Gegenstellen" schon. Lauschende Sockets sind ausgeblendet, bis man sie anfordert
 sie ändern. Echtzeit wird angezeigt, wenn ein Prozess bereits so läuft, aber nicht
 zum Einstellen angeboten.
 
+**Befehlspalette.** `Strg` + `K` öffnet eine Suche über alles: Profile starten und
+beenden, Programme aus der Bibliothek, Ansichten, Einstellungen und die
+Windows-Funktionen. Gesucht wird nach Teilfolgen, nicht nach Textstücken — `hd2`
+findet „Helldivers 2", weil man in Eile Anfangsbuchstaben tippt und keine
+vollständigen Wörter. Ohne Eingabe stehen die Aktionen bereit; die vierhundert
+installierten Programme erscheinen erst, wenn man nach ihnen sucht, sonst würden sie
+alles andere zudecken.
+
 **Zwei Bildschirme.** Der Hub lässt sich festlegen, auf welchem Monitor er startet
 und ins Vollbild geht. Dazu kommt ein eigenes Fenster für den zweiten Bildschirm: eine
 formatfüllende Anzeige mit Uhr, Auslastung, Datenträgern, Profilen und den aktivsten
@@ -236,6 +244,7 @@ Innerhalb des Hub-Fensters:
 
 | Taste | Wirkung |
 |---|---|
+| `Strg` + `K` | Befehlspalette |
 | `F11` | Vollbild umschalten |
 | `Alt` + `1` … `9` | Direkt zu Hub, System, Tasks, Files, Overlay, Windows, Claude, Library, Setup |
 | `F5` | Oberfläche neu laden |
