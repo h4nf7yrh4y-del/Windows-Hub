@@ -33,6 +33,27 @@ const KIND_LABELS = {
 };
 
 /**
+ * Scores one entry against a query.
+ *
+ * The title and the hint are scored separately rather than as one string,
+ * because they are not equally meaningful: someone typing "system" means the
+ * entry called System, not one whose description happens to mention it. A
+ * title match therefore outranks any hint match, and a title that *is* the
+ * query wins outright — anything else makes the palette feel arbitrary, which
+ * is worse than it being wrong.
+ */
+export function scoreEntry(entry, query) {
+  if (!query) return 0;
+  const title = String(entry.title || '');
+  const titleScore = fuzzyScore(title, query);
+  if (titleScore !== null) {
+    const exact = title.toLowerCase() === query.toLowerCase().trim();
+    return titleScore + 20 + (exact ? 100 : 0);
+  }
+  return fuzzyScore(entry.hint || '', query);
+}
+
+/**
  * Subsequence match with a score.
  *
  * Later characters of the needle must appear in order, not adjacently. Runs of
@@ -276,7 +297,7 @@ export function createPalette({ showView, actions }) {
         matches = entries.filter((e) => e.kind !== 'app' && e.kind !== 'feature').slice(0, 40);
       } else {
         matches = entries
-          .map((entry) => ({ entry, score: fuzzyScore(`${entry.title} ${entry.hint || ''}`, query) }))
+          .map((entry) => ({ entry, score: scoreEntry(entry, query) }))
           .filter((row) => row.score !== null)
           .sort((a, b) => b.score - a.score)
           .slice(0, 40)

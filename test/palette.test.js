@@ -16,11 +16,12 @@ const path = require('path');
 // The module is an ES module for the browser and imports the app's own
 // helpers, so only the pure function is lifted out of the source.
 const source = fs.readFileSync(path.join(__dirname, '..', 'src/renderer/js/palette.js'), 'utf8');
-const start = source.indexOf('export function fuzzyScore');
+const start = source.indexOf('export function scoreEntry');
 const end = source.indexOf('/* ----------------------------------------------------------------- sources */');
-const body = source.slice(start, end).replace('export function', 'function');
+const body = source.slice(start, end).replace(/^export function/gm, 'function');
 // eslint-disable-next-line no-new-func
-const fuzzyScore = new Function(`${body}; return fuzzyScore;`)();
+const { fuzzyScore, scoreEntry } =
+  new Function(`${body}; return { fuzzyScore, scoreEntry };`)();
 
 let passed = 0;
 function test(name, fn) {
@@ -95,6 +96,44 @@ test('scores are numbers, so sorting is meaningful', () => {
   const score = fuzzyScore('Spotify', 'spo');
   assert.strictEqual(typeof score, 'number');
   assert.ok(score > 0);
+});
+
+/* --------------------------------------------------------- entry scoring */
+
+const bestEntry = (needle, ...entries) => entries
+  .map((entry) => ({ entry, score: scoreEntry(entry, needle) }))
+  .filter((row) => row.score !== null)
+  .sort((a, b) => b.score - a.score)[0].entry;
+
+test('a title that is exactly the query wins outright', () => {
+  assert.strictEqual(
+    bestEntry('system', { title: 'System', hint: 'Auslastung' }, { title: 'Systeminformationen', hint: 'Werkzeug' }).title,
+    'System'
+  );
+});
+
+test('a title match beats a hint match', () => {
+  // Someone typing a word means the entry called that, not one whose
+  // description happens to mention it.
+  assert.strictEqual(
+    bestEntry('overlay',
+      { title: 'Overlay', hint: 'Schwebende Anzeigen' },
+      { title: 'Irgendwas', hint: 'Zeigt ein Overlay an' }).title,
+    'Overlay'
+  );
+});
+
+test('an entry is still found by its hint alone', () => {
+  assert.ok(scoreEntry({ title: 'Setup', hint: 'Einstellungen' }, 'einstell') !== null);
+});
+
+test('an entry that matches nowhere scores null', () => {
+  assert.strictEqual(scoreEntry({ title: 'Setup', hint: 'Einstellungen' }, 'zzzqqq'), null);
+});
+
+test('an entry without a hint does not throw', () => {
+  assert.ok(scoreEntry({ title: 'Hub' }, 'hub') !== null);
+  assert.strictEqual(scoreEntry({ title: 'Hub' }, 'zzz'), null);
 });
 
 console.log(`\n${passed} assertions passed.`);

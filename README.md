@@ -134,6 +134,11 @@ vollständigen Wörter. Ohne Eingabe stehen die Aktionen bereit; die vierhundert
 installierten Programme erscheinen erst, wenn man nach ihnen sucht, sonst würden sie
 alles andere zudecken.
 
+Titel und Beschreibung werden getrennt bewertet: wer „System" tippt, meint den Eintrag
+mit diesem Namen und nicht einen, in dessen Beschreibung das Wort vorkommt. Ein Titel,
+der genau der Eingabe entspricht, steht immer oben. Eine Palette, deren erster Treffer
+davon abhängt, was sonst noch in der Liste steht, ist eine, der man nicht traut.
+
 **Zwei Bildschirme.** Der Hub lässt sich festlegen, auf welchem Monitor er startet
 und ins Vollbild geht. Dazu kommt ein eigenes Fenster für den zweiten Bildschirm: eine
 formatfüllende Anzeige mit Uhr, Auslastung, Datenträgern, Profilen und den aktivsten

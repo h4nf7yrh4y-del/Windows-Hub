@@ -81,14 +81,18 @@ module.exports = [
       await t.click('#btn-palette');
       await t.waitFor(`!!document.querySelector('.pal')`, { label: 'Palette über den Knopf' });
 
-      // Running an entry closes the palette and does what it says.
+      // Running an entry closes the palette and does what it says. The exact
+      // title has to be first: on Windows the catalogue adds forty more
+      // entries, and a palette whose top hit depends on the platform is a
+      // palette nobody can trust.
       await t.js(`
         const input = document.querySelector('.pal-input');
-        input.value = 'system';
+        input.value = 'System';
         input.dispatchEvent(new Event('input'));
         return true;
       `);
-      await t.wait(300);
+      await t.waitFor(`(document.querySelector('.pal-row .pal-title') || {}).textContent === 'System'`,
+        { label: 'System als erster Treffer' });
       await t.js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));`);
       await t.waitFor(`!document.querySelector('.pal')`, { label: 'Palette nach Ausführung' });
       await t.waitFor(`document.querySelector('.rail-btn.active').dataset.view === 'system'`,
