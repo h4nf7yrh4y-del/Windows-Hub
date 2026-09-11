@@ -1,0 +1,88 @@
+# Windows Hub
+
+Electron-Launcher für Windows: Profile starten Programmgruppen, dazu Task-Manager,
+Dateimanager, Bildschirmsteuerung, Overlays und eine Claude-Code-Konsole.
+Ein Hauptprozess, mehrere Fenster, kein Bundler.
+
+## Befehle
+
+```bash
+npm install         # einmalig
+npm run dev         # startet mit geöffneten DevTools
+npm run lint        # Syntaxprüfung aller Quelldateien
+npm test            # Logiktests, ~190 Zusicherungen
+npm run test:ui     # startet die echte App und bedient 19 Ansichten
+npm run check       # alles zusammen
+npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
+```
+
+`npm test` prüft erzeugte PowerShell-Skripte mit PowerShells eigenem Parser, sofern
+eine PowerShell vorhanden ist; sonst wird dieser Teil übersprungen. Mit `PWSH_PATH`
+lässt sich ein Binary angeben.
+
+`npm run test:ui` braucht ein Display. Unter Windows und macOS ist das gegeben, unter
+Linux wird `xvfb` benutzt; fehlt beides, wird der Lauf mit Hinweis übersprungen statt
+fehlzuschlagen.
+
+## Aufbau
+
+- `src/main/` — Hauptprozess. Jede Datei ist ein Fachgebiet: `launcher` startet und
+  beendet Profile, `tweaks` ändert den Systemzustand drumherum, `pshost` ist die
+  einzige Stelle, die PowerShell ausführt, `ipc` die einzige, die den Renderer an das
+  System lässt.
+- `src/preload/preload.js` — die einzige Brücke. Explizite Methodenliste, kein
+  generisches `invoke(channel, …)`.
+- `src/renderer/` — native ES-Module, die der Browser direkt lädt. `js/views/` ist eine
+  Datei pro Ansicht, `js/widgets/` sind wiederverwendbare Bausteine.
+- `test/` — Logiktests in `test/*.test.js`, Oberflächentests in `test/ui/`.
+
+## Regeln, die nicht offensichtlich sind
+
+**Der Renderer gilt als nicht vertrauenswürdig.** `contextIsolation: true`,
+`nodeIntegration: false`. Jeder IPC-Handler prüft seine eigenen Eingaben. Ein neuer
+Kanal braucht einen Eintrag in `ipc.js`, in `preload.js` und in `renderer/js/api.js`.
+
+**Die Oberfläche wird über `hub://` ausgeliefert, nicht über `file://`.** ES-Module
+über `file://` blockiert Chromium, und ohne JavaScript-MIME-Typ verweigert es
+Modulskripte ganz. Der Handler dafür steht in `main.js`.
+
+**Alle PowerShell-Aufrufe laufen über `processes.runPowerShell`,** das an `pshost`
+weiterreicht: ein langlebiger Prozess, Aufträge einzeln über die Standardeingabe als
+Base64. Niemals `execFile('powershell.exe', …)` neu einführen — der Prozessstart ist
+der teure Teil, und der Host bezahlt ihn einmal. Hintergrundabfragen übergeben
+`{ background: true }` und stellen sich hinten an.
+
+**Skripte mit Backslashes brauchen `String.raw`.** Ein normales Template-Literal
+verschluckt sie, und ein Registrierungspfad ohne Backslashes schlägt nicht fehl,
+sondern liefert stillschweigend nichts. Jedes erzeugte Skript gehört in
+`test/powershell.test.js`, das sie durch den echten Parser schickt.
+
+**Ein leeres Ergebnis ist etwas anderes als ein Fehler.** Unter Windows heißt „nichts
+gefunden" oft Exitcode ungleich null. Wo das zutrifft, muss der Aufrufer unterscheiden
+können — `killByName` meldet deshalb `matched`.
+
+**Nie auf eine Stoppuhr warten, immer auf ein Ereignis.** Weder im Code noch in Tests.
+Feste Pausen sind auf einem ausgelasteten Rechner eine Münze, und genau dann wird
+diese Anwendung benutzt. Die Testtreiber haben dafür `waitFor`, `waitIn`,
+`waitForWindow`.
+
+**Langsame Abfragen dürfen die Oberfläche nicht aufhalten.** Was sofort da ist, wird
+sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon dreimal
+passiert — Dateimanager-Seitenleiste, Funktionskatalog, Dashboard.
+
+## Sprache und Stil
+
+Oberflächentexte, Fehlermeldungen und Logzeilen auf Deutsch. Kommentare und
+Commit-Nachrichten auf Englisch, und zwar über das *Warum*: was der Code tut, steht im
+Code. Kommentare, die nur die nächste Zeile wiederholen, gehören gelöscht.
+
+Keine Emojis, keine Ausrufezeichen in der Oberfläche. Ein Hinweis, der eine Einschränkung
+erklärt, ist besser als einer, der sie verschweigt.
+
+## Bauen und Veröffentlichen
+
+Jeder Push auf einen Branch löst den Workflow in `.github/workflows/build.yml` aus:
+Tests unter Linux, dann Bauen und dieselben Oberflächentests auf einem Windows-Runner,
+dann Veröffentlichen unter dem Tag `v<version aus package.json>`. Nur ein grüner Lauf
+veröffentlicht. Der Windows-Runner hat zwei Kerne und eine kaputte WMI-Energieverwaltung
+— was dort langsam ist, ist oft ein echter Engpass und nicht nur CI.

@@ -647,6 +647,27 @@ Administratorrechte.** Ohne diese schlägt das Entfernen mit einer Fehlermeldung
 
 ## Entwicklung
 
+### Lokal weiterarbeiten
+
+```bash
+git clone https://github.com/h4nf7yrh4y-del/Windows-Hub.git
+cd Windows-Hub
+npm install
+npm run dev
+```
+
+Gebraucht werden Node.js 20 oder neuer und Git. Das Repository ist privat, das Klonen
+verlangt also eine Anmeldung — am bequemsten über GitHub Desktop oder `gh auth login`.
+Es gibt nur einen Branch, `claude/windows-hub-tool-wo3npo`; er ist der Standard und
+wird beim Klonen automatisch ausgecheckt.
+
+`npm run dist` erzeugt Installer und portable exe unter `release/`. Das geht nur unter
+Windows, weil electron-builder dort den NSIS-Installer zusammensetzt.
+
+Wer mit Claude Code weiterarbeitet: `npm install -g @anthropic-ai/claude-code`, dann im
+Projektordner `claude`. Die Datei `CLAUDE.md` im Wurzelverzeichnis beschreibt Aufbau,
+Befehle und die Regeln, die man dem Code nicht ansieht — sie wird automatisch gelesen.
+
 ```bash
 npm run dev     # startet mit geöffneten DevTools
 npm run lint    # prüft alle Quelldateien auf Syntaxfehler
