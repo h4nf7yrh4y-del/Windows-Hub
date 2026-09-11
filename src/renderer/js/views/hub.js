@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { state, on, loadProfiles, watchRunning, refreshRunning } from '../state.js';
 import { openProfileEditor } from './profileEditor.js';
 import { openScheduleManager } from './schedule.js';
+import { openStats } from './stats.js';
 import { LaunchOverlay } from './launchOverlay.js';
 import { createMediaBar } from '../widgets/media.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
@@ -221,6 +222,7 @@ export function createHubView() {
         el('div', { class: 'view-sub', dataset: { role: 'profile-count' }, text: '' })
       ]),
       el('div', { class: 'view-actions' }, [
+        el('button', { class: 'btn subtle', text: 'Spielzeit', title: 'Wie lange welches Profil lief', onClick: () => openStats() }),
         el('button', { class: 'btn subtle', text: 'Zeitplan', title: 'Profile zu festen Zeiten starten oder beenden', onClick: () => openScheduleManager() }),
         el('button', { class: 'btn subtle', text: 'Aktualisieren', onClick: async () => { await loadProfiles(); toast('Profile neu geladen'); } }),
         el('button', { class: 'btn primary', onClick: () => openProfileEditor(null, render) }, [svg(ICON_PLUS, { width: 13, height: 13 }), 'Neues Profil'])

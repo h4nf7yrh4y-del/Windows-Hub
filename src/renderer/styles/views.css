@@ -1556,3 +1556,79 @@
 }
 
 .theme-hint { font-size: 10px; color: var(--text-faint); }
+
+/* ------------------------------------------------------------ play time */
+
+.stat-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+.stat-box {
+  padding: 12px;
+  text-align: center;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.stat-label {
+  margin-top: 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Fourteen days as a shape, not as fourteen numbers. */
+.stat-days {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 4px;
+  height: 74px;
+  padding: 8px 0 0;
+}
+
+.stat-day { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+
+.stat-day-bar {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stat-day-bar i {
+  width: 100%;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));
+  transition: height 0.5s var(--ease-out);
+}
+
+.stat-day-label { font-size: 9px; color: var(--text-faint); }
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--row-accent);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.stat-row.live { background: color-mix(in srgb, var(--ok) 8%, transparent); }
+
+.stat-times { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+
+.stat-week {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-total { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }

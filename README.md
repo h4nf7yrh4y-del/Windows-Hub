@@ -87,6 +87,19 @@ Gegenstellen" schon. Lauschende Sockets sind ausgeblendet, bis man sie anfordert
 sie ändern. Echtzeit wird angezeigt, wenn ein Prozess bereits so läuft, aber nicht
 zum Einstellen angeboten.
 
+**Spielzeit.** Der Hub misst, wie lange ein Profil tatsächlich lief, und zeigt es je
+Profil für die letzten sieben Tage, für insgesamt und als Verlauf über vierzehn Tage.
+Dafür braucht es keine neue Datenquelle: es ist dieselbe Prozessprüfung, die auch den
+Laufstatus speist. Gemessen wird ab dem Start eines Profils und bis dessen Programme zu
+sind — nicht, wie lange der Hub offen war.
+
+Was bewusst *nicht* gezählt wird, ist der interessantere Teil. Eine Sitzung wird erst
+festgehalten, wenn sie vorbei ist; stürzt der Hub mitten im Spiel ab, geht dieser Lauf
+verloren. Eine Startzeit ohne Endzeit zu speichern, würde beim nächsten Blick eine
+vierzehnstündige Sitzung ergeben, und eine fehlende Sitzung ist die kleinere Unwahrheit
+als eine erfundene. Läufe unter einer Minute zählen nicht, und ein Profil, dessen
+Prozesse nie auftauchen, erzeugt gar keine Sitzung.
+
 **Themen und reagierende Effekte.** Sechs fertige Farbsätze — Cyberpunk, Synthwave,
 Matrix, Ember, Ice, Mono — die beide Akzentfarben und die Effekte zusammen setzen.
 Beide Farben einzeln zu wählen war schon vorher möglich, aber ein Paar zu finden, das

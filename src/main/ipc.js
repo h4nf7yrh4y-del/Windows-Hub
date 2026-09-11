@@ -18,6 +18,7 @@ const winfeatures = require('./winfeatures');
 const network = require('./network');
 const media = require('./media');
 const scheduler = require('./scheduler');
+const sessions = require('./sessions');
 const screens = require('./screens');
 const dashboard = require('./dashboard');
 const tweaks = require('./tweaks');
@@ -272,6 +273,10 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     state.lastProfileId = profile.id;
     store.save();
 
+    // Begins the playtime measurement; it stops by itself once the profile's
+    // programs are gone.
+    sessions.watch(profile);
+
     const settings = store.getSettings();
     if (profile.minimizeOnLaunch !== false && settings.minimizeOnLaunch) {
       const win = getWindow();
@@ -293,8 +298,14 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     const profileId = requireString(id, 'Profile id');
     const profile = store.state.profiles.find((p) => p.id === profileId);
     if (!profile) throw new Error('Profile not found');
-    return launcher.stopProfile(profile);
+    // Closed by hand, so the session ends now rather than at the next poll.
+    const session = sessions.release(profileId);
+    const result = await launcher.stopProfile(profile);
+    return { ...result, session };
   }, 'profiles:stop'));
+
+  ipcMain.handle('sessions:stats', wrap(async () => sessions.stats(), 'sessions:stats'));
+  ipcMain.handle('sessions:clear', wrap(async () => sessions.clear(), 'sessions:clear'));
 
   /* -------------------------------------------------------------- schedule */
 

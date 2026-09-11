@@ -217,6 +217,29 @@ module.exports = [
   },
 
   {
+    name: 'Spielzeit: Dialog, Leerzustand, Zurücksetzen',
+    async run(t) {
+      await t.view('hub');
+      await t.clickText('#view-hub .btn', 'Spielzeit');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Spielzeit-Dialog' });
+
+      // Nothing has run yet, so the dialog has to explain itself rather than
+      // show three zeroes.
+      const text = (await t.text('.modal')) || '';
+      t.assert(text.includes('Noch keine Zeiten erfasst'), 'Ohne Daten steht dort, was gemessen wird');
+      t.assert(text.includes('unter einer Minute'), 'Und dass sehr kurze Läufe nicht zählen');
+
+      const stats = await t.evalExpr(`window.hub.sessions.stats().then((r) => r.data)`);
+      t.eq(stats.sessionCount, 0, 'Noch keine Sitzungen');
+      t.eq(stats.days.length, 14, 'Der Verlauf deckt immer vierzehn Tage ab');
+      t.assert(Array.isArray(stats.rows), 'Die Profilzeilen sind eine Liste');
+
+      await t.clickText('.modal .btn', 'Schließen');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
+    }
+  },
+
+  {
     name: 'Zeitplan: anlegen, listen, entfernen',
     async run(t) {
       await t.view('hub');

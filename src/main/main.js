@@ -14,6 +14,7 @@ const claudesession = require('./claudesession');
 const tweaks = require('./tweaks');
 const pshost = require('./pshost');
 const scheduler = require('./scheduler');
+const sessions = require('./sessions');
 const display = require('./display');
 const screens = require('./screens');
 const dashboard = require('./dashboard');
@@ -402,6 +403,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   log.info('Hub wird beendet');
   scheduler.stop();
+  sessions.stop();
   pshost.dispose();
   hotkeys.dispose();
   globalShortcut.unregisterAll();

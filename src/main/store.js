@@ -44,7 +44,9 @@ const DEFAULTS = {
   // Time-of-day rules that start or stop profiles.
   schedules: [],
   // Second-screen board: whether it is open, and on which monitor.
-  dashboard: { enabled: false, display: null, autoOpen: false }
+  dashboard: { enabled: false, display: null, autoOpen: false },
+  // How long each profile actually ran. Appended when a session ends.
+  playSessions: []
 };
 
 let cache = null;

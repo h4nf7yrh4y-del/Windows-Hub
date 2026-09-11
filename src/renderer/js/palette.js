@@ -134,6 +134,10 @@ function actionEntries(showView, actions) {
     { title: 'Dashboard umschalten', hint: 'Zweiter Bildschirm', run: () => api.dashboard.toggle() },
     { title: 'Overlays umschalten', hint: 'Alle schwebenden Anzeigen', run: () => api.overlays.toggle() },
     { title: 'Claude-Konsole öffnen', hint: 'Eigenes Fenster', run: () => api.claude.openWindow() },
+    { title: 'Spielzeit ansehen', hint: 'Wie lange welches Profil lief', run: async () => {
+      const { openStats } = await import('./views/stats.js');
+      openStats();
+    } },
     { title: 'Zeitplan öffnen', hint: 'Profile zu festen Zeiten', run: async () => {
       const { openScheduleManager } = await import('./views/schedule.js');
       openScheduleManager();
