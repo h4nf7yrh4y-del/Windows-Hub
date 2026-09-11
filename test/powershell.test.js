@@ -22,6 +22,7 @@ const gpu = require('../src/main/gpu');
 const processes = require('../src/main/processes');
 const tweaks = require('../src/main/tweaks');
 const network = require('../src/main/network');
+const media = require('../src/main/media');
 
 function findPowerShell() {
   const candidates = [process.env.PWSH_PATH, 'pwsh', 'powershell', 'powershell.exe'].filter(Boolean);
@@ -160,6 +161,15 @@ SCRIPTS['tweaks: restart apps'] = tweaks.restartScript([
 ]);
 SCRIPTS['tweaks: find pid'] = tweaks.NAME_TO_PID_SCRIPT("O'Brien");
 SCRIPTS['network: connections'] = network.CONNECTION_SCRIPT;
+
+// WinRT from PowerShell is the least testable corner of this project: the API
+// exists only on Windows and only in Windows PowerShell. The parser is the one
+// thing that can be checked anywhere, and a typo here would surface as "no
+// media playing" rather than as an error.
+SCRIPTS['media: read session'] = media.READ_SCRIPT;
+for (const [name, method] of Object.entries(media.COMMANDS)) {
+  SCRIPTS[`media: ${name}`] = media.commandScript(method);
+}
 
 test('every writable entry stays inside HKCU unless it asks for elevation', () => {
   for (const entry of winfeatures.CATALOGUE) {

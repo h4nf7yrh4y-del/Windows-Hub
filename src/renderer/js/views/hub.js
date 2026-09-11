@@ -4,6 +4,7 @@ import { state, on, loadProfiles, watchRunning, refreshRunning } from '../state.
 import { openProfileEditor } from './profileEditor.js';
 import { openScheduleManager } from './schedule.js';
 import { LaunchOverlay } from './launchOverlay.js';
+import { createMediaBar } from '../widgets/media.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { confirmDialog } from '../widgets/modal.js';
 
@@ -211,6 +212,8 @@ function render() {
 }
 
 export function createHubView() {
+  const mediaBar = createMediaBar();
+
   host = el('section', { class: 'view', id: 'view-hub' }, [
     el('div', { class: 'view-head' }, [
       el('div', {}, [
@@ -223,6 +226,7 @@ export function createHubView() {
         el('button', { class: 'btn primary', onClick: () => openProfileEditor(null, render) }, [svg(ICON_PLUS, { width: 13, height: 13 }), 'Neues Profil'])
       ])
     ]),
+    mediaBar.node,
     el('div', { class: 'profile-grid' })
   ]);
 
@@ -230,8 +234,15 @@ export function createHubView() {
   on('running', render);
 
   let releaseWatch = watchRunning();
-  host.addEventListener('view:unmount', () => { if (releaseWatch) { releaseWatch(); releaseWatch = null; } });
-  host.addEventListener('view:mount', () => { if (!releaseWatch) releaseWatch = watchRunning(); });
+  host.addEventListener('view:unmount', () => {
+    if (releaseWatch) { releaseWatch(); releaseWatch = null; }
+    // Each read is a system call; it stops with the view.
+    mediaBar.stop();
+  });
+  host.addEventListener('view:mount', () => {
+    if (!releaseWatch) releaseWatch = watchRunning();
+    mediaBar.start();
+  });
 
   render();
   return host;

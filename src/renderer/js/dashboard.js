@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { Graph } from './widgets/graph.js';
 import { Ring } from './widgets/ring.js';
 import { countTo } from './motion.js';
+import { createMediaBar } from './widgets/media.js';
 
 /**
  * The second screen.
@@ -203,6 +204,8 @@ function panel(title, children, extraClass = '') {
   ]);
 }
 
+const mediaBar = createMediaBar({ compact: true });
+
 function build() {
   clear(root);
   root.append(
@@ -231,7 +234,7 @@ function build() {
 
       panel('Datenträger', [diskHost]),
 
-      panel('Profile', [profileHost]),
+      panel('Profile', [mediaBar.node, profileHost]),
 
       panel('Aktivste Prozesse', [
         el('div', { class: 'table-wrap' }, [

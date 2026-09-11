@@ -16,6 +16,7 @@ const hotkeys = require('./hotkeys');
 const display = require('./display');
 const winfeatures = require('./winfeatures');
 const network = require('./network');
+const media = require('./media');
 const scheduler = require('./scheduler');
 const screens = require('./screens');
 const dashboard = require('./dashboard');
@@ -376,6 +377,12 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   /* --------------------------------------------------------------- network */
 
   ipcMain.handle('network:overview', wrap(async () => network.overview(), 'network:overview'));
+
+  /* ----------------------------------------------------------------- media */
+
+  ipcMain.handle('media:read', wrap(async () => media.read(), 'media:read'));
+  ipcMain.handle('media:command', wrap(async (name) =>
+    media.command(requireString(name, 'Befehl')), 'media:command'));
 
   /* ----------------------------------------------------------------- power */
 

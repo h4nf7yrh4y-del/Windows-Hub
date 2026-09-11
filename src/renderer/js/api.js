@@ -61,6 +61,10 @@ export const api = {
     runNow: call(bridge.schedule.runNow),
     onFired: bridge.schedule.onFired
   },
+  media: {
+    read: call(bridge.media.read),
+    command: call(bridge.media.command)
+  },
   network: {
     overview: call(bridge.network.overview)
   },

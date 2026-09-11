@@ -87,6 +87,19 @@ Gegenstellen" schon. Lauschende Sockets sind ausgeblendet, bis man sie anfordert
 sie ändern. Echtzeit wird angezeigt, wenn ein Prozess bereits so läuft, aber nicht
 zum Einstellen angeboten.
 
+**Medienwiedergabe.** Der Hub zeigt, was gerade läuft — Titel, Interpret, Fortschritt —
+und hat Knöpfe für Zurück, Pause und Weiter. Gelesen wird die systemweite
+Mediensitzung von Windows, also dieselbe Quelle wie die Lautstärkeanzeige und die
+Medientasten; jeder ordentliche Player meldet sich dort an, Spotify und der Browser
+eingeschlossen. Läuft nichts, ist die Leiste nicht da — ein Element, das den ganzen Tag
+„nichts" sagt, ist schlechter als keines.
+
+Der Zugriff läuft über WinRT und funktioniert deshalb nur mit Windows PowerShell;
+PowerShell 7 hat die WinRT-Unterstützung entfernt. Auf Windows 10 vor Version 1809 gibt
+es die Schnittstelle nicht, dann bleibt die Leiste dauerhaft aus. Scheitert der Aufruf,
+wird fünf Minuten lang nicht erneut gefragt, statt die Shell alle paar Sekunden für eine
+Antwort zu belegen, die sich nicht ändert.
+
 **Befehlspalette.** `Strg` + `K` öffnet eine Suche über alles: Profile starten und
 beenden, Programme aus der Bibliothek, Ansichten, Einstellungen und die
 Windows-Funktionen. Gesucht wird nach Teilfolgen, nicht nach Textstücken — `hd2`

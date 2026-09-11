@@ -148,6 +148,9 @@ function actionEntries(showView, actions) {
       await api.library.scan({ force: true });
       notifyOk('Bibliothek aktualisiert');
     } },
+    { title: 'Wiedergabe anhalten oder fortsetzen', hint: 'Aktueller Titel', run: () => api.media.command('playpause') },
+    { title: 'Nächster Titel', hint: 'Medienwiedergabe', run: () => api.media.command('next') },
+    { title: 'Vorheriger Titel', hint: 'Medienwiedergabe', run: () => api.media.command('previous') },
     { title: 'Vollbild umschalten', hint: 'F11', run: () => api.window.toggleFullscreen() },
     { title: 'Protokollordner öffnen', hint: 'Logdateien im Explorer', run: () => api.diagnostics.openLogs() },
     { title: 'Diagnosebericht speichern', hint: 'Textdatei zum Weitergeben', run: async () => {

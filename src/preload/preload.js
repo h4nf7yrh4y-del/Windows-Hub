@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld('hub', {
     openSettings: (page) => invoke('display:openSettings', page),
     onReverted: (handler) => on('display:reverted', handler)
   },
+  media: {
+    read: () => invoke('media:read'),
+    command: (name) => invoke('media:command', name)
+  },
   network: {
     overview: () => invoke('network:overview')
   },

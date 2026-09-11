@@ -717,3 +717,95 @@ input[type='color'] {
 @media (max-width: 1200px) {
   .topbar-search span { display: none; }
 }
+
+/* ------------------------------------------------------------ media bar */
+
+.media-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.3fr) minmax(140px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 14px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--ok);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--ok) 7%, transparent),
+    rgba(255, 255, 255, 0.015) 40%);
+  animation: rise-in 380ms var(--ease-out) both;
+}
+
+/* Paused is a different state, not a broken one: same bar, calmer colour. */
+.media-bar.paused {
+  border-left-color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.media-mark { color: var(--ok); display: inline-flex; }
+.media-bar.paused .media-mark { color: var(--text-faint); }
+
+.media-meta { min-width: 0; }
+.media-title { font-size: 13px; letter-spacing: 0.02em; }
+.media-artist { font-size: 11px; color: var(--text-dim); }
+.media-source { font-size: 10px; color: var(--text-faint); }
+
+.media-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.media-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.media-bar-track {
+  flex: 1;
+  height: 3px;
+  min-width: 40px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.media-bar-track i {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  transition: width 0.6s linear;
+}
+
+.media-bar.paused .media-bar-track i { background: var(--text-faint); }
+
+.media-controls { display: flex; gap: 4px; }
+
+.media-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: color var(--dur), border-color var(--dur), background var(--dur);
+}
+
+.media-btn:hover {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+
+/* A control the player says it does not support, shown but inert. */
+.media-btn.off { opacity: 0.3; cursor: default; }
+.media-btn.off:hover { color: var(--text-dim); border-color: var(--hairline); }
+
+.media-bar.compact { grid-template-columns: auto minmax(0, 1fr) auto; padding: 7px 10px; }
+.media-bar.compact .media-progress { display: none; }
+
+@media (max-width: 1100px) {
+  .media-bar { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .media-bar .media-progress { display: none; }
+}
