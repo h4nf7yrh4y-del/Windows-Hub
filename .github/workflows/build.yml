@@ -88,21 +88,13 @@ jobs:
         shell: pwsh
         run: Get-ChildItem release -File | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
 
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: WindowsHub-setup
-          path: release/*setup*.exe
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Upload portable build
-        uses: actions/upload-artifact@v4
-        with:
-          name: WindowsHub-portable
-          path: release/*portable*.exe
-          if-no-files-found: error
-          retention-days: 90
+      # There were two upload-artifact steps here and they are gone on purpose.
+      # They stored the same two files the release below publishes, zipped,
+      # reachable only while signed in, and kept for ninety days -- a little
+      # over two hundred megabytes per push. That filled the artifact quota,
+      # and because the upload runs before the release, a full quota stopped
+      # the release from being published at all. The duplicate was costing the
+      # thing it duplicated.
 
       - name: Read version from package.json
         id: pkg
