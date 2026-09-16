@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld('hub', {
   },
   updates: {
     scan: () => invoke('updates:scan'),
+    scanGames: () => invoke('updates:scanGames'),
+    clients: () => invoke('updates:clients'),
+    scanWinget: () => invoke('updates:scanWinget'),
     state: () => invoke('updates:state'),
     run: (id) => invoke('updates:run', id),
     cancel: () => invoke('updates:cancel'),

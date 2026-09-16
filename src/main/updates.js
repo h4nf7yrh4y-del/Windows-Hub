@@ -211,9 +211,14 @@ async function steamUpdates() {
     return { available: false, running: false, games: [], installed: 0, note: `Steam-Bibliothek nicht lesbar: ${err.message}` };
   }
 
+  // `running` is left unknown on purpose. Asking whether the client is up
+  // needs the PowerShell host, which has one pipe and may be several seconds
+  // into a winget query; the manifests are already read at this point and
+  // waiting for a detail would hold back the whole list. `clientState` fills
+  // it in separately.
   return {
     available: true,
-    running: await steamClientRunning(),
+    running: null,
     installed: rows.length,
     games: rows.filter((row) => row.needsUpdate || row.running),
     note: null
@@ -243,7 +248,8 @@ async function steamProgress() {
     const rows = await steamLibrary();
     return {
       available: true,
-      running: await steamClientRunning(),
+      // No client flag here: the poll must stay cheap, and the view already
+      // has that answer from `clientState`. Sending it would overwrite it.
       games: rows.filter((row) => row.needsUpdate || row.running)
     };
   } catch (_) {
@@ -259,7 +265,7 @@ async function epicGames() {
     const games = await scanner.scanEpic();
     return {
       available: true,
-      running: await epicClientRunning(),
+      running: null,
       // The launch URI is carried through because launching is the only way to
       // make the launcher update a specific game.
       games: games.map((g) => ({ name: g.name, id: g.id, launchUri: g.launch && g.launch.target })),
@@ -281,21 +287,43 @@ async function epicClientRunning() {
 
 /* ---------------------------------------------------------------- overview */
 
-async function scan() {
-  const [winget, steam, epic] = await Promise.all([
-    wingetUpgrades(),
-    steamUpdates(),
-    epicGames()
-  ]);
+/**
+ * The two halves of a scan, deliberately separate.
+ *
+ * Steam and Epic are local files and come back in milliseconds. winget has to
+ * talk to its sources and can take a minute and a half on a slow machine — on
+ * the CI runner it hit the ninety-second ceiling. Asking for both at once
+ * means the fast answer waits for the slow one, and the whole view sits empty
+ * until winget is done. The caller asks for each half on its own and draws
+ * whichever arrives first.
+ */
+/**
+ * Whether the two launchers are up.
+ *
+ * Its own request because it is the only part of a game scan that needs a
+ * process list. One call answers for both: `runningNames` is shared and
+ * deduplicated, so asking twice would cost the same as asking once anyway.
+ */
+async function clientState() {
+  if (!IS_WIN) return { steam: false, epic: false };
+  const [steam, epic] = await Promise.all([steamClientRunning(), epicClientRunning()]);
+  return { steam, epic };
+}
 
-  return {
-    ts: Date.now(),
-    winget,
-    steam,
-    epic,
-    // Only the winget figure is a promise the hub can keep by itself.
-    actionable: winget.packages.length
-  };
+async function scanGames() {
+  const [steam, epic] = await Promise.all([steamUpdates(), epicGames()]);
+  return { ts: Date.now(), steam, epic };
+}
+
+async function scanWinget() {
+  const winget = await wingetUpgrades();
+  // Only the winget figure is a promise the hub can keep by itself.
+  return { ts: Date.now(), winget, actionable: winget.packages.length };
+}
+
+async function scan() {
+  const [games, packages] = await Promise.all([scanGames(), scanWinget()]);
+  return { ...games, ...packages, ts: Date.now() };
 }
 
 /* --------------------------------------------------------------- upgrading */
@@ -536,6 +564,9 @@ module.exports = {
   epicGames,
   runUpgrade,
   cancelUpgrade,
+  scanGames,
+  clientState,
+  scanWinget,
   openExternal,
   steamUpdateUri,
   epicUpdateUri,

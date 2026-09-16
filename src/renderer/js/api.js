@@ -67,6 +67,9 @@ export const api = {
   },
   updates: {
     scan: call(bridge.updates.scan),
+    scanGames: call(bridge.updates.scanGames),
+    clients: call(bridge.updates.clients),
+    scanWinget: call(bridge.updates.scanWinget),
     state: call(bridge.updates.state),
     run: call(bridge.updates.run),
     cancel: call(bridge.updates.cancel),

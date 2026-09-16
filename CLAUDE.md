@@ -92,8 +92,15 @@ diese Anwendung benutzt. Die Testtreiber haben dafür `waitFor`, `waitIn`,
 `waitForWindow`.
 
 **Langsame Abfragen dürfen die Oberfläche nicht aufhalten.** Was sofort da ist, wird
-sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon dreimal
-passiert — Dateimanager-Seitenleiste, Funktionskatalog, Dashboard.
+sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon viermal
+passiert — Dateimanager-Seitenleiste, Funktionskatalog, Dashboard, Update-Center.
+
+Beim vierten Mal kam eine Verschärfung dazu: eine Abfrage ist nicht schnell, nur weil
+sie wenig tut. `steamUpdates` las Manifestdateien in Millisekunden und hängte dann eine
+einzige Zeile „läuft der Client?" an, die über den PowerShell-Host geht — eine Leitung,
+zu dem Zeitpunkt mitten in einer winget-Abfrage. Damit wartete die schnelle Hälfte
+neunzig Sekunden auf ein Detail. Was den Host braucht, wird getrennt abgefragt und
+nachgetragen, und bis dahin sagt die Oberfläche „wird geprüft" statt zu raten.
 
 ## Sprache und Stil
 

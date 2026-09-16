@@ -395,6 +395,9 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   updates.setEmitter((event) => send('updates:progress', event));
 
   ipcMain.handle('updates:scan', wrap(async () => updates.scan(), 'updates:scan'));
+  ipcMain.handle('updates:scanGames', wrap(async () => updates.scanGames(), 'updates:scanGames'));
+  ipcMain.handle('updates:clients', wrap(async () => updates.clientState(), 'updates:clients'));
+  ipcMain.handle('updates:scanWinget', wrap(async () => updates.scanWinget(), 'updates:scanWinget'));
   ipcMain.handle('updates:state', wrap(async () => updates.state(), 'updates:state'));
   ipcMain.handle('updates:run', wrap(async (id) =>
     updates.runUpgrade({ id: typeof id === 'string' && id ? id : null }), 'updates:run'));

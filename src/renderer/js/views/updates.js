@@ -19,7 +19,14 @@ const ICON_STOP = 'M6 6h12v12H6z';
 const ICON_LINK = 'M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1';
 
 export function createUpdatesView() {
-  let data = null;
+  // Three slots rather than one result: each source is drawn the moment it
+  // answers. winget can take a minute and a half, and a view that waits for
+  // its slowest source is a view that is empty for a minute and a half.
+  let data = { winget: null, steam: null, epic: null };
+  // Whether the launchers are up needs a process list, which is the one slow
+  // part of a game scan. It arrives separately and until it does the view says
+  // so rather than guessing "zu".
+  let clients = null;
   let busy = false;
   let running = false;
   let filter = '';
@@ -108,6 +115,16 @@ export function createUpdatesView() {
 
   function renderWinget() {
     const winget = data.winget;
+    if (!winget) {
+      return el('section', { class: 'upd-section' }, [
+        sectionHead('Programme', 'winget wird abgefragt …'),
+        el('div', { class: 'empty', style: { padding: '28px' } }, [
+          el('div', { class: 'empty-title', text: 'Wird gesucht' }),
+          el('div', { style: { fontSize: '12px' },
+            text: 'winget fragt seine Quellen ab. Das dauert auf manchen Rechnern eine Minute.' })
+        ])
+      ]);
+    }
     const packages = (winget.packages || [])
       .filter((p) => !filter || p.name.toLowerCase().includes(filter) || p.id.toLowerCase().includes(filter));
 
@@ -173,11 +190,12 @@ export function createUpdatesView() {
 
   function renderSteam() {
     const steam = data.steam;
+    if (!steam) return el('section', { class: 'upd-section' }, [sectionHead('Steam-Spiele', 'Wird gelesen …')]);
     const block = el('section', { class: 'upd-section' }, [
       sectionHead(
         'Steam-Spiele',
         steam.available
-          ? `${steam.installed} Spiele installiert · Client ${steam.running ? 'läuft' : 'ist zu'}. `
+          ? `${steam.installed} Spiele installiert · Client ${clients === null ? 'wird geprüft' : (clients.steam ? 'läuft' : 'ist zu')}. `
             + 'Der Download läuft über Steam; der Hub stößt ihn an und liest den Fortschritt aus den Manifesten.'
           : null,
         [
@@ -196,7 +214,11 @@ export function createUpdatesView() {
     }
 
     if (!steam.games.length) {
-      block.appendChild(el('div', { class: 'upd-hint', text: steam.running
+      // With the client closed the list is an opinion from disk: Steam learns
+      // that a game is out of date by talking to its servers, not by sitting
+      // there. Saying that is the difference between "nothing to do" and
+      // "nothing known".
+      block.appendChild(el('div', { class: 'upd-hint', text: clients && clients.steam
         ? 'Kein Spiel ist als veraltet markiert.'
         : 'Kein Spiel ist als veraltet markiert — aber Steam ist zu, und es erfährt von Updates erst, '
           + 'wenn es läuft. Diese Liste ist bei geschlossenem Client nicht das letzte Wort.' }));
@@ -209,6 +231,7 @@ export function createUpdatesView() {
 
   function renderEpic() {
     const epic = data.epic;
+    if (!epic) return el('section', { class: 'upd-section' }, [sectionHead('Epic Games', 'Wird gelesen …')]);
     const block = el('section', { class: 'upd-section' }, [
       sectionHead(
         'Epic Games',
@@ -268,11 +291,13 @@ export function createUpdatesView() {
   /* ------------------------------------------------------------ rendering */
 
   function updateCounts() {
-    if (!data) return;
-    const total = (data.winget.packages || []).length;
-    const steam = (data.steam.games || []).length;
+    // Each half reports for itself: a count that silently reads zero while its
+    // source is still being asked is a wrong answer, not a pending one.
+    const total = data.winget ? (data.winget.packages || []).length : 0;
+    const steam = data.steam ? (data.steam.games || []).length : 0;
     const parts = [];
-    parts.push(total ? `${total} Programm${total === 1 ? '' : 'e'} aktualisierbar` : 'Programme aktuell');
+    if (!data.winget) parts.push('winget wird abgefragt …');
+    else parts.push(total ? `${total} Programm${total === 1 ? '' : 'e'} aktualisierbar` : 'Programme aktuell');
     if (steam) parts.push(`${steam} Steam-Spiel${steam === 1 ? '' : 'e'} wartet auf Steam`);
     if (selected.size) parts.push(`${selected.size} ausgewählt`);
     statusLine.textContent = parts.join(' · ');
@@ -282,13 +307,6 @@ export function createUpdatesView() {
 
   function render() {
     clear(listHost);
-    if (!data) {
-      listHost.appendChild(el('div', { class: 'empty', style: { padding: '40px' } }, [
-        el('div', { class: 'empty-title', text: 'Noch nicht gesucht' }),
-        el('div', { style: { fontSize: '12px' }, text: 'Die Suche fragt winget, die Steam-Manifeste und die Epic-Bibliothek ab.' })
-      ]));
-      return;
-    }
     listHost.append(renderWinget(), renderSteam(), renderEpic(), renderSystem());
     updateCounts();
   }
@@ -318,7 +336,7 @@ export function createUpdatesView() {
     steamTimer = setInterval(async () => {
       try {
         const progress = await api.updates.steamProgress();
-        if (!data) return;
+        if (!data.steam) return;
         data.steam = { ...data.steam, ...progress };
         render();
         if (!progress.games.some((g) => g.running)) stopWatchingSteam();
@@ -376,20 +394,44 @@ export function createUpdatesView() {
     } catch (err) { notifyError(err.message); }
   }
 
+  /**
+   * Asks both sources at once and draws each answer as it lands.
+   *
+   * The games come from local manifests and are there immediately; winget has
+   * to reach its sources. Awaiting them together would hold the fast half
+   * hostage to the slow one.
+   */
   async function scan() {
     if (busy) return;
     busy = true;
     statusLine.textContent = 'Suche läuft …';
     scanButton.disabled = '';
-    try {
-      data = await api.updates.scan();
-      selected = new Set();
+    selected = new Set();
+    render();
+
+    const games = api.updates.scanGames().then((result) => {
+      data.steam = result.steam;
+      data.epic = result.epic;
       render();
       // Something may already be downloading from an earlier visit.
-      if ((data.steam.games || []).some((g) => g.running)) watchSteam();
-    } catch (err) {
+      if ((result.steam.games || []).some((g) => g.running)) watchSteam();
+    }).catch((err) => notifyError(err.message));
+
+    const running = api.updates.clients().then((result) => {
+      clients = result;
+      render();
+    }).catch(() => { clients = null; });
+
+    const packages = api.updates.scanWinget().then((result) => {
+      data.winget = result.winget;
+      render();
+    }).catch((err) => {
       statusLine.textContent = err.message;
       notifyError(err.message);
+    });
+
+    try {
+      await Promise.all([games, running, packages]);
     } finally {
       busy = false;
       scanButton.removeAttribute('disabled');
@@ -407,7 +449,7 @@ export function createUpdatesView() {
       message: id
         ? `winget installiert die neue Version von „${label}". Das Programm sollte dabei geschlossen sein.\n\n`
           + 'Manche Installationsprogramme verlangen erhöhte Rechte — dann erscheint die Windows-Abfrage.'
-        : `${(data.winget.packages || []).length} Programme werden nacheinander aktualisiert. `
+        : `${((data.winget && data.winget.packages) || []).length} Programme werden nacheinander aktualisiert. `
           + 'Das kann je nach Größe dauern und einzelne Programme beenden.\n\n'
           + 'Manche Installationsprogramme verlangen erhöhte Rechte — dann erscheint die Windows-Abfrage.',
       confirmLabel: 'Aktualisieren',

@@ -581,10 +581,12 @@ module.exports = [
     async run(t) {
       await t.view('updates');
 
-      // The scan runs on mount; off Windows every source reports that it is
-      // unavailable, which is exactly the state worth rendering well.
+      // The four sections are drawn before anything is asked. The timeout is
+      // deliberately short: winget took ninety seconds on the CI runner once,
+      // and the whole view waited for it. Each source fills in its own section
+      // when it answers, so none of them may gate the frame.
       await t.waitFor(`document.querySelectorAll('#view-updates .upd-section').length >= 4`,
-        { label: 'Update-Abschnitte', timeout: 60000 });
+        { label: 'Update-Abschnitte', timeout: 15000 });
 
       const titles = await t.evalExpr(
         `[...document.querySelectorAll('.upd-section-title')].map((n) => n.textContent)`
@@ -611,6 +613,11 @@ module.exports = [
         'Ein unbekannter Modus wird abgewiesen');
       await assertRejects(t, `window.hub.updates.epicGame('https://example.com')`, 'Epic-Adresse',
         'Eine fremde Adresse wird abgewiesen');
+
+      // The games come from local manifests and must not wait behind winget.
+      const games = await t.evalExpr(`window.hub.updates.scanGames().then((r) => r.data)`);
+      t.assert(games && games.steam && games.epic, 'Spiele werden getrennt von winget abgefragt',
+        JSON.stringify(games));
 
       const state = await t.evalExpr(`window.hub.updates.scan().then((r) => r.data)`);
       t.assert(state && state.winget && Array.isArray(state.winget.packages),
