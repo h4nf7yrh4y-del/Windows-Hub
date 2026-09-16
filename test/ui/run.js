@@ -107,10 +107,13 @@ function main() {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
 
-    // A hung renderer must not hang the build. The limit is generous because
-    // a two-core CI runner is several times slower than any machine this ever
-    // runs on for real.
-    const budgetMs = Math.max(60000, Number(process.env.HUB_UI_TEST_TIMEOUT_MS) || 600000);
+    // A hung renderer must not hang the build. Ten minutes looked generous and
+    // was not: on the two-core Windows runner the suite legitimately needs
+    // seven or eight, because compiling the display helper, enumerating
+    // features and building the diagnostics report each cost most of a minute
+    // there. A budget that cuts off a healthy run tells you nothing about what
+    // went wrong, which is the opposite of what a guard is for.
+    const budgetMs = Math.max(60000, Number(process.env.HUB_UI_TEST_TIMEOUT_MS) || 900000);
     let timedOut = false;
     const guard = setTimeout(() => {
       timedOut = true;

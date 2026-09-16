@@ -157,9 +157,24 @@ function runWinget(args, timeoutMs) {
   });
 }
 
+/**
+ * The listing in flight, if any.
+ *
+ * A second request joins the first instead of starting another winget. Two
+ * listings answer the same question, take a minute and a half each, and on a
+ * two-core machine mostly get in each other's way. Opening the view twice, or
+ * pressing Suchen while it works, used to do exactly that.
+ */
+let listing = null;
+
 async function wingetUpgrades() {
   if (!IS_WIN) return { available: false, packages: [], note: 'winget gibt es nur unter Windows.' };
+  if (listing) return listing;
+  listing = readWingetUpgrades();
+  try { return await listing; } finally { listing = null; }
+}
 
+async function readWingetUpgrades() {
   let out = '';
   try {
     out = await runWinget(

@@ -627,13 +627,18 @@ module.exports = [
       t.assert(games && games.steam && games.epic, 'Spiele werden getrennt von winget abgefragt',
         JSON.stringify(games));
 
-      const state = await t.evalExpr(`window.hub.updates.scanWinget().then((r) => r.data)`);
-      t.assert(state && state.winget && Array.isArray(state.winget.packages),
-        'Die Abfrage liefert eine Paketliste', JSON.stringify(state && state.winget));
-      // Whether winget exists depends on the machine; that it explains itself
-      // when it does not is the part that has to hold everywhere.
-      t.assert(state.winget.available || String(state.winget.note || '').length > 0,
-        'Fehlt winget, steht dabei warum', JSON.stringify(state.winget));
+      // Deliberately not a second `scanWinget()` call. The view already made
+      // one on mount, and on a machine with cold sources that query takes a
+      // minute and a half; asking again bought nothing and cost the suite
+      // three minutes. What is waited for here is the section leaving its
+      // pending state -- whatever it then says, it has to say something.
+      await t.waitFor(
+        `!/wird abgefragt/.test(document.querySelectorAll('#view-updates .upd-section')[0].textContent)`,
+        { label: 'winget-Abschnitt', timeout: 150000 });
+      const wingetText = await t.evalExpr(
+        `document.querySelectorAll('#view-updates .upd-section')[0].textContent`);
+      t.assert(/Alles aktuell|Aktualisieren|winget steht nicht zur Verfügung/.test(wingetText),
+        'Der Programmabschnitt sagt, was Sache ist', wingetText.slice(0, 200));
 
       // Nothing is running, so the log pane stays out of the way.
       t.eq(await t.evalExpr(`document.querySelector('.upd-log-pane').classList.contains('hidden')`), true,

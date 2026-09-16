@@ -78,6 +78,12 @@ Argument: die Prüfung läuft also *nach* dem Zugriff. In der echten Anwendung f
 das nie auf, im Test ohne Electron sofort. Ebenso gehört eine Prüfung vor die
 Plattformabfrage, sonst läuft sie nur unter Windows und nirgends im Test.
 
+**Ein Oberflächentest fragt nicht noch einmal, was die Ansicht schon gefragt hat.**
+Die Ansicht stellt ihre Abfragen beim Öffnen; ein `evalExpr`, das dieselbe Abfrage
+wiederholt, zahlt sie ein zweites Mal. Auf dem Windows-Runner waren das neunzig
+Sekunden pro winget-Aufruf und drei zusätzliche Minuten für die Suite. Geprüft wird,
+was die Ansicht anzeigt, nicht was sich noch einmal abrufen lässt.
+
 **Ein Test, der eine Aktion aufruft, führt sie auch aus.** Unter Linux warf
 `updates.run(null)` „nur unter Windows verfügbar", und genau das prüfte der
 Oberflächentest. Auf dem Windows-Runner warf derselbe Aufruf nichts — er startete
