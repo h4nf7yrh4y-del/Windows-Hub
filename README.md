@@ -126,6 +126,36 @@ es die Schnittstelle nicht, dann bleibt die Leiste dauerhaft aus. Scheitert der 
 wird fünf Minuten lang nicht erneut gefragt, statt die Shell alle paar Sekunden für eine
 Antwort zu belegen, die sich nicht ändert.
 
+**Update-Center.** Eine eigene Ansicht, die drei Quellen abfragt und bei jeder
+dazuschreibt, was sie kann.
+
+*Programme* laufen über **winget**, den Paketmanager von Windows. Er kennt mehrere
+tausend Programme und installiert deren Updates unbeaufsichtigt — einzeln oder alle
+nacheinander, mit mitlaufendem Protokoll. Das ist der Teil, der den Namen Updater
+verdient, und er deckt die **Launcher** von Steam und Epic wie jedes andere Programm ab.
+
+*Steam-Spiele* liest der Hub aus den Manifestdateien: dort steht, ob Steam ein Spiel
+für veraltet hält und wie viel noch fehlt. Herunterladen kann das nur der Client
+selbst — es gibt keine unterstützte Schnittstelle für „aktualisiere jetzt dieses
+Spiel". Der Hub zeigt den Zustand und übergibt an Steam.
+
+*Epic-Spiele* erscheinen nur als Liste. Die Manifeste sagen, was installiert ist, nicht
+was aktuell ist; es gibt nichts zu lesen und nichts auszulösen. Der Abschnitt existiert,
+damit die Liste nicht stillschweigend unvollständig ist.
+
+*Windows-Update und Store* werden verlinkt, nicht ausgelöst. Ohne erhöhte Rechte und
+ohne Zusatzmodul geht das nicht, und ein Knopf, der so tut als ob, wäre schlimmer als
+einer, der weiterleitet.
+
+Die winget-Ausgabe wird nach Spaltenpositionen gelesen, nicht nach den Überschriften —
+die sind in der Systemsprache beschriftet, und ein Parser, der auf „Available" wartet,
+funktioniert auf einem deutschen Windows nicht. Er würde dann nichts finden und „alles
+aktuell" melden, was niemand nachprüft.
+
+Eine laufende Aktualisierung überlebt das Schließen des Hubs bewusst: ein Installations-
+programm mitten im Schreiben abzubrechen hinterlässt ein kaputtes Programm. Manche
+Installer verlangen erhöhte Rechte; dann erscheint die Windows-Abfrage.
+
 **Befehlspalette.** `Strg` + `K` öffnet eine Suche über alles: Profile starten und
 beenden, Programme aus der Bibliothek, Ansichten, Einstellungen und die
 Windows-Funktionen. Gesucht wird nach Teilfolgen, nicht nach Textstücken — `hd2`
@@ -290,7 +320,7 @@ Innerhalb des Hub-Fensters:
 |---|---|
 | `Strg` + `K` | Befehlspalette |
 | `F11` | Vollbild umschalten |
-| `Alt` + `1` … `9` | Direkt zu Hub, System, Tasks, Files, Overlay, Windows, Claude, Library, Setup |
+| `Alt` + `1` … `9`, `Alt` + `0` | Direkt zu Hub, System, Tasks, Files, Overlay, Windows, Updates, Claude, Library, Setup |
 | `F5` | Oberfläche neu laden |
 | `Esc` | Offenen Dialog schließen |
 

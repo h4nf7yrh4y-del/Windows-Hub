@@ -57,6 +57,19 @@ verschluckt sie, und ein Registrierungspfad ohne Backslashes schlägt nicht fehl
 sondern liefert stillschweigend nichts. Jedes erzeugte Skript gehört in
 `test/powershell.test.js`, das sie durch den echten Parser schickt.
 
+**Lange Vorgänge gehören nicht in den PowerShell-Host.** Der Host hat genau eine
+Leitung. Ein `winget upgrade` dauert Minuten und würde Prozessliste, Messwerte und
+jede andere Systemabfrage so lange blockieren; außerdem braucht es seine Ausgabe
+zeilenweise, was ein Frage-Antwort-Host nicht liefert. `updates.js` startet winget
+deshalb als eigenen Prozess — die einzige bewusste Ausnahme. Das *Auflisten* läuft
+weiterhin über den Host, mit `{ background: true }`.
+
+**Ausgaben, die für Menschen gemacht sind, werden nach Spaltenposition gelesen.**
+winget beschriftet seine Spalten in der Systemsprache. Der Parser in `updates.js`
+nimmt die Positionen aus der Kopfzeile und die Strichlinie darunter, nicht die
+Wörter — sonst funktioniert er in genau einer Sprache. Ein Parser, der nichts findet,
+meldet „alles aktuell", und gute Nachrichten prüft niemand nach.
+
 **Ein leeres Ergebnis ist etwas anderes als ein Fehler.** Unter Windows heißt „nichts
 gefunden" oft Exitcode ungleich null. Wo das zutrifft, muss der Aufrufer unterscheiden
 können — `killByName` meldet deshalb `matched`.

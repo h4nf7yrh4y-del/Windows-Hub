@@ -10,12 +10,19 @@
  * that data, plus its empty and error states.
  */
 
+/** Asserts that an IPC call comes back as a refusal mentioning `needle`. */
+async function assertRejects(t, expression, needle, message) {
+  const result = await t.evalExpr(`${expression}.then((r) => r)`);
+  t.assert(result && result.ok === false && String(result.error || '').includes(needle),
+    message, JSON.stringify(result));
+}
+
 module.exports = [
 
   {
     name: 'Grundgerüst: Leiste, Uhr, Kopfzeile',
     async run(t) {
-      t.eq(await t.count('.rail-btn'), 9, 'Neun Einträge in der Seitenleiste');
+      t.eq(await t.count('.rail-btn'), 10, 'Zehn Einträge in der Seitenleiste');
       t.assert(/^v\d+\.\d+\.\d+/.test((await t.text('#brand-version')) || ''),
         'Versionsnummer wird angezeigt', await t.text('#brand-version'));
       t.assert(/^\d{2}:\d{2}$/.test(((await t.text('#clock-time')) || '').trim()),
@@ -566,6 +573,49 @@ module.exports = [
 
       await t.evalExpr(`window.hub.dashboard.close()`);
       t.eq(await t.waitForNoWindow('dashboard.html'), true, 'Und lässt sich wieder schließen');
+    }
+  },
+
+  {
+    name: 'Updates: Abschnitte, Grenzen, Protokoll',
+    async run(t) {
+      await t.view('updates');
+
+      // The scan runs on mount; off Windows every source reports that it is
+      // unavailable, which is exactly the state worth rendering well.
+      await t.waitFor(`document.querySelectorAll('#view-updates .upd-section').length >= 4`,
+        { label: 'Update-Abschnitte', timeout: 60000 });
+
+      const titles = await t.evalExpr(
+        `[...document.querySelectorAll('.upd-section-title')].map((n) => n.textContent)`
+      );
+      t.assert(titles.includes('Programme'), 'Abschnitt für winget-Programme', JSON.stringify(titles));
+      t.assert(titles.includes('Steam-Spiele'), 'Abschnitt für Steam');
+      t.assert(titles.includes('Epic Games'), 'Abschnitt für Epic');
+      t.assert(titles.includes('System'), 'Abschnitt für Windows und Store');
+
+      // The whole point of the layout: what the hub cannot do must say so
+      // rather than offer a button that quietly does nothing.
+      const body = (await t.text('#view-updates')) || '';
+      t.assert(body.includes('Steam lädt selbst herunter'),
+        'Bei Steam steht, dass der Client herunterlädt');
+      t.assert(body.includes('keinen Aktualisierungsstand'),
+        'Bei Epic steht, dass es keinen Stand gibt');
+      t.assert(body.includes('Ein Knopf, der so tut'),
+        'Bei Windows Update steht, warum nur verlinkt wird');
+
+      const state = await t.evalExpr(`window.hub.updates.scan().then((r) => r.data)`);
+      t.assert(state && state.winget && Array.isArray(state.winget.packages),
+        'Die Abfrage liefert eine Paketliste', JSON.stringify(state && state.winget));
+      t.eq(state.winget.available, false, 'Ausserhalb von Windows meldet winget sich als nicht verfügbar');
+      t.assert(String(state.winget.note || '').length > 0, 'Und sagt warum', state.winget.note);
+
+      // Nothing is running, so the log pane stays out of the way.
+      t.eq(await t.evalExpr(`document.querySelector('.upd-log-pane').classList.contains('hidden')`), true,
+        'Das Protokoll erscheint erst, wenn etwas läuft');
+
+      await assertRejects(t, `window.hub.updates.run(null)`, 'Windows',
+        'Ausserhalb von Windows lässt sich nichts installieren');
     }
   },
 

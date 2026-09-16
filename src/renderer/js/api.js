@@ -65,6 +65,14 @@ export const api = {
     stats: call(bridge.sessions.stats),
     clear: call(bridge.sessions.clear)
   },
+  updates: {
+    scan: call(bridge.updates.scan),
+    state: call(bridge.updates.state),
+    run: call(bridge.updates.run),
+    cancel: call(bridge.updates.cancel),
+    open: call(bridge.updates.open),
+    onProgress: bridge.updates.onProgress
+  },
   media: {
     read: call(bridge.media.read),
     command: call(bridge.media.command)

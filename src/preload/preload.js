@@ -53,6 +53,14 @@ contextBridge.exposeInMainWorld('hub', {
     stats: () => invoke('sessions:stats'),
     clear: () => invoke('sessions:clear')
   },
+  updates: {
+    scan: () => invoke('updates:scan'),
+    state: () => invoke('updates:state'),
+    run: (id) => invoke('updates:run', id),
+    cancel: () => invoke('updates:cancel'),
+    open: (what, id) => invoke('updates:open', what, id),
+    onProgress: (handler) => on('updates:progress', handler)
+  },
   media: {
     read: () => invoke('media:read'),
     command: (name) => invoke('media:command', name)

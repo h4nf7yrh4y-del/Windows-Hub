@@ -11,6 +11,7 @@ import { createLibraryView } from './views/library.js';
 import { createFilesView } from './views/files.js';
 import { createOverlaysView } from './views/overlays.js';
 import { createWindowsView } from './views/windows.js';
+import { createUpdatesView } from './views/updates.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
@@ -60,6 +61,13 @@ const VIEWS = [
     label: 'Windows',
     icon: ['M3 5h18v14H3z', 'M12 5v14M3 12h18'],
     factory: createWindowsView,
+    keep: false
+  },
+  {
+    id: 'updates',
+    label: 'Updates',
+    icon: ['M20 11a8 8 0 10-2.3 5.7', 'M20 5v6h-6'],
+    factory: createUpdatesView,
     keep: false
   },
   {
@@ -154,7 +162,7 @@ function buildRail() {
     rail.appendChild(el('button', {
       class: 'rail-btn',
       dataset: { view: def.id },
-      title: `${def.label} (Alt+${index + 1})`,
+      title: `${def.label} (Alt+${index === 9 ? 0 : index + 1})`,
       onClick: () => showView(def.id)
     }, [svg(def.icon), el('span', { text: def.label })]));
   });
@@ -272,8 +280,10 @@ function bindShortcuts() {
       openPalette();
       return;
     }
-    if (event.altKey && !event.ctrlKey && !event.shiftKey) {
-      const index = Number(event.key) - 1;
+    if (event.altKey && !event.ctrlKey && !event.shiftKey && /^[0-9]$/.test(event.key)) {
+      // Alt+1..9 are the first nine; Alt+0 is the tenth, where a keyboard
+      // puts it anyway.
+      const index = event.key === '0' ? 9 : Number(event.key) - 1;
       if (index >= 0 && index < VIEWS.length) {
         event.preventDefault();
         showView(VIEWS[index].id);

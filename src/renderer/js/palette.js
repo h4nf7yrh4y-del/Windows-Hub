@@ -98,6 +98,7 @@ function viewEntries(showView) {
     ['files', 'Files', 'Dateimanager'],
     ['overlays', 'Overlay', 'Schwebende Leistungsanzeigen'],
     ['windows', 'Windows', 'Bildschirme und Systemfunktionen'],
+    ['updates', 'Updates', 'Programme, Spiele und System aktualisieren'],
     ['library', 'Library', 'Gefundene Programme'],
     ['settings', 'Setup', 'Einstellungen']
   ];
@@ -155,6 +156,8 @@ function actionEntries(showView, actions) {
     { title: 'Dashboard umschalten', hint: 'Zweiter Bildschirm', run: () => api.dashboard.toggle() },
     { title: 'Overlays umschalten', hint: 'Alle schwebenden Anzeigen', run: () => api.overlays.toggle() },
     { title: 'Claude-Konsole öffnen', hint: 'Eigenes Fenster', run: () => api.claude.openWindow() },
+    { title: 'Nach Updates suchen', hint: 'winget, Steam und Epic abfragen', run: () => showView('updates') },
+    { title: 'Alle Programme aktualisieren', hint: 'Über winget, ohne Rückfrage je Paket', run: () => showView('updates') },
     { title: 'Spielzeit ansehen', hint: 'Wie lange welches Profil lief', run: async () => {
       const { openStats } = await import('./views/stats.js');
       openStats();

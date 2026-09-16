@@ -17,6 +17,7 @@ const display = require('./display');
 const winfeatures = require('./winfeatures');
 const network = require('./network');
 const media = require('./media');
+const updates = require('./updates');
 const scheduler = require('./scheduler');
 const sessions = require('./sessions');
 const screens = require('./screens');
@@ -388,6 +389,18 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   /* --------------------------------------------------------------- network */
 
   ipcMain.handle('network:overview', wrap(async () => network.overview(), 'network:overview'));
+
+  /* --------------------------------------------------------------- updates */
+
+  updates.setEmitter((event) => send('updates:progress', event));
+
+  ipcMain.handle('updates:scan', wrap(async () => updates.scan(), 'updates:scan'));
+  ipcMain.handle('updates:state', wrap(async () => updates.state(), 'updates:state'));
+  ipcMain.handle('updates:run', wrap(async (id) =>
+    updates.runUpgrade({ id: typeof id === 'string' && id ? id : null }), 'updates:run'));
+  ipcMain.handle('updates:cancel', wrap(async () => updates.cancelUpgrade(), 'updates:cancel'));
+  ipcMain.handle('updates:open', wrap(async (what, id) =>
+    updates.openExternal(requireString(what, 'Ziel'), id), 'updates:open'));
 
   /* ----------------------------------------------------------------- media */
 

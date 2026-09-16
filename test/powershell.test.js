@@ -23,6 +23,7 @@ const processes = require('../src/main/processes');
 const tweaks = require('../src/main/tweaks');
 const network = require('../src/main/network');
 const media = require('../src/main/media');
+const updates = require('../src/main/updates');
 
 function findPowerShell() {
   const candidates = [process.env.PWSH_PATH, 'pwsh', 'powershell', 'powershell.exe'].filter(Boolean);
@@ -166,6 +167,7 @@ SCRIPTS['network: connections'] = network.CONNECTION_SCRIPT;
 // exists only on Windows and only in Windows PowerShell. The parser is the one
 // thing that can be checked anywhere, and a typo here would surface as "no
 // media playing" rather than as an error.
+SCRIPTS['updates: winget list'] = updates.WINGET_LIST_SCRIPT;
 SCRIPTS['media: read session'] = media.READ_SCRIPT;
 for (const [name, method] of Object.entries(media.COMMANDS)) {
   SCRIPTS[`media: ${name}`] = media.commandScript(method);
