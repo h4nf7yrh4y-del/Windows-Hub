@@ -91,9 +91,15 @@ let planFailedAt = 0;
 let planInFlight = null;
 const PLAN_CACHE_MS = 60000;
 const PLAN_RETRY_MS = 30000;
-// A machine that needs more than this to list five power schemes has a broken
-// WMI provider, not a slow one. Waiting longer only blocks the queue.
-const PLAN_TIMEOUT_MS = 12000;
+// The old value here was twelve seconds, on the reasoning that a machine
+// needing longer has a broken provider and waiting only blocks the queue. That
+// was half the picture: a job that times out blocks the queue for its whole
+// timeout AND costs a host replacement, because the hung script still owns the
+// only pipe. On the two-core runner the next view's process list then landed on
+// a cold PowerShell and never arrived. Waiting is cheaper than timing out, and
+// the query goes in as background work so it can never get ahead of something
+// a person is waiting for.
+const PLAN_TIMEOUT_MS = 40000;
 
 async function listPowerPlans({ force = false } = {}) {
   if (!IS_WIN) return [];
@@ -104,7 +110,7 @@ async function listPowerPlans({ force = false } = {}) {
   if (planInFlight) return planInFlight;
 
   planInFlight = (async () => {
-    const parsed = parseJson(await processes.runPowerShell(PLANS_SCRIPT, PLAN_TIMEOUT_MS).catch((err) => {
+    const parsed = parseJson(await processes.runPowerShell(PLANS_SCRIPT, PLAN_TIMEOUT_MS, { background: true }).catch((err) => {
       log.warn(`Energiepläne nicht lesbar: ${err.message}`);
       return '';
     }));

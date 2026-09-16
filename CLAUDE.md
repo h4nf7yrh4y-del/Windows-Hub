@@ -99,6 +99,13 @@ Linux brav am `IS_WIN`-Riegel scheitert, lief auf dem Windows-Runner durch, star
 den PowerShell-Host und hielt den Testlauf fünf Minuten lang offen, bis der Host
 wegen Leerlauf aufgab. Testbar ist die reine Funktion davor, nicht die Wirkung.
 
+**Eine Zeitüberschreitung im Host ist teurer als das Warten.** Der hängende Auftrag
+besetzt die Leitung bis zum Ende seines Limits und kostet danach einen Neustart des
+Hosts — alles, was dahinter wartet, zahlt zusätzlich einen kalten PowerShell-Start.
+Ein knappes Limit macht eine langsame Abfrage also nicht billiger, sondern teurer. Was
+bekanntermaßen lange dauert, bekommt Zeit und `{ background: true }`, damit es sich
+nicht vor etwas drängelt, auf das jemand wartet.
+
 **Ein leeres Ergebnis ist etwas anderes als ein Fehler.** Unter Windows heißt „nichts
 gefunden" oft Exitcode ungleich null. Wo das zutrifft, muss der Aufrufer unterscheiden
 können — `killByName` meldet deshalb `matched`.

@@ -353,8 +353,12 @@ module.exports = [
     async run(t) {
       await t.view('processes');
       t.eq(await t.count('#view-processes .tab-bar .tab'), 3, 'Drei Reiter: Prozesse, Netzwerk, Autostart');
+      // Generous on purpose. There is one PowerShell pipe, and on the two-core
+      // runner a slow query ahead of this one times out, takes the host down
+      // with it and makes the process list wait for a cold start as well. Sixty
+      // seconds covered the query but not that chain.
       await t.waitFor(`document.querySelectorAll('#view-processes tbody tr').length > 0`,
-        { label: 'Prozesszeilen', timeout: 60000 });
+        { label: 'Prozesszeilen', timeout: 150000 });
       t.atLeast(await t.count('#view-processes tbody tr'), 3, 'Prozesse werden aufgelistet');
       t.atLeast(await t.count('.proc-action'), 1, 'Beenden-Knopf pro Zeile');
       t.assert(((await t.text('.proc-summary')) || '').length > 0, 'Zusammenfassung unter der Tabelle');
