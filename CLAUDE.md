@@ -61,8 +61,10 @@ sondern liefert stillschweigend nichts. Jedes erzeugte Skript gehört in
 Leitung. Ein `winget upgrade` dauert Minuten und würde Prozessliste, Messwerte und
 jede andere Systemabfrage so lange blockieren; außerdem braucht es seine Ausgabe
 zeilenweise, was ein Frage-Antwort-Host nicht liefert. `updates.js` startet winget
-deshalb als eigenen Prozess — die einzige bewusste Ausnahme. Das *Auflisten* läuft
-weiterhin über den Host, mit `{ background: true }`.
+deshalb als eigenen Prozess. Das gilt auch fürs bloße *Auflisten*: das lief erst über
+den Host, weil es „schnell" sei — auf einem Rechner mit kalten Quellen dauerte es
+neunzig Sekunden, und solange stand alles andere an, bis hin zu „läuft Steam?". Wie
+lange etwas dauert, entscheidet die langsamste Maschine, nicht die eigene.
 
 **Ausgaben, die für Menschen gemacht sind, werden nach Spaltenposition gelesen.**
 winget beschriftet seine Spalten in der Systemsprache. Der Parser in `updates.js`
@@ -99,6 +101,10 @@ können — `killByName` meldet deshalb `matched`.
 Feste Pausen sind auf einem ausgelasteten Rechner eine Münze, und genau dann wird
 diese Anwendung benutzt. Die Testtreiber haben dafür `waitFor`, `waitIn`,
 `waitForWindow`.
+
+**Was ohne die Daten funktioniert, bleibt während des Ladens bedienbar.** Ein
+Platzhalter ersetzt die Liste, nicht den Abschnitt: „Steam-Updates starten" hängt nicht
+daran, ob die Bibliothek schon gelesen ist, und darf deshalb nicht verschwinden.
 
 **Langsame Abfragen dürfen die Oberfläche nicht aufhalten.** Was sofort da ist, wird
 sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon viermal

@@ -588,6 +588,18 @@ module.exports = [
       await t.waitFor(`document.querySelectorAll('#view-updates .upd-section').length >= 4`,
         { label: 'Update-Abschnitte', timeout: 15000 });
 
+      // Checked before anything has had time to answer: an action that does
+      // not depend on the list must not disappear while the list loads. On the
+      // Windows runner these two buttons were missing for a minute, because
+      // the loading placeholder had dropped them.
+      const earlyButtons = await t.evalExpr(
+        `[...document.querySelectorAll('#view-updates button')].map((n) => n.textContent).join(' | ')`
+      );
+      t.assert(earlyButtons.includes('Steam-Updates starten'),
+        'Steam-Updates lassen sich anstoßen, bevor die Bibliothek gelesen ist', earlyButtons);
+      t.assert(earlyButtons.includes('Launcher prüfen lassen'),
+        'Der Epic-Launcher lässt sich prüfen lassen, bevor die Bibliothek gelesen ist', earlyButtons);
+
       const titles = await t.evalExpr(
         `[...document.querySelectorAll('.upd-section-title')].map((n) => n.textContent)`
       );
@@ -599,10 +611,6 @@ module.exports = [
       // Each section says what it can do rather than offering a button that
       // quietly does nothing.
       const body = (await t.text('#view-updates')) || '';
-      t.assert(body.includes('Steam-Updates starten'),
-        'Steam-Updates lassen sich anstoßen');
-      t.assert(body.includes('Launcher prüfen lassen'),
-        'Der Epic-Launcher lässt sich prüfen lassen');
       t.assert(body.includes('Ein Knopf, der so tut'),
         'Bei Windows Update steht, warum nur verlinkt wird');
 

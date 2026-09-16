@@ -114,34 +114,68 @@ function parseUpgrades(text) {
     .filter((row) => row.available && row.available !== row.current);
 }
 
-const WINGET_LIST_SCRIPT = String.raw`
-$ErrorActionPreference = "SilentlyContinue"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { 'HUB_NO_WINGET' } else {
-  winget upgrade --include-unknown --accept-source-agreements --disable-interactivity
+/**
+ * Runs winget and collects what it printed.
+ *
+ * As its own process, not through the PowerShell host. The comment that used
+ * to sit here said listing was quick; on a machine whose sources are cold it
+ * took ninety seconds and hit the ceiling, and for all of that time the host's
+ * single pipe was busy — which meant the process list, the metrics and even
+ * the question "is Steam running" queued behind a package listing. Long
+ * operations do not belong in the host, and this is one.
+ */
+function runWinget(args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn('winget.exe', args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    let out = '';
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(guard);
+      fn(value);
+    };
+
+    const guard = setTimeout(() => {
+      child.kill();
+      finish(reject, new Error(`winget hat nach ${Math.round(timeoutMs / 1000)} s nicht geantwortet`));
+    }, timeoutMs);
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { out += chunk; });
+    // Diagnostics only; winget writes its table to stdout.
+    child.stderr.resume();
+    child.on('error', (err) => finish(reject, err));
+    child.on('close', () => finish(resolve, out));
+  });
 }
-`;
 
 async function wingetUpgrades() {
   if (!IS_WIN) return { available: false, packages: [], note: 'winget gibt es nur unter Windows.' };
 
   let out = '';
   try {
-    // Listing is quick and goes through the shared shell. Installing does not;
-    // see runUpgrade below for why.
-    out = await processes.runPowerShell(WINGET_LIST_SCRIPT, 90000, { background: true });
+    out = await runWinget(
+      ['upgrade', '--include-unknown', '--accept-source-agreements', '--disable-interactivity'],
+      90000
+    );
   } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      return {
+        available: false,
+        packages: [],
+        note: 'winget ist nicht installiert. Es gehört zum App Installer aus dem Microsoft Store.'
+      };
+    }
     log.warn(`winget nicht lesbar: ${err.message}`);
     return { available: false, packages: [], note: `winget antwortet nicht: ${err.message}` };
-  }
-
-  if (out.includes('HUB_NO_WINGET')) {
-    return {
-      available: false,
-      packages: [],
-      note: 'winget ist nicht installiert. Es gehört zum App Installer aus dem Microsoft Store.'
-    };
   }
 
   return { available: true, packages: parseUpgrades(out), note: null };
@@ -590,6 +624,5 @@ module.exports = {
   parseWingetTable,
   parseUpgrades,
   parseSteamState,
-  cleanOutput,
-  WINGET_LIST_SCRIPT
+  cleanOutput
 };

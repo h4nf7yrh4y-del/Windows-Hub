@@ -190,23 +190,29 @@ export function createUpdatesView() {
 
   function renderSteam() {
     const steam = data.steam;
-    if (!steam) return el('section', { class: 'upd-section' }, [sectionHead('Steam-Spiele', 'Wird gelesen …')]);
-    const block = el('section', { class: 'upd-section' }, [
-      sectionHead(
-        'Steam-Spiele',
-        steam.available
+    // The head is built first and identically in both states. Dropping the
+    // buttons while the list loads would take away an action that does not
+    // depend on the list at all -- starting Steam's own update run works
+    // whether or not the hub has finished reading the manifests.
+    const head = sectionHead(
+      'Steam-Spiele',
+      !steam
+        ? 'Bibliothek wird gelesen …'
+        : (steam.available
           ? `${steam.installed} Spiele installiert · Client ${clients === null ? 'wird geprüft' : (clients.steam ? 'läuft' : 'ist zu')}. `
             + 'Der Download läuft über Steam; der Hub stößt ihn an und liest den Fortschritt aus den Manifesten.'
-          : null,
-        [
-          el('button', {
-            class: 'btn primary sm',
-            title: 'Steam starten, falls nötig, und die Downloadliste öffnen',
-            onClick: () => steamAll()
-          }, [svg(ICON_DOWN, { width: 12, height: 12 }), 'Steam-Updates starten'])
-        ]
-      )
-    ]);
+          : null),
+      [
+        el('button', {
+          class: 'btn primary sm',
+          title: 'Steam starten, falls nötig, und die Downloadliste öffnen',
+          onClick: () => steamAll()
+        }, [svg(ICON_DOWN, { width: 12, height: 12 }), 'Steam-Updates starten'])
+      ]
+    );
+
+    if (!steam) return el('section', { class: 'upd-section' }, [head]);
+    const block = el('section', { class: 'upd-section' }, [head]);
 
     if (!steam.available) {
       block.appendChild(el('div', { class: 'upd-hint', text: steam.note || 'Steam nicht gefunden.' }));
@@ -231,20 +237,22 @@ export function createUpdatesView() {
 
   function renderEpic() {
     const epic = data.epic;
-    if (!epic) return el('section', { class: 'upd-section' }, [sectionHead('Epic Games', 'Wird gelesen …')]);
-    const block = el('section', { class: 'upd-section' }, [
-      sectionHead(
-        'Epic Games',
-        'Der Launcher nennt keinen Aktualisierungsstand. Er bringt ein Spiel aber auf Stand, bevor er es startet — das ist der einzige Hebel, den er anbietet.',
-        [
-          el('button', {
-            class: 'btn primary sm',
-            title: 'Launcher starten; er prüft beim Anmelden seine Bibliothek',
-            onClick: () => epicAll()
-          }, [svg(ICON_DOWN, { width: 12, height: 12 }), 'Launcher prüfen lassen'])
-        ]
-      )
-    ]);
+    const head = sectionHead(
+      'Epic Games',
+      epic
+        ? 'Der Launcher nennt keinen Aktualisierungsstand. Er bringt ein Spiel aber auf Stand, bevor er es startet — das ist der einzige Hebel, den er anbietet.'
+        : 'Bibliothek wird gelesen …',
+      [
+        el('button', {
+          class: 'btn primary sm',
+          title: 'Launcher starten; er prüft beim Anmelden seine Bibliothek',
+          onClick: () => epicAll()
+        }, [svg(ICON_DOWN, { width: 12, height: 12 }), 'Launcher prüfen lassen'])
+      ]
+    );
+
+    if (!epic) return el('section', { class: 'upd-section' }, [head]);
+    const block = el('section', { class: 'upd-section' }, [head]);
 
     if (!epic.available || !epic.games.length) {
       block.appendChild(el('div', { class: 'upd-hint', text: epic.note
