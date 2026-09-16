@@ -594,15 +594,23 @@ module.exports = [
       t.assert(titles.includes('Epic Games'), 'Abschnitt für Epic');
       t.assert(titles.includes('System'), 'Abschnitt für Windows und Store');
 
-      // The whole point of the layout: what the hub cannot do must say so
-      // rather than offer a button that quietly does nothing.
+      // Each section says what it can do rather than offering a button that
+      // quietly does nothing.
       const body = (await t.text('#view-updates')) || '';
-      t.assert(body.includes('Steam lädt selbst herunter'),
-        'Bei Steam steht, dass der Client herunterlädt');
-      t.assert(body.includes('keinen Aktualisierungsstand'),
-        'Bei Epic steht, dass es keinen Stand gibt');
+      t.assert(body.includes('Steam-Updates starten'),
+        'Steam-Updates lassen sich anstoßen');
+      t.assert(body.includes('Launcher prüfen lassen'),
+        'Der Epic-Launcher lässt sich prüfen lassen');
       t.assert(body.includes('Ein Knopf, der so tut'),
         'Bei Windows Update steht, warum nur verlinkt wird');
+
+      // The triggers reach the main process and are checked there, not here.
+      await assertRejects(t, `window.hub.updates.steamGame('abc', 'validate')`, 'Kennung',
+        'Eine unsinnige Spiel-Kennung wird abgewiesen');
+      await assertRejects(t, `window.hub.updates.steamGame('553850', 'quatsch')`, 'Modus',
+        'Ein unbekannter Modus wird abgewiesen');
+      await assertRejects(t, `window.hub.updates.epicGame('https://example.com')`, 'Epic-Adresse',
+        'Eine fremde Adresse wird abgewiesen');
 
       const state = await t.evalExpr(`window.hub.updates.scan().then((r) => r.data)`);
       t.assert(state && state.winget && Array.isArray(state.winget.packages),

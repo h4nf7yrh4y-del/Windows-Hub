@@ -402,6 +402,19 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   ipcMain.handle('updates:open', wrap(async (what, id) =>
     updates.openExternal(requireString(what, 'Ziel'), id), 'updates:open'));
 
+  // Triggering a game update is the launcher's job; these are the hooks it
+  // offers, driven from here instead of by hand.
+  ipcMain.handle('updates:steamProgress', wrap(async () => updates.steamProgress(), 'updates:steamProgress'));
+  ipcMain.handle('updates:steamAll', wrap(async () => updates.startSteamUpdates(), 'updates:steamAll'));
+  // The mode is passed through rather than normalised: quietly turning an
+  // unknown value into a valid one would defeat the check that exists to
+  // refuse it, and one of the two modes starts a game.
+  ipcMain.handle('updates:steamGame', wrap(async (appId, mode) =>
+    updates.updateSteamGame(appId, mode), 'updates:steamGame'));
+  ipcMain.handle('updates:epicAll', wrap(async () => updates.startEpicUpdates(), 'updates:epicAll'));
+  ipcMain.handle('updates:epicGame', wrap(async (uri) =>
+    updates.updateEpicGame(requireString(uri, 'Adresse')), 'updates:epicGame'));
+
   /* ----------------------------------------------------------------- media */
 
   ipcMain.handle('media:read', wrap(async () => media.read(), 'media:read'));

@@ -1786,3 +1786,18 @@
 @media (max-width: 1100px) {
   .upd-body:has(.upd-log-pane:not(.hidden)) { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Live download progress, read from Steam's own manifests. */
+.upd-bar {
+  height: 3px;
+  margin-top: 5px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.upd-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+  transition: width 1.2s linear;
+}

@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('hub', {
     run: (id) => invoke('updates:run', id),
     cancel: () => invoke('updates:cancel'),
     open: (what, id) => invoke('updates:open', what, id),
+    steamProgress: () => invoke('updates:steamProgress'),
+    steamAll: () => invoke('updates:steamAll'),
+    steamGame: (appId, mode) => invoke('updates:steamGame', appId, mode),
+    epicAll: () => invoke('updates:epicAll'),
+    epicGame: (uri) => invoke('updates:epicGame', uri),
     onProgress: (handler) => on('updates:progress', handler)
   },
   media: {

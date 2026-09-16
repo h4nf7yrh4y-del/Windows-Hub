@@ -183,6 +183,38 @@ add('a manifest that cannot be read yields zeroes rather than throwing', () => {
 
 /* -------------------------------------------------------------- targets */
 
+/* ------------------------------------------------------- update triggers */
+
+add('a Steam game id must be numeric', async () => {
+  // The id ends up in a steam:// URI handed to the shell, so it is checked
+  // before the platform is, or the check could only ever run on Windows.
+  await assert.rejects(updates.updateSteamGame('abc'), /Kennung/);
+  await assert.rejects(updates.updateSteamGame('../../evil'), /Kennung/);
+  await assert.rejects(updates.updateSteamGame(''), /Kennung/);
+  await assert.rejects(updates.updateSteamGame(null), /Kennung/);
+});
+
+add('only the two known Steam modes are accepted', async () => {
+  await assert.rejects(updates.updateSteamGame('553850', 'quatsch'), /Modus/);
+  // Both real modes get past validation and fail only on the platform.
+  await assert.rejects(updates.updateSteamGame('553850', 'launch'), /Windows/);
+  await assert.rejects(updates.updateSteamGame('553850', 'validate'), /Windows/);
+});
+
+add('an Epic address must be a launcher URI', async () => {
+  await assert.rejects(updates.updateEpicGame('https://example.com'), /Epic-Adresse/);
+  await assert.rejects(updates.updateEpicGame('com.epicgames.launcher://other/x'), /Epic-Adresse/);
+  await assert.rejects(updates.updateEpicGame(''), /Epic-Adresse/);
+  // A space would end the argument; the manifest never produces one.
+  await assert.rejects(updates.updateEpicGame('com.epicgames.launcher://apps/a b'), /Epic-Adresse/);
+});
+
+add('a real Epic launch URI passes validation', async () => {
+  const uri = 'com.epicgames.launcher://apps/ns%3Acat%3AFortnite?action=launch&silent=true';
+  await assert.rejects(updates.updateEpicGame(uri), /Windows/,
+    'it should get past the shape check and stop at the platform');
+});
+
 add('opening an unknown target is refused', async () => {
   await assert.rejects(updates.openExternal('gibt-es-nicht'), /Unbekanntes Ziel/);
 });

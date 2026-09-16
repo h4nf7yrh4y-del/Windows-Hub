@@ -71,6 +71,11 @@ export const api = {
     run: call(bridge.updates.run),
     cancel: call(bridge.updates.cancel),
     open: call(bridge.updates.open),
+    steamProgress: call(bridge.updates.steamProgress),
+    steamAll: call(bridge.updates.steamAll),
+    steamGame: call(bridge.updates.steamGame),
+    epicAll: call(bridge.updates.epicAll),
+    epicGame: call(bridge.updates.epicGame),
     onProgress: bridge.updates.onProgress
   },
   media: {

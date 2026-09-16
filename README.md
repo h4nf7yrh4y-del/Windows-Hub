@@ -135,13 +135,23 @@ nacheinander, mit mitlaufendem Protokoll. Das ist der Teil, der den Namen Update
 verdient, und er deckt die **Launcher** von Steam und Epic wie jedes andere Programm ab.
 
 *Steam-Spiele* liest der Hub aus den Manifestdateien: dort steht, ob Steam ein Spiel
-für veraltet hält und wie viel noch fehlt. Herunterladen kann das nur der Client
-selbst — es gibt keine unterstützte Schnittstelle für „aktualisiere jetzt dieses
-Spiel". Der Hub zeigt den Zustand und übergibt an Steam.
+für veraltet hält und wie viel noch fehlt. Auslösen kann der Hub das Update auch —
+allerdings nicht selbst, sondern über den Client. Zwei Wege stehen zur Verfügung:
+„Aktualisieren und starten" schickt `steam://run/<id>`, und weil Steam sich weigert,
+eine veraltete Fassung zu starten, lädt es vorher das Update. „Nur aktualisieren"
+schickt `steam://validate/<id>`, das patcht ohne zu starten, liest dafür aber die
+gesamte Installation durch und dauert entsprechend. Der Fortschritt kommt anschließend
+wieder aus den Manifesten, mit Balken pro Spiel, abgefragt nur solange etwas läuft.
 
-*Epic-Spiele* erscheinen nur als Liste. Die Manifeste sagen, was installiert ist, nicht
-was aktuell ist; es gibt nichts zu lesen und nichts auszulösen. Der Abschnitt existiert,
-damit die Liste nicht stillschweigend unvollständig ist.
+*Epic-Spiele* erscheinen mit Namen und Installationsort. Ob ein Titel aktuell ist,
+steht in keinem Manifest — das weiß nur der Launcher, und er veröffentlicht es nicht.
+Auslösen lässt sich ein Update trotzdem: die Start-Adresse des Titels bringt den
+Launcher dazu, vor dem Start zu patchen. Angezeigt wird deshalb kein Zustand, sondern
+nur, dass etwas angestoßen wurde.
+
+In beiden Fällen lädt der Hub kein Spiel selbst herunter, sondern bedient die
+Update-Mechanik des jeweiligen Launchers — der einzige Weg ohne Zugangsdaten. Was
+danach passiert, entscheidet der Client, und die Ansicht sagt das auch so.
 
 *Windows-Update und Store* werden verlinkt, nicht ausgelöst. Ohne erhöhte Rechte und
 ohne Zusatzmodul geht das nicht, und ein Knopf, der so tut als ob, wäre schlimmer als

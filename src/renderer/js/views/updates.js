@@ -142,18 +142,50 @@ export function createUpdatesView() {
     return block;
   }
 
+  function steamGameRow(game) {
+    const percent = game.bytesToDownload
+      ? Math.min(100, (game.bytesDownloaded / game.bytesToDownload) * 100)
+      : 0;
+
+    return el('div', { class: 'upd-row' }, [
+      el('span', { class: `upd-dot ${game.running ? 'busy' : 'wait'}` }),
+      el('div', { class: 'stack gap-2 grow', style: { minWidth: '0' } }, [
+        el('div', { class: 'upd-name truncate', text: game.name }),
+        el('div', { class: 'upd-id truncate', text: game.running
+          ? `Wird geladen${game.bytesToDownload ? ` · ${bytes(game.bytesDownloaded)} von ${bytes(game.bytesToDownload)}` : ''}`
+          : `Update ausstehend${game.remainingBytes ? ` · ${bytes(game.remainingBytes)}` : ''}` }),
+        game.bytesToDownload ? el('div', { class: 'upd-bar' }, [
+          el('i', { style: { width: `${percent}%` } })
+        ]) : null
+      ]),
+      el('button', {
+        class: 'btn subtle sm',
+        title: 'Steam aktualisiert das Spiel und startet es anschließend',
+        onClick: () => steamGame(game, 'launch')
+      }, ['Aktualisieren und starten']),
+      el('button', {
+        class: 'btn subtle sm',
+        title: 'Steam prüft alle Dateien und lädt fehlende nach. Dauert bei großen Spielen.',
+        onClick: () => steamGame(game, 'validate')
+      }, ['Nur aktualisieren'])
+    ]);
+  }
+
   function renderSteam() {
     const steam = data.steam;
     const block = el('section', { class: 'upd-section' }, [
       sectionHead(
         'Steam-Spiele',
-        'Steam lädt selbst herunter. Der Hub liest den Zustand aus den Manifesten und übergibt an den Client.',
+        steam.available
+          ? `${steam.installed} Spiele installiert · Client ${steam.running ? 'läuft' : 'ist zu'}. `
+            + 'Der Download läuft über Steam; der Hub stößt ihn an und liest den Fortschritt aus den Manifesten.'
+          : null,
         [
           el('button', {
-            class: 'btn subtle sm',
-            title: 'Downloadliste in Steam öffnen',
-            onClick: () => open('steam-downloads')
-          }, [svg(ICON_LINK, { width: 12, height: 12 }), 'Downloads in Steam'])
+            class: 'btn primary sm',
+            title: 'Steam starten, falls nötig, und die Downloadliste öffnen',
+            onClick: () => steamAll()
+          }, [svg(ICON_DOWN, { width: 12, height: 12 }), 'Steam-Updates starten'])
         ]
       )
     ]);
@@ -164,28 +196,14 @@ export function createUpdatesView() {
     }
 
     if (!steam.games.length) {
-      block.appendChild(el('div', { class: 'upd-hint', text:
-        'Kein Spiel ist als veraltet markiert. Steam merkt das selbst erst, wenn der Client läuft — '
-        + 'bei geschlossenem Steam ist diese Liste also nicht das letzte Wort.' }));
+      block.appendChild(el('div', { class: 'upd-hint', text: steam.running
+        ? 'Kein Spiel ist als veraltet markiert.'
+        : 'Kein Spiel ist als veraltet markiert — aber Steam ist zu, und es erfährt von Updates erst, '
+          + 'wenn es läuft. Diese Liste ist bei geschlossenem Client nicht das letzte Wort.' }));
       return block;
     }
 
-    for (const game of steam.games) {
-      block.appendChild(el('div', { class: 'upd-row' }, [
-        el('span', { class: `upd-dot ${game.running ? 'busy' : 'wait'}` }),
-        el('div', { class: 'stack gap-2 grow', style: { minWidth: '0' } }, [
-          el('div', { class: 'upd-name truncate', text: game.name }),
-          el('div', { class: 'upd-id truncate', text: game.running
-            ? 'Wird gerade aktualisiert'
-            : `Update ausstehend${game.remainingBytes ? ` · ${bytes(game.remainingBytes)}` : ''}` })
-        ]),
-        el('button', {
-          class: 'btn subtle sm',
-          title: 'Steam öffnen, damit der Download startet',
-          onClick: () => open('steam-downloads')
-        }, ['In Steam öffnen'])
-      ]));
-    }
+    for (const game of steam.games) block.appendChild(steamGameRow(game));
     return block;
   }
 
@@ -194,12 +212,13 @@ export function createUpdatesView() {
     const block = el('section', { class: 'upd-section' }, [
       sectionHead(
         'Epic Games',
-        'Der Launcher veröffentlicht keinen Aktualisierungsstand. Der Hub kann ihn nur öffnen.',
+        'Der Launcher nennt keinen Aktualisierungsstand. Er bringt ein Spiel aber auf Stand, bevor er es startet — das ist der einzige Hebel, den er anbietet.',
         [
           el('button', {
-            class: 'btn subtle sm',
-            onClick: () => open('epic')
-          }, [svg(ICON_LINK, { width: 12, height: 12 }), 'Launcher öffnen'])
+            class: 'btn primary sm',
+            title: 'Launcher starten; er prüft beim Anmelden seine Bibliothek',
+            onClick: () => epicAll()
+          }, [svg(ICON_DOWN, { width: 12, height: 12 }), 'Launcher prüfen lassen'])
         ]
       )
     ]);
@@ -210,8 +229,24 @@ export function createUpdatesView() {
       return block;
     }
 
-    block.appendChild(el('div', { class: 'upd-hint', text:
-      `${epic.games.length} installierte Spiele. Ob eines davon veraltet ist, weiß nur der Launcher selbst.` }));
+    const games = epic.games
+      .filter((g) => !filter || g.name.toLowerCase().includes(filter));
+
+    for (const game of games) {
+      block.appendChild(el('div', { class: 'upd-row' }, [
+        el('span', { class: 'upd-dot' }),
+        el('div', { class: 'stack gap-2 grow', style: { minWidth: '0' } }, [
+          el('div', { class: 'upd-name truncate', text: game.name }),
+          el('div', { class: 'upd-id truncate', text: 'Stand unbekannt — der Launcher prüft beim Start' })
+        ]),
+        el('button', {
+          class: 'btn subtle sm',
+          title: 'Der Launcher aktualisiert das Spiel und startet es anschließend',
+          disabled: game.launchUri ? null : '',
+          onClick: () => epicGame(game)
+        }, ['Aktualisieren und starten'])
+      ]));
+    }
     return block;
   }
 
@@ -266,6 +301,81 @@ export function createUpdatesView() {
     } catch (err) { notifyError(err.message); }
   }
 
+  /* --------------------------------------------------------- game updates */
+
+  let steamTimer = null;
+
+  /**
+   * Keeps the Steam rows current while a download runs.
+   *
+   * The manifests are rewritten by Steam as it downloads, so the progress is
+   * real data rather than an animation. Polling only while something is
+   * actually moving keeps it from reading the library every few seconds for
+   * the rest of the session.
+   */
+  function watchSteam() {
+    if (steamTimer) return;
+    steamTimer = setInterval(async () => {
+      try {
+        const progress = await api.updates.steamProgress();
+        if (!data) return;
+        data.steam = { ...data.steam, ...progress };
+        render();
+        if (!progress.games.some((g) => g.running)) stopWatchingSteam();
+      } catch (_) { stopWatchingSteam(); }
+    }, 4000);
+  }
+
+  function stopWatchingSteam() {
+    if (steamTimer) clearInterval(steamTimer);
+    steamTimer = null;
+  }
+
+  async function steamAll() {
+    try {
+      const result = await api.updates.steamAll();
+      notifyOk(result.note);
+      watchSteam();
+    } catch (err) { notifyError(err.message); }
+  }
+
+  async function steamGame(game, mode) {
+    if (mode === 'validate') {
+      const sure = await confirmDialog({
+        title: `„${game.name}" prüfen und aktualisieren`,
+        message: 'Steam vergleicht jede einzelne Datei des Spiels mit dem Server und lädt nach, '
+          + 'was fehlt oder veraltet ist.\n\n'
+          + 'Das ist der einzige Weg, ein Spiel zu aktualisieren, ohne es zu starten — er liest '
+          + 'dafür aber die gesamte Installation von der Festplatte und dauert bei großen Spielen '
+          + 'einige Minuten.',
+        confirmLabel: 'Prüfen',
+        width: '520px'
+      });
+      if (!sure) return;
+    }
+
+    try {
+      const result = await api.updates.steamGame(game.appId, mode);
+      notifyOk(result.note);
+      watchSteam();
+    } catch (err) { notifyError(err.message); }
+  }
+
+  async function epicAll() {
+    try {
+      const result = await api.updates.epicAll();
+      notifyOk(result.note);
+    } catch (err) { notifyError(err.message); }
+  }
+
+  async function epicGame(game) {
+    if (!game.launchUri) { notifyError('Für dieses Spiel steht keine Startadresse im Manifest'); return; }
+    try {
+      const result = await api.updates.epicGame(game.launchUri);
+      notifyOk(result.note);
+    } catch (err) { notifyError(err.message); }
+  }
+
   async function scan() {
     if (busy) return;
     busy = true;
@@ -275,6 +385,8 @@ export function createUpdatesView() {
       data = await api.updates.scan();
       selected = new Set();
       render();
+      // Something may already be downloading from an earlier visit.
+      if ((data.steam.games || []).some((g) => g.running)) watchSteam();
     } catch (err) {
       statusLine.textContent = err.message;
       notifyError(err.message);
@@ -356,6 +468,7 @@ export function createUpdatesView() {
   view.addEventListener('view:mount', bind);
   view.addEventListener('view:unmount', () => {
     if (releaseProgress) { releaseProgress(); releaseProgress = null; }
+    stopWatchingSteam();
   });
 
   bind();

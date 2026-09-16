@@ -39,9 +39,9 @@ const IS_WIN = process.platform === 'win32';
 // Progress spinners, box drawing and carriage-return overwrites arrive mixed
 // into the output. None of it is data, and the overwrites are why a naive
 // split produces a hundred empty rows.
-const SPINNER = /[─-╿·∙|/\\-]*\r/g;
-const ANSI = /\[[0-9;?]*[a-zA-Z]/g;
-const BACKSPACE = //g;
+const SPINNER = /[\u2500-\u257F\u00B7\u2219|/\\-]*\r/g;
+const ANSI = /\u001B\[[0-9;?]*[a-zA-Z]/g;
+const BACKSPACE = /\u0008/g;
 
 function cleanOutput(text) {
   return String(text || '')
@@ -177,46 +177,105 @@ function parseSteamState(text) {
   };
 }
 
-async function steamUpdates() {
-  if (!IS_WIN) return { available: false, games: [], note: 'Nur unter Windows.' };
-
-  let installed = [];
-  try {
-    installed = await scanner.scanSteam();
-  } catch (err) {
-    return { available: false, games: [], note: `Steam-Bibliothek nicht lesbar: ${err.message}` };
-  }
-  if (!installed.length) return { available: true, games: [], note: null };
-
-  const games = [];
+/** Every installed game with the state Steam recorded for it. */
+async function steamLibrary() {
+  const installed = await scanner.scanSteam();
+  const rows = [];
   for (const game of installed) {
     if (!game.installDir) continue;
     // The manifest sits two levels above common/<installdir>.
     const manifest = path.join(path.dirname(path.dirname(game.installDir)), `appmanifest_${game.appId}.acf`);
     try {
       const state = parseSteamState(await fsp.readFile(manifest, 'utf8'));
-      if (!state.updateRequired && !state.updateRunning) continue;
-      games.push({
+      rows.push({
         appId: game.appId,
         name: game.name,
+        needsUpdate: state.updateRequired,
         running: state.updateRunning,
-        remainingBytes: state.remainingBytes
+        remainingBytes: state.remainingBytes,
+        bytesToDownload: state.bytesToDownload,
+        bytesDownloaded: state.bytesDownloaded
       });
     } catch (_) { /* an unreadable manifest says nothing either way */ }
   }
+  return rows;
+}
 
-  return { available: true, games, note: null };
+async function steamUpdates() {
+  if (!IS_WIN) return { available: false, running: false, games: [], installed: 0, note: 'Nur unter Windows.' };
+
+  let rows = [];
+  try {
+    rows = await steamLibrary();
+  } catch (err) {
+    return { available: false, running: false, games: [], installed: 0, note: `Steam-Bibliothek nicht lesbar: ${err.message}` };
+  }
+
+  return {
+    available: true,
+    running: await steamClientRunning(),
+    installed: rows.length,
+    games: rows.filter((row) => row.needsUpdate || row.running),
+    note: null
+  };
+}
+
+/**
+ * Whether the Steam client is up.
+ *
+ * It matters because Steam only fetches updates while it runs, and because
+ * a manifest read while the client is closed is a stale opinion: Steam learns
+ * that a game is out of date when it talks to its servers, not from disk.
+ */
+async function steamClientRunning() {
+  try {
+    const names = await processes.runningNames();
+    return names.some((name) => String(name).toLowerCase() === 'steam');
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Live download figures, cheap enough to poll while the view is open. */
+async function steamProgress() {
+  if (!IS_WIN) return { available: false, games: [] };
+  try {
+    const rows = await steamLibrary();
+    return {
+      available: true,
+      running: await steamClientRunning(),
+      games: rows.filter((row) => row.needsUpdate || row.running)
+    };
+  } catch (_) {
+    return { available: false, games: [] };
+  }
 }
 
 /* -------------------------------------------------------------------- Epic */
 
 async function epicGames() {
-  if (!IS_WIN) return { available: false, games: [], note: 'Nur unter Windows.' };
+  if (!IS_WIN) return { available: false, running: false, games: [], note: 'Nur unter Windows.' };
   try {
     const games = await scanner.scanEpic();
-    return { available: true, games: games.map((g) => ({ name: g.name, id: g.id })), note: null };
+    return {
+      available: true,
+      running: await epicClientRunning(),
+      // The launch URI is carried through because launching is the only way to
+      // make the launcher update a specific game.
+      games: games.map((g) => ({ name: g.name, id: g.id, launchUri: g.launch && g.launch.target })),
+      note: null
+    };
   } catch (err) {
-    return { available: false, games: [], note: err.message };
+    return { available: false, running: false, games: [], note: err.message };
+  }
+}
+
+async function epicClientRunning() {
+  try {
+    const names = await processes.runningNames();
+    return names.some((name) => /^epicgameslauncher$/i.test(String(name)));
+  } catch (_) {
+    return false;
   }
 }
 
@@ -338,8 +397,115 @@ async function openExternal(what, id) {
   return { ok: true };
 }
 
+/* ------------------------------------------------- triggering game updates */
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Starts Steam's own update run.
+ *
+ * Steam fetches queued updates while it is running and stops when it is not,
+ * so the useful action is: make sure the client is up, then put the download
+ * page in front of it. There is no supported call that means "update
+ * everything now" — this is the mechanism Steam itself uses, driven from here
+ * instead of by hand.
+ */
+async function startSteamUpdates() {
+  if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
+
+  const wasRunning = await steamClientRunning();
+  if (!wasRunning) {
+    await shell.openExternal('steam://open/games');
+    // The client needs a moment before it accepts a second URI; sending both
+    // at once loses the first.
+    await sleep(4000);
+  }
+  await shell.openExternal('steam://open/downloads');
+
+  return {
+    ok: true,
+    started: !wasRunning,
+    note: wasRunning
+      ? 'Steam lädt ausstehende Updates herunter, die Downloadliste ist offen.'
+      : 'Steam wurde gestartet. Sobald es sich angemeldet hat, beginnen ausstehende Downloads.'
+  };
+}
+
+/**
+ * Updates one Steam game.
+ *
+ * Two mechanisms, both official, neither of them "just download the delta":
+ *
+ *   launch   `steam://run/<id>` — Steam refuses to start an out-of-date game
+ *            and updates it first. Quick and exact, but the game starts.
+ *   validate `steam://validate/<id>` — re-checks every file and fetches what
+ *            is wrong or missing. Does not start the game, but reads the whole
+ *            installation from disk, which on a large title is minutes.
+ *
+ * The caller picks; the interface says what each one costs.
+ */
+async function updateSteamGame(appId, mode = 'validate') {
+  if (!/^\d+$/.test(String(appId || ''))) throw new Error('Ungültige Spiel-Kennung');
+  if (mode !== 'validate' && mode !== 'launch') throw new Error(`Unbekannter Modus: ${mode}`);
+  if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
+
+  if (!(await steamClientRunning())) {
+    await shell.openExternal('steam://open/games');
+    await sleep(4000);
+  }
+
+  await shell.openExternal(mode === 'launch' ? `steam://run/${appId}` : `steam://validate/${appId}`);
+  return {
+    ok: true,
+    mode,
+    note: mode === 'launch'
+      ? 'Steam aktualisiert das Spiel und startet es anschließend.'
+      : 'Steam prüft die Dateien und lädt fehlende nach. Das dauert bei großen Spielen.'
+  };
+}
+
+/**
+ * Updates one Epic game.
+ *
+ * The launcher patches a game before it starts it, and that is the only hook
+ * it offers: no update command, no state to read. The URI comes from the
+ * launcher's own manifest, so it is checked for shape before it is handed to
+ * the shell rather than trusted because it arrived from the renderer.
+ */
+async function updateEpicGame(launchUri) {
+  const uri = String(launchUri || '');
+  if (!/^com\.epicgames\.launcher:\/\/apps\/[^\s]+$/.test(uri)) {
+    throw new Error('Ungültige Epic-Adresse');
+  }
+  if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
+  await shell.openExternal(uri);
+  return {
+    ok: true,
+    note: 'Der Launcher aktualisiert das Spiel und startet es anschließend.'
+  };
+}
+
+/** Starts the Epic launcher, which checks its library on startup. */
+async function startEpicUpdates() {
+  if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
+  const wasRunning = await epicClientRunning();
+  await shell.openExternal('com.epicgames.launcher://apps');
+  return {
+    ok: true,
+    started: !wasRunning,
+    note: wasRunning
+      ? 'Der Launcher ist offen und prüft seine Bibliothek.'
+      : 'Der Launcher wurde gestartet und prüft beim Anmelden, was zu aktualisieren ist.'
+  };
+}
+
 module.exports = {
   scan,
+  steamProgress,
+  startSteamUpdates,
+  updateSteamGame,
+  startEpicUpdates,
+  updateEpicGame,
   wingetUpgrades,
   steamUpdates,
   epicGames,
