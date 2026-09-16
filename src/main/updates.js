@@ -341,6 +341,14 @@ function state() {
     : { running: false, lines: [] };
 }
 
+/*
+ * What a winget package id may look like: names such as `Mozilla.Firefox` or
+ * `Notepad++.Notepad++`, and Store ids such as `9NBLGGH4NNS1`. No whitespace,
+ * which is the point — the value is an argument to a process that installs
+ * software.
+ */
+const PACKAGE_ID = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/;
+
 /**
  * Runs winget directly rather than through the shared PowerShell host.
  *
@@ -351,6 +359,12 @@ function state() {
  * which a request-and-response host cannot give.
  */
 function runUpgrade({ id = null } = {}) {
+  // Checked first and on every platform. This function installs software; a
+  // guard that only exists on Windows is a guard no test ever reaches, and the
+  // id comes from the renderer.
+  if (id !== null && !PACKAGE_ID.test(String(id))) {
+    throw new Error(`Ungültige Paket-Kennung: ${id}`);
+  }
   if (!IS_WIN) throw new Error('winget gibt es nur unter Windows');
   if (running) throw new Error('Es läuft bereits eine Aktualisierung');
 

@@ -111,13 +111,24 @@ function main() {
     // a two-core CI runner is several times slower than any machine this ever
     // runs on for real.
     const budgetMs = Math.max(60000, Number(process.env.HUB_UI_TEST_TIMEOUT_MS) || 600000);
+    let timedOut = false;
     const guard = setTimeout(() => {
+      timedOut = true;
       console.error(`UI-Tests: Zeitüberschreitung nach ${Math.round(budgetMs / 1000)} s, Prozess wird beendet.`);
+      // Everything collected so far is printed here rather than in the close
+      // handler, because under Windows a killed Electron leaves grandchildren
+      // holding the pipes and `close` can be minutes away -- long enough for
+      // the build to cancel the step and throw away the only evidence of what
+      // actually hung. That happened once and cost a whole run.
+      if (stdout.trim()) console.error(`--- stdout ---\n${stdout.trim().slice(-4000)}`);
+      if (stderr.trim()) console.error(`--- stderr ---\n${stderr.trim().slice(-4000)}`);
       child.kill('SIGKILL');
+      resolve(1);
     }, budgetMs);
 
     child.on('close', (code) => {
       clearTimeout(guard);
+      if (timedOut) return;
       const line = stdout.split(/\r?\n/).find((l) => l.startsWith(MARKER));
       if (!line) {
         console.error('UI-Tests: kein Ergebnis erhalten.');

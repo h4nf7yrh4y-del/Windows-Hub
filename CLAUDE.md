@@ -76,6 +76,15 @@ Argument: die Prüfung läuft also *nach* dem Zugriff. In der echten Anwendung f
 das nie auf, im Test ohne Electron sofort. Ebenso gehört eine Prüfung vor die
 Plattformabfrage, sonst läuft sie nur unter Windows und nirgends im Test.
 
+**Ein Test, der eine Aktion aufruft, führt sie auch aus.** Unter Linux warf
+`updates.run(null)` „nur unter Windows verfügbar", und genau das prüfte der
+Oberflächentest. Auf dem Windows-Runner warf derselbe Aufruf nichts — er startete
+`winget upgrade --all` und aktualisierte den Rechner, bis der Testlauf in die
+Zehn-Minuten-Grenze lief. Wer eine Absicherung prüfen will, prüft die Prüfung: eine
+abgewiesene Eingabe, keinen Aufruf, der nur zufällig scheitert. Und eine Zusicherung,
+die „außerhalb von Windows" im Namen trägt, gehört auf die Plattform geprüft oder gar
+nicht geschrieben.
+
 **Logiktests fassen nichts an, was einen Prozess startet.** `require` auf ein
 Hauptprozess-Modul ist harmlos, ein Aufruf darin oft nicht: ein Test, der unter
 Linux brav am `IS_WIN`-Riegel scheitert, lief auf dem Windows-Runner durch, startete

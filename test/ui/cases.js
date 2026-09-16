@@ -619,18 +619,28 @@ module.exports = [
       t.assert(games && games.steam && games.epic, 'Spiele werden getrennt von winget abgefragt',
         JSON.stringify(games));
 
-      const state = await t.evalExpr(`window.hub.updates.scan().then((r) => r.data)`);
+      const state = await t.evalExpr(`window.hub.updates.scanWinget().then((r) => r.data)`);
       t.assert(state && state.winget && Array.isArray(state.winget.packages),
         'Die Abfrage liefert eine Paketliste', JSON.stringify(state && state.winget));
-      t.eq(state.winget.available, false, 'Ausserhalb von Windows meldet winget sich als nicht verfügbar');
-      t.assert(String(state.winget.note || '').length > 0, 'Und sagt warum', state.winget.note);
+      // Whether winget exists depends on the machine; that it explains itself
+      // when it does not is the part that has to hold everywhere.
+      t.assert(state.winget.available || String(state.winget.note || '').length > 0,
+        'Fehlt winget, steht dabei warum', JSON.stringify(state.winget));
 
       // Nothing is running, so the log pane stays out of the way.
       t.eq(await t.evalExpr(`document.querySelector('.upd-log-pane').classList.contains('hidden')`), true,
         'Das Protokoll erscheint erst, wenn etwas läuft');
 
-      await assertRejects(t, `window.hub.updates.run(null)`, 'Windows',
-        'Ausserhalb von Windows lässt sich nichts installieren');
+      // Deliberately NOT `run(null)`: on Windows that is not an error, it is
+      // `winget upgrade --all`, and a test that installed software on the CI
+      // runner is how this was discovered. The id check is the part that can
+      // be exercised without starting anything.
+      await assertRejects(t, `window.hub.updates.run('nicht; erlaubt')`, 'Paket-Kennung',
+        'Eine unsinnige Paket-Kennung wird abgewiesen');
+      await assertRejects(t, `window.hub.updates.run('../../evil')`, 'Paket-Kennung',
+        'Und eine, die wie ein Pfad aussieht, auch');
+      t.eq(await t.evalExpr(`window.hub.updates.state().then((r) => r.data.running)`), false,
+        'Nach den abgewiesenen Aufrufen läuft nichts');
     }
   },
 
