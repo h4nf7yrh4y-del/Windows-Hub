@@ -384,11 +384,37 @@ const TARGETS = {
   store: 'ms-windows-store://downloadsandupdates'
 };
 
+/**
+ * Turns a game reference into the URI that will be handed to the shell.
+ *
+ * Kept separate from the functions that act on it so the check can be tested
+ * anywhere. Folded into those, it would sit behind the Windows guard on Linux
+ * and behind a live shell call on Windows — testable on neither, which is a
+ * poor arrangement for the one piece of code that decides what gets executed.
+ */
+function steamUpdateUri(appId, mode = 'validate') {
+  if (!/^\d+$/.test(String(appId || ''))) throw new Error('Ungültige Spiel-Kennung');
+  if (mode !== 'validate' && mode !== 'launch') throw new Error(`Unbekannter Modus: ${mode}`);
+  return mode === 'launch' ? `steam://run/${appId}` : `steam://validate/${appId}`;
+}
+
+function epicUpdateUri(launchUri) {
+  const uri = String(launchUri || '');
+  // The manifest never produces whitespace; anything that does is not one.
+  if (!/^com\.epicgames\.launcher:\/\/apps\/[^\s]+$/.test(uri)) {
+    throw new Error('Ungültige Epic-Adresse');
+  }
+  return uri;
+}
+
 /** Hands over to whatever owns the download. */
 async function openExternal(what, id) {
   if (what === 'steam-validate') {
-    if (!/^\d+$/.test(String(id || ''))) throw new Error('Ungültige Spiel-Kennung');
-    await shell.openExternal(`steam://validate/${id}`);
+    // The URI is built first on purpose: written as an argument it would be
+    // evaluated after `shell.openExternal` is looked up, so the validation
+    // would run second rather than first.
+    const uri = steamUpdateUri(id, 'validate');
+    await shell.openExternal(uri);
     return { ok: true };
   }
   const target = TARGETS[what];
@@ -445,8 +471,10 @@ async function startSteamUpdates() {
  * The caller picks; the interface says what each one costs.
  */
 async function updateSteamGame(appId, mode = 'validate') {
-  if (!/^\d+$/.test(String(appId || ''))) throw new Error('Ungültige Spiel-Kennung');
-  if (mode !== 'validate' && mode !== 'launch') throw new Error(`Unbekannter Modus: ${mode}`);
+  // Validated before the platform is checked: the argument ends up in a URI
+  // the shell executes, and a guard that only runs on Windows is a guard that
+  // is never exercised by the test suite.
+  const uri = steamUpdateUri(appId, mode);
   if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
 
   if (!(await steamClientRunning())) {
@@ -454,7 +482,7 @@ async function updateSteamGame(appId, mode = 'validate') {
     await sleep(4000);
   }
 
-  await shell.openExternal(mode === 'launch' ? `steam://run/${appId}` : `steam://validate/${appId}`);
+  await shell.openExternal(uri);
   return {
     ok: true,
     mode,
@@ -473,10 +501,7 @@ async function updateSteamGame(appId, mode = 'validate') {
  * the shell rather than trusted because it arrived from the renderer.
  */
 async function updateEpicGame(launchUri) {
-  const uri = String(launchUri || '');
-  if (!/^com\.epicgames\.launcher:\/\/apps\/[^\s]+$/.test(uri)) {
-    throw new Error('Ungültige Epic-Adresse');
-  }
+  const uri = epicUpdateUri(launchUri);
   if (!IS_WIN) throw new Error('Nur unter Windows verfügbar');
   await shell.openExternal(uri);
   return {
@@ -512,6 +537,8 @@ module.exports = {
   runUpgrade,
   cancelUpgrade,
   openExternal,
+  steamUpdateUri,
+  epicUpdateUri,
   setEmitter,
   state,
   // Exported for the tests: the parsers are where this breaks silently.

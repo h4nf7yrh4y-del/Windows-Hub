@@ -11,7 +11,7 @@ npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
 npm run lint        # Syntaxprüfung aller Quelldateien
 npm test            # Logiktests, ~190 Zusicherungen
-npm run test:ui     # startet die echte App und bedient 19 Ansichten
+npm run test:ui     # startet die echte App und bedient 22 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
 ```
@@ -69,6 +69,18 @@ winget beschriftet seine Spalten in der Systemsprache. Der Parser in `updates.js
 nimmt die Positionen aus der Kopfzeile und die Strichlinie darunter, nicht die
 Wörter — sonst funktioniert er in genau einer Sprache. Ein Parser, der nichts findet,
 meldet „alles aktuell", und gute Nachrichten prüft niemand nach.
+
+**Was geprüft wird, gehört in eine eigene Funktion — nicht in den Aufruf.**
+`shell.openExternal(pruefe(x))` wertet erst `shell.openExternal` aus und dann das
+Argument: die Prüfung läuft also *nach* dem Zugriff. In der echten Anwendung fällt
+das nie auf, im Test ohne Electron sofort. Ebenso gehört eine Prüfung vor die
+Plattformabfrage, sonst läuft sie nur unter Windows und nirgends im Test.
+
+**Logiktests fassen nichts an, was einen Prozess startet.** `require` auf ein
+Hauptprozess-Modul ist harmlos, ein Aufruf darin oft nicht: ein Test, der unter
+Linux brav am `IS_WIN`-Riegel scheitert, lief auf dem Windows-Runner durch, startete
+den PowerShell-Host und hielt den Testlauf fünf Minuten lang offen, bis der Host
+wegen Leerlauf aufgab. Testbar ist die reine Funktion davor, nicht die Wirkung.
 
 **Ein leeres Ergebnis ist etwas anderes als ein Fehler.** Unter Windows heißt „nichts
 gefunden" oft Exitcode ungleich null. Wo das zutrifft, muss der Aufrufer unterscheiden

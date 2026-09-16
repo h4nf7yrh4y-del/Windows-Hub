@@ -335,7 +335,10 @@ async function open(target) {
 }
 
 async function reveal(target) {
-  shell.showItemInFolder(requirePath(target, 'Pfad'));
+  // Checked into its own binding first: as an argument it would be evaluated
+  // after the method lookup, putting the validation second.
+  const checked = requirePath(target, 'Pfad');
+  shell.showItemInFolder(checked);
   return { ok: true };
 }
 

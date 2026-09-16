@@ -185,34 +185,45 @@ add('a manifest that cannot be read yields zeroes rather than throwing', () => {
 
 /* ------------------------------------------------------- update triggers */
 
-add('a Steam game id must be numeric', async () => {
-  // The id ends up in a steam:// URI handed to the shell, so it is checked
-  // before the platform is, or the check could only ever run on Windows.
-  await assert.rejects(updates.updateSteamGame('abc'), /Kennung/);
-  await assert.rejects(updates.updateSteamGame('../../evil'), /Kennung/);
-  await assert.rejects(updates.updateSteamGame(''), /Kennung/);
-  await assert.rejects(updates.updateSteamGame(null), /Kennung/);
+/*
+ * These check the shape of what will be handed to the shell, not the handing
+ * over. An earlier version called the trigger functions and asserted that they
+ * stopped at the platform guard, which held on this machine and nowhere else:
+ * on the Windows runner the same calls walked straight past the guard, started
+ * a PowerShell host to look for Steam, and then fell over on an `electron`
+ * module that is a path string outside a real Electron process. The check that
+ * matters is a pure function now, so it is the same check everywhere.
+ */
+
+add('a Steam game id must be numeric', () => {
+  // The id ends up in a steam:// URI handed to the shell.
+  assert.throws(() => updates.steamUpdateUri('abc'), /Kennung/);
+  assert.throws(() => updates.steamUpdateUri('../../evil'), /Kennung/);
+  assert.throws(() => updates.steamUpdateUri('553850 && calc'), /Kennung/);
+  assert.throws(() => updates.steamUpdateUri(''), /Kennung/);
+  assert.throws(() => updates.steamUpdateUri(null), /Kennung/);
 });
 
-add('only the two known Steam modes are accepted', async () => {
-  await assert.rejects(updates.updateSteamGame('553850', 'quatsch'), /Modus/);
-  // Both real modes get past validation and fail only on the platform.
-  await assert.rejects(updates.updateSteamGame('553850', 'launch'), /Windows/);
-  await assert.rejects(updates.updateSteamGame('553850', 'validate'), /Windows/);
+add('only the two known Steam modes are accepted', () => {
+  assert.throws(() => updates.steamUpdateUri('553850', 'quatsch'), /Modus/);
+  // One of the two modes starts a game, so an unknown value must not fall
+  // through to a default that does.
+  assert.strictEqual(updates.steamUpdateUri('553850', 'launch'), 'steam://run/553850');
+  assert.strictEqual(updates.steamUpdateUri('553850', 'validate'), 'steam://validate/553850');
+  assert.strictEqual(updates.steamUpdateUri('553850'), 'steam://validate/553850');
 });
 
-add('an Epic address must be a launcher URI', async () => {
-  await assert.rejects(updates.updateEpicGame('https://example.com'), /Epic-Adresse/);
-  await assert.rejects(updates.updateEpicGame('com.epicgames.launcher://other/x'), /Epic-Adresse/);
-  await assert.rejects(updates.updateEpicGame(''), /Epic-Adresse/);
+add('an Epic address must be a launcher URI', () => {
+  assert.throws(() => updates.epicUpdateUri('https://example.com'), /Epic-Adresse/);
+  assert.throws(() => updates.epicUpdateUri('com.epicgames.launcher://other/x'), /Epic-Adresse/);
+  assert.throws(() => updates.epicUpdateUri(''), /Epic-Adresse/);
   // A space would end the argument; the manifest never produces one.
-  await assert.rejects(updates.updateEpicGame('com.epicgames.launcher://apps/a b'), /Epic-Adresse/);
+  assert.throws(() => updates.epicUpdateUri('com.epicgames.launcher://apps/a b'), /Epic-Adresse/);
 });
 
-add('a real Epic launch URI passes validation', async () => {
+add('a real Epic launch URI passes unchanged', () => {
   const uri = 'com.epicgames.launcher://apps/ns%3Acat%3AFortnite?action=launch&silent=true';
-  await assert.rejects(updates.updateEpicGame(uri), /Windows/,
-    'it should get past the shape check and stop at the platform');
+  assert.strictEqual(updates.epicUpdateUri(uri), uri);
 });
 
 add('opening an unknown target is refused', async () => {
@@ -220,6 +231,8 @@ add('opening an unknown target is refused', async () => {
 });
 
 add('a Steam validation needs a numeric app id', async () => {
+  // openExternal validates through the same function, so a bad id is refused
+  // before anything reaches the shell.
   await assert.rejects(updates.openExternal('steam-validate', '../../evil'), /Kennung/);
   await assert.rejects(updates.openExternal('steam-validate', ''), /Kennung/);
 });
