@@ -81,6 +81,13 @@ export const api = {
     epicGame: call(bridge.updates.epicGame),
     onProgress: bridge.updates.onProgress
   },
+  discord: {
+    state: call(bridge.discord.state),
+    save: call(bridge.discord.save),
+    remove: call(bridge.discord.remove),
+    open: call(bridge.discord.open),
+    parse: call(bridge.discord.parse)
+  },
   audio: {
     list: call(bridge.audio.list),
     setDefault: call(bridge.audio.setDefault)

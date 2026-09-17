@@ -99,6 +99,7 @@ function viewEntries(showView) {
     ['overlays', 'Overlay', 'Schwebende Leistungsanzeigen'],
     ['windows', 'Windows', 'Bildschirme und Systemfunktionen'],
     ['updates', 'Updates', 'Programme, Spiele und System aktualisieren'],
+    ['storage', 'Speicher', 'Was die Platte belegt'],
     ['library', 'Library', 'Gefundene Programme'],
     ['settings', 'Setup', 'Einstellungen']
   ];
@@ -201,6 +202,28 @@ async function featureEntries() {
       run: async () => {
         if (item.canOpen) await api.features.open(item.id);
         else notifyOk(`${item.name} steht unter Windows → Funktionen`);
+      }
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * The Discord jump marks.
+ *
+ * This is where they earn their keep: getting into a voice channel while a
+ * game is loading is two keystrokes here and four clicks in the client.
+ */
+async function discordEntries() {
+  try {
+    const data = await api.discord.state();
+    return (data.shortcuts || []).filter((entry) => entry.link).map((entry) => ({
+      kind: 'discord',
+      title: entry.label,
+      hint: data.running ? 'Discord' : 'Discord (startet erst)',
+      run: async () => {
+        try { await api.discord.open(entry.id); } catch (err) { notifyError(err.message); }
       }
     }));
   } catch (_) {
@@ -356,6 +379,14 @@ export function createPalette({ showView, actions }) {
     // The Windows catalogue needs a system call, so it arrives after the
     // palette is already usable rather than delaying it.
     featureEntries().then((extra) => {
+      if (!openPalette || !extra.length) return;
+      entries = [...entries, ...extra];
+      filter();
+    });
+
+    // Same reason, and cheaper: reading the stored shortcuts needs one round
+    // trip, which is one more than the palette should wait for.
+    discordEntries().then((extra) => {
       if (!openPalette || !extra.length) return;
       entries = [...entries, ...extra];
       filter();

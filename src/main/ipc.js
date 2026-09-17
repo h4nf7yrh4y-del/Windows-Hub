@@ -31,6 +31,7 @@ const storage = require('./storage');
 const triggers = require('./triggers');
 const backup = require('./backup');
 const audio = require('./audio');
+const discord = require('./discord');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -409,6 +410,17 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // different thing entirely: that view reports on other people's software,
   // this one replaces the running application.
   triggers.setNotifier((event) => send('triggers:event', event));
+  /* ------------------------------------------------------------- discord */
+
+  ipcMain.handle('discord:state', wrap(async () => discord.state(), 'discord:state'));
+  ipcMain.handle('discord:save', wrap(async (entry) => discord.save(entry), 'discord:save'));
+  ipcMain.handle('discord:remove', wrap(async (id) => discord.remove(id), 'discord:remove'));
+  ipcMain.handle('discord:open', wrap(async (id) => discord.openStored(id), 'discord:open'));
+  // Parsing is its own channel so the editor can show what it understood
+  // before anything is stored.
+  ipcMain.handle('discord:parse', wrap(async (text) =>
+    discord.parseInvite(requireString(text, 'Adresse')), 'discord:parse'));
+
   ipcMain.handle('audio:list', wrap(async (force) =>
     audio.list({ force: force === true }), 'audio:list'));
   // The id is passed through: it is checked in the audio module, where the

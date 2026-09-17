@@ -153,9 +153,46 @@ In beiden Fällen lädt der Hub kein Spiel selbst herunter, sondern bedient die
 Update-Mechanik des jeweiligen Launchers — der einzige Weg ohne Zugangsdaten. Was
 danach passiert, entscheidet der Client, und die Ansicht sagt das auch so.
 
+*Der Hub selbst* steht als erster Abschnitt drin, weil er der einzige Eintrag ist, für
+den er ganz verantwortlich ist. Er lädt seine eigene neue Fassung und startet neu.
+Drei Fälle können das nicht und sagen es: eine Fassung aus dem Quellcode hat keine
+Installation zum Ersetzen, die portable exe kann sich nicht selbst überschreiben
+(sie prüft trotzdem und verlinkt den Download), und ohne Windows gibt es nichts zu tun.
+
 *Windows-Update und Store* werden verlinkt, nicht ausgelöst. Ohne erhöhte Rechte und
 ohne Zusatzmodul geht das nicht, und ein Knopf, der so tut als ob, wäre schlimmer als
 einer, der weiterleitet.
+
+**Speicher.** Was die Platte belegt — und ob es das zurückgibt. Größe allein ist keine
+Entscheidung: ein 120-GB-Spiel, das jeden Abend läuft, ist kein Problem, ein 90-GB-Spiel
+seit letztem Jahr schon. Jede Zeile trägt beides, und die Voreinstellung gewichtet die
+Größe damit, wie lange das Spiel schon daliegt. Die Zahlen stehen bei Steam ohnehin in
+den Manifesten; Epic nennt weder Größe noch letzten Start, also sagen diese Zeilen das
+und bieten an, den Ordner zu zählen — auf Anfrage, ein Spiel nach dem anderen. Entfernt
+wird über Steam, nicht von Hand: Steam weiß, welche Dateien es mit einem anderen Titel
+teilt.
+
+**Profil-Auslöser.** Ein Profil ging bisher nur in eine Richtung. Startest du dasselbe
+Spiel über Steam, blieb der Energieplan, wie er war. Der Hub schaut jetzt in der
+Prozessliste nach und zieht den Systemteil nach — die Programme startet er bewusst
+nicht, denn das Spiel läuft ja schon. Weg ist ein Programm erst nach drei Durchläufen:
+Spiele starten ihren eigenen Prozess beim Wechsel vom Launcher zur Engine neu.
+
+**Wiedergabegerät pro Profil.** Headset fürs Spiel, Boxen für den Film. Windows
+dokumentiert das Auflisten der Geräte, nicht das Umschalten — der Hub nutzt dieselbe
+undokumentierte Schnittstelle wie jedes andere Umschaltprogramm. Deshalb sind beide
+Hälften getrennt: bricht das Umschalten mit einem Windows-Update, zeigt der Hub weiter
+an, was aktiv ist, und das Profil startet trotzdem.
+
+**Sichern und übertragen.** Profile, Einstellungen, Zeitpläne und eigene Programme
+lassen sich in eine Datei schreiben und anderswo einlesen. Was nur hier gilt — gemerkte
+Systemänderungen, Spielzeit, Monitorwahl — bleibt bewusst zurück und steht auch so in
+der Oberfläche.
+
+**Discord.** Sprungmarken in den Client über `discord://`: Server, Kanal, Sprachkanal,
+und in der Befehlspalette zwei Tastendrücke statt vier Klicks. Chat und Sprache *im*
+Hub gehen nicht — dafür müsste sich der Hub mit deinem Account anmelden, was Discord
+als Selfbot verbietet und mit Accountsperre ahndet.
 
 Die winget-Ausgabe wird nach Spaltenpositionen gelesen, nicht nach den Überschriften —
 die sind in der Systemsprache beschriftet, und ein Parser, der auf „Available" wartet,

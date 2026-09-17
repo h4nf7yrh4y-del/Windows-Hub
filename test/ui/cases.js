@@ -854,6 +854,39 @@ module.exports = [
   },
 
   {
+    name: 'Discord: Sprungmarken und die Grenze',
+    async run(t) {
+      await t.view('settings');
+      await t.waitFor(`/Selfbot/.test(document.querySelector('#view-settings').textContent)`,
+        { label: 'Discord-Panel', timeout: 30000 });
+
+      // The panel names what cannot be built, rather than leaving someone to
+      // wonder why there is no chat window.
+      const body = (await t.text('#view-settings')) || '';
+      t.assert(/Chat und Sprache/.test(body), 'Die Grenze steht in der Oberfläche');
+      t.assert(/Sprungmarke|Link aus Discord/.test(body), 'Sprungmarken lassen sich anlegen');
+
+      // Every id reaches a URI the shell executes, and every check sits in
+      // front of the platform guard so it means the same thing here.
+      await assertRejects(t, `window.hub.discord.save({ kind: 'server', guildId: 'nein' })`, 'Server-Kennung',
+        'Eine unsinnige Server-Kennung wird abgewiesen');
+      await assertRejects(t, `window.hub.discord.save({ kind: 'quatsch' })`, 'Discord-Art',
+        'Eine unbekannte Art wird abgewiesen');
+      await assertRejects(t, `window.hub.discord.open('gibt-es-nicht')`, 'gibt es nicht',
+        'Eine unbekannte Verknüpfung wird abgewiesen');
+
+      const parsed = await t.evalExpr(
+        `window.hub.discord.parse('https://discord.com/channels/123456789012345678/987654321098765432').then((r) => r.data)`);
+      t.assert(parsed && parsed.guildId === '123456789012345678', 'Ein kopierter Link wird verstanden',
+        JSON.stringify(parsed));
+
+      const nonsense = await t.evalExpr(
+        `window.hub.discord.parse('https://example.com/channels/1/2').then((r) => r.data)`);
+      t.eq(nonsense, null, 'Ein fremder Link liefert nichts statt einer falschen Adresse');
+    }
+  },
+
+  {
     name: 'Sicherung: Panel, Prüfung, abgewiesene Eingaben',
     async run(t) {
       await t.view('settings');

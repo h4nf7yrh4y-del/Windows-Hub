@@ -172,6 +172,94 @@ export function createSettingsView() {
       }
     })));
 
+  /* ----------------------------------------------------------------- discord */
+
+  const discordList = el('div', { class: 'stack gap-8' });
+  const discordNote = el('div', { class: 'setting-hint', text: 'Wird gelesen …' });
+
+  const discordLabel = el('input', { class: 'input', placeholder: 'Name, etwa „Sprachchat Freitags"' });
+  const discordLink = el('input', {
+    class: 'input',
+    placeholder: 'Link aus Discord einfügen (Rechtsklick auf Kanal → Link kopieren)'
+  });
+
+  async function refreshDiscord() {
+    let data;
+    try {
+      data = await api.discord.state();
+    } catch (err) {
+      discordNote.textContent = err.message;
+      return;
+    }
+
+    discordNote.textContent = data.note;
+    clear(discordList);
+
+    if (!data.shortcuts.length) {
+      discordList.appendChild(el('div', { class: 'setting-hint',
+        text: 'Noch keine Sprungmarken. Ein Kanal-Link reicht.' }));
+      return;
+    }
+
+    for (const entry of data.shortcuts) {
+      discordList.appendChild(el('div', { class: 'row gap-8 between' }, [
+        el('div', { class: 'stack gap-2 grow', style: { minWidth: '0' } }, [
+          el('div', { class: 'setting-label', text: entry.label }),
+          el('div', { class: 'setting-hint mono truncate', text: entry.link || 'Adresse unvollständig' })
+        ]),
+        el('button', {
+          class: 'btn subtle sm',
+          text: 'Öffnen',
+          onClick: async () => {
+            try { await api.discord.open(entry.id); } catch (err) { notifyError(err.message); }
+          }
+        }),
+        el('button', {
+          class: 'btn danger sm',
+          text: 'Entfernen',
+          onClick: async () => {
+            try { await api.discord.remove(entry.id); await refreshDiscord(); } catch (err) { notifyError(err.message); }
+          }
+        })
+      ]));
+    }
+  }
+
+  /**
+   * Turns a pasted Discord link into a shortcut.
+   *
+   * The link is parsed in the main process rather than here, so what gets
+   * stored is what was understood — and an address that was not understood is
+   * refused now instead of failing silently the first time someone uses it
+   * mid-game.
+   */
+  async function addDiscord() {
+    const text = discordLink.value.trim();
+    if (!text) { notifyError('Erst einen Link einfügen'); return; }
+
+    try {
+      const parsed = await api.discord.parse(text);
+      if (!parsed) {
+        notifyError('Das sieht nicht nach einem Discord-Link aus');
+        return;
+      }
+      await api.discord.save({
+        label: discordLabel.value.trim(),
+        kind: parsed.channelId ? 'channel' : 'server',
+        guildId: parsed.guildId,
+        channelId: parsed.channelId
+      });
+      discordLabel.value = '';
+      discordLink.value = '';
+      await refreshDiscord();
+      notifyOk('Sprungmarke angelegt');
+    } catch (err) {
+      notifyError(err.message);
+    }
+  }
+
+  refreshDiscord();
+
   /* ------------------------------------------------------------------ backup */
 
   const backupLine = el('div', { class: 'setting-hint',
@@ -717,6 +805,22 @@ export function createSettingsView() {
             }
           })
         ])
+      ]),
+
+      panel('Discord', [
+        discordNote,
+        el('div', { style: { height: '12px' } }),
+        discordList,
+        el('div', { class: 'stack gap-8', style: { marginTop: '12px' } }, [
+          discordLabel,
+          el('div', { class: 'row gap-8' }, [
+            discordLink,
+            el('button', { class: 'btn primary sm', text: 'Anlegen', onClick: addDiscord })
+          ])
+        ]),
+        el('div', { class: 'setting-hint', style: { marginTop: '12px' },
+          text: 'Angelegte Sprungmarken tauchen auch in der Befehlspalette auf — dort kosten sie '
+            + 'zwei Tastendrücke statt vier Klicks im Client.' })
       ]),
 
       panel('Sichern und übertragen', [

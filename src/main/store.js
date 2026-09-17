@@ -46,7 +46,9 @@ const DEFAULTS = {
   // Second-screen board: whether it is open, and on which monitor.
   dashboard: { enabled: false, display: null, autoOpen: false },
   // How long each profile actually ran. Appended when a session ends.
-  playSessions: []
+  playSessions: [],
+  // Jump marks into the Discord client. Not chat -- see discord.js for why.
+  discord: []
 };
 
 let cache = null;

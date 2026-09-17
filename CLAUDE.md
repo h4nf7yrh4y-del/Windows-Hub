@@ -10,8 +10,8 @@ Ein Hauptprozess, mehrere Fenster, kein Bundler.
 npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
 npm run lint        # Syntaxprüfung aller Quelldateien
-npm test            # Logiktests, ~190 Zusicherungen
-npm run test:ui     # startet die echte App und bedient 22 Ansichten
+npm test            # Logiktests, ~280 Zusicherungen
+npm run test:ui     # startet die echte App und bedient 26 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
 ```
@@ -105,6 +105,22 @@ Hosts — alles, was dahinter wartet, zahlt zusätzlich einen kalten PowerShell-
 Ein knappes Limit macht eine langsame Abfrage also nicht billiger, sondern teurer. Was
 bekanntermaßen lange dauert, bekommt Zeit und `{ background: true }`, damit es sich
 nicht vor etwas drängelt, auf das jemand wartet.
+
+**Ein unbekannter Wert wird abgewiesen, nicht auf den harmlosen zurückgesetzt.** Das
+Muster ist hier dreimal aufgetreten: ein unbekannter Steam-Modus, eine unbekannte
+Sicherungs-Art, eine unbekannte Discord-Art. Jedes Mal sah der Rückfall harmlos aus,
+und jedes Mal hätte er die Prüfung genau dort ausgehebelt, wo sie gebraucht wird — eine
+vertippte Sprungmarke in den Sprachkanal wird sonst zu „Discord öffnen", steht richtig
+in der Liste und springt woanders hin.
+
+**Kennungen kommen aus `crypto.randomUUID()`, nicht aus der Uhr.** `Date.now()` als
+Kennung heißt: zwei Einträge in derselben Millisekunde teilen sich eine, und der zweite
+überschreibt den ersten stillschweigend.
+
+**Zusicherungen auf feste Anzahlen brechen beim nächsten Feature.** „Zehn Einträge in
+der Seitenleiste" und „der erste Abschnitt ist winget" sind beide schon gebrochen, und
+zwar aus dem einzigen Grund, der kein Fehler ist. Geprüft wird, was da sein muss — über
+seinen Namen, nicht über seine Position.
 
 **Ein leeres Ergebnis ist etwas anderes als ein Fehler.** Unter Windows heißt „nichts
 gefunden" oft Exitcode ungleich null. Wo das zutrifft, muss der Aufrufer unterscheiden

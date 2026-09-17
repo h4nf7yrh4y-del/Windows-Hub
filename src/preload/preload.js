@@ -69,6 +69,13 @@ contextBridge.exposeInMainWorld('hub', {
     epicGame: (uri) => invoke('updates:epicGame', uri),
     onProgress: (handler) => on('updates:progress', handler)
   },
+  discord: {
+    state: () => invoke('discord:state'),
+    save: (entry) => invoke('discord:save', entry),
+    remove: (id) => invoke('discord:remove', id),
+    open: (id) => invoke('discord:open', id),
+    parse: (text) => invoke('discord:parse', text)
+  },
   audio: {
     list: (force) => invoke('audio:list', force),
     setDefault: (id) => invoke('audio:setDefault', id)
