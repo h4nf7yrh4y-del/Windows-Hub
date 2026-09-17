@@ -683,6 +683,51 @@ module.exports = [
   },
 
   {
+    name: 'Profil-Auslöser: Schalter, Herleitung, Grenzen',
+    async run(t) {
+      await t.view('hub');
+      await t.click('.profile-card:not(.add-card) .card-actions .icon-btn:last-child');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Editor' });
+      await t.clickText('.modal .tab', 'System');
+      await t.waitFor(`/Von selbst reagieren/.test(document.querySelector('.modal').textContent)`,
+        { label: 'Auslöser-Abschnitt' });
+
+      // Off by default. A profile that starts changing the power plan because
+      // a process appeared, without anyone asking for it, would be a surprise.
+      const before = await t.text('.modal');
+      t.assert(!/Worauf geachtet wird/.test(before),
+        'Ohne Schalter bleibt der Auslöser-Teil eingeklappt');
+
+      await t.evalExpr(`(() => {
+        const rows = [...document.querySelectorAll('.modal .setting-row')];
+        const row = rows.find((r) => r.textContent.includes('Auf startende Programme achten'));
+        row.querySelector('.toggle').click();
+        return true;
+      })()`);
+      await t.waitFor(`/Worauf geachtet wird/.test(document.querySelector('.modal').textContent)`,
+        { label: 'ausgeklappter Auslöser' });
+
+      const after = (await t.text('.modal')) || '';
+      t.assert(/Nur Systemzustand|Ganzes Profil/.test(after), 'Die Wirkung lässt sich wählen');
+      t.assert(/Leer heißt|Sobald einer dieser Prozesse/.test(after),
+        'Es steht dabei, worauf geachtet wird');
+
+      await t.clickText('.modal .btn', 'Abbrechen');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Editor' });
+
+      // The watcher only polls while a profile wants it, and the listing says
+      // per profile whether it could ever fire.
+      const rows = await t.evalExpr(`window.hub.triggers.list().then((r) => r.data)`);
+      t.assert(Array.isArray(rows), 'Die Auslöser lassen sich auflisten');
+      for (const row of rows) {
+        t.assert(typeof row.usable === 'boolean', 'Jeder Eintrag sagt, ob er greifen kann');
+        t.assert(row.usable || !row.trigger.enabled || (row.reason || '').length > 20,
+          'Kann er nicht greifen, steht der Grund dabei', JSON.stringify(row));
+      }
+    }
+  },
+
+  {
     name: 'Speicher: Laufwerke, Sortierung, Grenzen',
     async run(t) {
       await t.view('storage');

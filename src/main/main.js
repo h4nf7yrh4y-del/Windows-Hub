@@ -14,6 +14,7 @@ const claudesession = require('./claudesession');
 const tweaks = require('./tweaks');
 const pshost = require('./pshost');
 const scheduler = require('./scheduler');
+const triggers = require('./triggers');
 const sessions = require('./sessions');
 const display = require('./display');
 const screens = require('./screens');
@@ -366,6 +367,10 @@ app.on('ready', () => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
   });
 
+  // Starts polling only if a profile actually asks for it, so a hub without
+  // triggers costs nothing.
+  triggers.refresh();
+
   // A power plan the hub switched must not outlive the hub. If a snapshot is
   // still on disk, the last run ended without getting to undo it.
   tweaks.restoreAfterCrash().catch((err) => log.error(`Systemzustand: ${err.message}`));
@@ -403,6 +408,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   log.info('Hub wird beendet');
   scheduler.stop();
+  triggers.stop();
   sessions.stop();
   pshost.dispose();
   hotkeys.dispose();

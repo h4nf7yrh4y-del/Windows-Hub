@@ -28,6 +28,7 @@ const claudecode = require('./claudecode');
 const claudesession = require('./claudesession');
 const selfupdate = require('./selfupdate');
 const storage = require('./storage');
+const triggers = require('./triggers');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -96,6 +97,7 @@ function sanitizeProfile(raw) {
     alsoClose: Array.isArray(raw.alsoClose) ? raw.alsoClose.filter((x) => typeof x === 'string') : [],
     minimizeOnLaunch: raw.minimizeOnLaunch !== false,
     system: tweaks.sanitize(raw.system),
+    trigger: triggers.sanitize(raw.trigger),
     createdAt: Number(raw.createdAt) || Date.now(),
     lastLaunched: Number(raw.lastLaunched) || 0,
     launchCount: Number(raw.launchCount) || 0
@@ -239,6 +241,9 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     if (index >= 0) state.profiles[index] = { ...state.profiles[index], ...profile };
     else state.profiles.push(profile);
     store.save();
+    // The watcher polls only while at least one profile wants it, so every
+    // change to the profiles has to be told.
+    triggers.refresh();
     return profile;
   }, 'profiles:save'));
 
@@ -249,6 +254,7 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     state.profiles = state.profiles.filter((p) => p.id !== profileId);
     if (state.lastProfileId === profileId) state.lastProfileId = null;
     store.save();
+    triggers.refresh();
     return { removed: before - state.profiles.length };
   }, 'profiles:delete'));
 
@@ -400,6 +406,10 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // The hub's own update. Kept apart from `updates:*` because it is a
   // different thing entirely: that view reports on other people's software,
   // this one replaces the running application.
+  triggers.setNotifier((event) => send('triggers:event', event));
+  ipcMain.handle('triggers:list', wrap(async () => triggers.list(), 'triggers:list'));
+  ipcMain.handle('triggers:refresh', wrap(async () => triggers.refresh(), 'triggers:refresh'));
+
   ipcMain.handle('storage:overview', wrap(async () => storage.overview(), 'storage:overview'));
   ipcMain.handle('storage:measure', wrap(async (dir) =>
     storage.measure(requireString(dir, 'Ordner')), 'storage:measure'));

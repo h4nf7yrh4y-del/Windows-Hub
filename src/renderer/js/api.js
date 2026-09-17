@@ -81,6 +81,11 @@ export const api = {
     epicGame: call(bridge.updates.epicGame),
     onProgress: bridge.updates.onProgress
   },
+  triggers: {
+    list: call(bridge.triggers.list),
+    refresh: call(bridge.triggers.refresh),
+    onEvent: bridge.triggers.onEvent
+  },
   storage: {
     overview: call(bridge.storage.overview),
     measure: call(bridge.storage.measure),

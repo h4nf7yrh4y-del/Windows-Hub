@@ -139,6 +139,94 @@ export function createSystemSection(profile) {
   const system = profile.system;
   if (!Array.isArray(profile.alsoClose)) profile.alsoClose = [];
 
+  profile.trigger = { enabled: false, processes: [], action: 'system', revertOnExit: true, ...(profile.trigger || {}) };
+  const trigger = profile.trigger;
+  if (!Array.isArray(trigger.processes)) trigger.processes = [];
+
+  const triggerDetail = el('div', { class: 'stack gap-8' });
+
+  const triggerNameInput = el('input', {
+    class: 'input',
+    placeholder: 'Prozessname, etwa helldivers2',
+    onkeydown: (event) => { if (event.key === 'Enter') { event.preventDefault(); addTriggerName(); } }
+  });
+
+  function addTriggerName() {
+    const raw = triggerNameInput.value.trim().replace(/\.exe$/i, '');
+    if (!raw) return;
+    if (!trigger.processes.includes(raw)) trigger.processes.push(raw);
+    triggerNameInput.value = '';
+    renderTriggerDetail();
+  }
+
+  /**
+   * The part below the switch.
+   *
+   * Redrawn rather than toggled so the hint can state what will actually be
+   * watched: with no names of its own the trigger falls back to the profile's
+   * own programs, and a profile made only of launcher URIs then has nothing to
+   * watch at all. A trigger that can never fire looks exactly like one that
+   * has not fired yet, so it says so.
+   */
+  function renderTriggerDetail() {
+    clear(triggerDetail);
+    if (!trigger.enabled) return;
+
+    triggerDetail.appendChild(el('div', { class: 'setting-row' }, [
+      el('div', {}, [
+        el('div', { class: 'setting-label', text: 'Was dann passiert' }),
+        el('div', { class: 'setting-hint', text: trigger.action === 'full'
+          ? 'Das ganze Profil wird gestartet. Vorsicht: läuft das Spiel schon, startet der Hub es ein zweites Mal.'
+          : 'Nur der Systemteil dieses Reiters wird angewendet — Energieplan, Priorität, Programme schließen. '
+            + 'Die Programme des Profils werden nicht gestartet, weil das erkannte Programm ja schon läuft.' })
+      ]),
+      el('select', {
+        class: 'select',
+        onchange: (event) => { trigger.action = event.target.value; renderTriggerDetail(); }
+      }, [
+        el('option', { value: 'system', text: 'Nur Systemzustand', selected: trigger.action !== 'full' ? '' : null }),
+        el('option', { value: 'full', text: 'Ganzes Profil starten', selected: trigger.action === 'full' ? '' : null })
+      ])
+    ]));
+
+    triggerDetail.appendChild(toggleRow(
+      'Beim Beenden wieder zurücksetzen',
+      'Der Zustand wird erst zurückgegeben, wenn das Programm drei Durchläufe lang weg ist — '
+      + 'Spiele starten ihren eigenen Prozess beim Wechsel vom Launcher zur Engine neu.',
+      () => trigger.revertOnExit !== false,
+      (v) => { trigger.revertOnExit = v; }
+    ));
+
+    const chips = el('div', { class: 'chip-row' });
+    for (const name of trigger.processes) {
+      chips.appendChild(el('span', { class: 'chip' }, [
+        name,
+        el('button', {
+          class: 'chip-x',
+          title: 'Entfernen',
+          onClick: () => {
+            trigger.processes = trigger.processes.filter((n) => n !== name);
+            renderTriggerDetail();
+          }
+        }, ['×'])
+      ]));
+    }
+
+    triggerDetail.appendChild(el('div', { class: 'setting-block' }, [
+      el('div', { class: 'setting-label', text: 'Worauf geachtet wird' }),
+      trigger.processes.length ? chips : null,
+      el('div', { class: 'row gap-8' }, [
+        triggerNameInput,
+        el('button', { class: 'btn subtle sm', onClick: addTriggerName },
+          [svg(ICON_PLUS, { width: 13, height: 13 }), 'Hinzufügen'])
+      ]),
+      el('div', { class: 'setting-hint', text: trigger.processes.length
+        ? 'Sobald einer dieser Prozesse auftaucht, greift der Auslöser.'
+        : 'Leer heißt: die Programme dieses Profils. Besteht das Profil nur aus Launcher-Adressen '
+          + 'wie steam://, lässt sich daraus kein Prozess ableiten — dann trage hier einen von Hand ein.' })
+    ]));
+  }
+
   /* ------------------------------------------------------------ power plan */
 
   const planSelect = el('select', { class: 'select' }, [
@@ -283,7 +371,7 @@ export function createSystemSection(profile) {
 
   /* ----------------------------------------------------------------- shell */
 
-  return el('div', { class: 'stack gap-12' }, [
+  const section = el('div', { class: 'stack gap-12' }, [
     el('div', { class: 'row between' }, [
       el('span', { class: 'label', text: 'Systemzustand' }),
       el('span', { class: 'faint', style: { fontSize: '11px' }, text: 'Alles hier wird beim Beenden des Profils zurückgenommen' })
@@ -365,6 +453,29 @@ export function createSystemSection(profile) {
       'Aus lassen heißt: Energieplan und geschlossene Programme bleiben, wie das Profil sie hinterlassen hat.',
       () => system.restore !== false,
       (v) => { system.restore = v; }
-    )
+    ),
+
+    /* ------------------------------------------------------------ trigger */
+
+    el('div', { class: 'setting-group' }, [
+      el('div', { class: 'setting-title', text: 'Von selbst reagieren' }),
+      el('div', { class: 'setting-hint', text:
+        'Bisher geht das Profil nur in eine Richtung: Start drücken, und es startet seine Programme und '
+        + 'ändert den Systemzustand. Startest du dasselbe Spiel direkt über Steam, passiert nichts davon. '
+        + 'Mit dieser Einstellung schaut der Hub in der Prozessliste nach und zieht nach.' }),
+
+      toggleRow(
+        'Auf startende Programme achten',
+        'Geprüft wird alle vier Sekunden in der Prozessliste, die der Hub ohnehin abfragt. '
+        + 'Nutzt kein Profil das, wird gar nicht geprüft.',
+        () => !!trigger.enabled,
+        (v) => { trigger.enabled = v; renderTriggerDetail(); }
+      ),
+
+      triggerDetail
+    ])
   ]);
+
+  renderTriggerDetail();
+  return section;
 }
