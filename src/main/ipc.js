@@ -29,6 +29,7 @@ const claudesession = require('./claudesession');
 const selfupdate = require('./selfupdate');
 const storage = require('./storage');
 const triggers = require('./triggers');
+const backup = require('./backup');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -407,6 +408,46 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // different thing entirely: that view reports on other people's software,
   // this one replaces the running application.
   triggers.setNotifier((event) => send('triggers:event', event));
+  /* -------------------------------------------------------------- backup */
+
+  // The file dialogs live here rather than in the renderer: the renderer never
+  // learns a path it did not already have, and an import cannot be aimed at a
+  // file the user did not pick.
+  ipcMain.handle('backup:export', wrap(async () => {
+    const win = getWindow();
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Einstellungen sichern',
+      defaultPath: backup.suggestedName(),
+      filters: [{ name: 'Sicherung', extensions: ['json'] }]
+    });
+    if (result.canceled || !result.filePath) return null;
+    return backup.exportTo(result.filePath);
+  }, 'backup:export'));
+
+  ipcMain.handle('backup:inspect', wrap(async () => {
+    const win = getWindow();
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Sicherung auswählen',
+      properties: ['openFile'],
+      filters: [{ name: 'Sicherung', extensions: ['json'] }]
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    const file = result.filePaths[0];
+    const text = await require('fs').promises.readFile(file, 'utf8');
+    // The contents travel back with the summary so importing does not have to
+    // read the file a second time and find something different.
+    return { file, text, summary: backup.inspect(text) };
+  }, 'backup:inspect'));
+
+  // The mode is passed through rather than normalised: "replace" discards
+  // profiles, and quietly turning an unknown value into a valid one would
+  // defeat the check that exists to refuse it.
+  ipcMain.handle('backup:import', wrap(async (text, mode) => {
+    const result = await backup.importFrom(requireString(text, 'Sicherung'), { mode });
+    triggers.refresh();
+    return result;
+  }, 'backup:import'));
+
   ipcMain.handle('triggers:list', wrap(async () => triggers.list(), 'triggers:list'));
   ipcMain.handle('triggers:refresh', wrap(async () => triggers.refresh(), 'triggers:refresh'));
 

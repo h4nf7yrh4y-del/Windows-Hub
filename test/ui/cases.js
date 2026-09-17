@@ -848,6 +848,32 @@ module.exports = [
   },
 
   {
+    name: 'Sicherung: Panel, Prüfung, abgewiesene Eingaben',
+    async run(t) {
+      await t.view('settings');
+      await t.waitFor(`/Sichern und übertragen/.test(document.querySelector('#view-settings').textContent)`,
+        { label: 'Sicherungs-Panel', timeout: 30000 });
+
+      const body = (await t.text('#view-settings')) || '';
+      t.assert(/Einstellungen sichern/.test(body), 'Sichern lässt sich auslösen');
+      t.assert(/Sicherung einlesen/.test(body), 'Einlesen lässt sich auslösen');
+      // The panel names what it deliberately leaves behind, rather than
+      // letting someone discover it on the other machine.
+      t.assert(/Nicht mitgenommen/.test(body), 'Es steht dabei, was nicht mitgeht');
+
+      // Checked in the main process. A folder of json files is the normal way
+      // to pick the wrong one, and an import that half-reads it loses profiles.
+      await assertRejects(t, `window.hub.backup.import('kein json', 'merge')`, 'JSON',
+        'Etwas, das kein JSON ist, wird abgewiesen');
+      await assertRejects(t, `window.hub.backup.import('{"some":"other file"}', 'merge')`, 'Windows Hub',
+        'Fremdes JSON wird abgewiesen');
+      await assertRejects(t,
+        `window.hub.backup.import('{"format":"windows-hub-backup","formatVersion":1,"data":{}}', 'quatsch')`,
+        'Modus', 'Ein unbekannter Modus wird abgewiesen');
+    }
+  },
+
+  {
     name: 'Diagnosebericht wird erzeugt und ist bereinigt',
     async run(t) {
       const report = await t.evalExpr(`window.hub.diagnostics.build().then((r) => r.ok ? r.data.report : 'FEHLER: ' + r.error)`);

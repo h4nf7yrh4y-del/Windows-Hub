@@ -172,6 +172,63 @@ export function createSettingsView() {
       }
     })));
 
+  /* ------------------------------------------------------------------ backup */
+
+  const backupLine = el('div', { class: 'setting-hint',
+    text: 'Alles, was der Hub weiß, liegt in einer Datei. Diese lässt sich wegsichern und anderswo einlesen.' });
+
+  async function exportBackup() {
+    try {
+      const result = await api.backup.export();
+      if (!result) return;
+      backupLine.textContent = `Gesichert: ${result.profiles} Profile, ${result.schedules} Zeitpläne `
+        + `(${bytes(result.bytes)})`;
+      notifyOk('Sicherung geschrieben');
+    } catch (err) {
+      notifyError(err.message);
+    }
+  }
+
+  /**
+   * Reads the file, shows what is in it, and only then asks.
+   *
+   * An import is the one action here that can lose work, so the dialog names
+   * the profiles it found rather than asking about a file path. Adding is the
+   * default; replacing is offered but has to be chosen.
+   */
+  async function importBackup() {
+    let picked;
+    try {
+      picked = await api.backup.inspect();
+    } catch (err) {
+      notifyError(err.message);
+      return;
+    }
+    if (!picked) return;
+
+    const { summary } = picked;
+    const names = summary.profileNames.slice(0, 8).join(', ');
+    const sure = await confirmDialog({
+      title: 'Sicherung einlesen',
+      message: `Gefunden: ${summary.profiles} Profile${names ? ` (${names}${summary.profiles > 8 ? ' …' : ''})` : ''}`
+        + `, ${summary.schedules} Zeitpläne${summary.hasSettings ? ', Einstellungen' : ''}.\n\n`
+        + 'Die Profile werden zu den vorhandenen hinzugefügt; gleiche Kennungen werden ersetzt. '
+        + 'Die aktuelle Konfiguration wird vorher neben sich selbst kopiert.',
+      confirmLabel: 'Hinzufügen',
+      width: '540px'
+    });
+    if (!sure) return;
+
+    try {
+      const result = await api.backup.import(picked.text, 'merge');
+      backupLine.textContent = `Eingelesen: ${result.added} neu, ${result.updated} ersetzt, `
+        + `${result.kept} unverändert`;
+      notifyOk('Sicherung eingelesen. Die Profilansicht zeigt sie nach dem Neuladen.');
+    } catch (err) {
+      notifyError(err.message);
+    }
+  }
+
   /* ------------------------------------------------------------- diagnostics */
 
   const diag = el('div', { class: 'kv-list' });
@@ -660,6 +717,19 @@ export function createSettingsView() {
             }
           })
         ])
+      ]),
+
+      panel('Sichern und übertragen', [
+        backupLine,
+        el('div', { class: 'row gap-8', style: { flexWrap: 'wrap', marginTop: '12px' } }, [
+          el('button', { class: 'btn primary sm', text: 'Einstellungen sichern', onClick: exportBackup }),
+          el('button', { class: 'btn subtle sm', text: 'Sicherung einlesen', onClick: importBackup })
+        ]),
+        el('div', { class: 'setting-hint', style: { marginTop: '12px', lineHeight: '1.65' },
+          text: 'Mitgenommen werden Profile, Einstellungen, Zeitpläne und selbst angelegte Programme. '
+            + 'Nicht mitgenommen wird, was nur auf diesem Rechner gilt: gemerkte Systemänderungen, '
+            + 'Spielzeit, Claude-Sitzungen und die Monitorwahl. Auf einem anderen Rechner wären das '
+            + 'Angaben über Dinge, die es dort nicht gibt.' })
       ]),
 
       panel('Diagnose', [

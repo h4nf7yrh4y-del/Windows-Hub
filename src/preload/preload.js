@@ -69,6 +69,11 @@ contextBridge.exposeInMainWorld('hub', {
     epicGame: (uri) => invoke('updates:epicGame', uri),
     onProgress: (handler) => on('updates:progress', handler)
   },
+  backup: {
+    export: () => invoke('backup:export'),
+    inspect: () => invoke('backup:inspect'),
+    import: (text, mode) => invoke('backup:import', text, mode)
+  },
   triggers: {
     list: () => invoke('triggers:list'),
     refresh: () => invoke('triggers:refresh'),
