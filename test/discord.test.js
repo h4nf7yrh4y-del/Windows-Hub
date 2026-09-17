@@ -92,9 +92,13 @@ add('a channel without its server is refused', () => {
   assert.throws(() => discord.linkFor({ kind: 'channel', channelId: CHANNEL }), /Server-Kennung/);
 });
 
-add('the check runs before the platform, so it runs here', async () => {
+add('a bad id is refused as a bad id on every platform', async () => {
+  // Deliberately only the refusal. Asserting that a valid entry "stops at the
+  // platform guard" would, on Windows, mean no guard to stop at: the call
+  // would go through and actually open Discord. The ordering of the check is
+  // what this proves, and the refusal proves it on any machine.
   await assert.rejects(discord.open({ kind: 'server', guildId: 'nope' }), /Server-Kennung/);
-  await assert.rejects(discord.open({ kind: 'app' }), /Windows/);
+  await assert.rejects(discord.open({ kind: 'quatsch' }), /Discord-Art/);
 });
 
 /* ---------------------------------------------------------------- parsing */
@@ -192,11 +196,11 @@ add('opening a shortcut that does not exist says so', async () => {
 
 /* ------------------------------------------------------------ the honesty */
 
-add('the state says outright what is not possible', async () => {
-  const state = await discord.state();
-  assert.ok(/Selfbot/i.test(state.note), state.note);
-  assert.ok(/Chat und Sprache/.test(state.note), state.note);
-  assert.strictEqual(typeof state.running, 'boolean');
+add('the note says outright what is not possible', () => {
+  // The constant rather than `state()`: that would ask for a process list,
+  // which on Windows starts the PowerShell host and holds the run open.
+  assert.ok(/Selfbot/i.test(discord.LIMIT_NOTE), discord.LIMIT_NOTE);
+  assert.ok(/Chat und Sprache/.test(discord.LIMIT_NOTE), discord.LIMIT_NOTE);
 });
 
 (async () => {

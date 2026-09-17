@@ -80,19 +80,31 @@ add('a quote cannot travel inside an id', () => {
   assert.throws(() => audio.checkDeviceId("{0.0.0.0}.{'}"), /Gerätekennung/);
 });
 
-add('the check runs before the platform, so it runs here', async () => {
-  // On Linux a bad id must still be refused as a bad id, not as "Windows only".
+add('a bad id is refused as a bad id on every platform', async () => {
+  // The refusal has to read the same everywhere. If the shape check sat behind
+  // the platform guard, this would come back as "Windows only" off Windows and
+  // the check itself would never be exercised.
   await assert.rejects(audio.setDefault('nonsense'), /Gerätekennung/);
-  // And a well-formed one gets past the shape check and stops at the platform.
-  await assert.rejects(audio.setDefault(REAL_ID), /Windows/);
+  await assert.rejects(audio.setDefault(''), /Gerätekennung/);
 });
 
-add('listing off Windows reports why rather than an empty list', async () => {
-  const result = await audio.list();
-  assert.strictEqual(result.supported, false);
-  assert.ok(result.note && result.note.length > 10, String(result.note));
-  assert.deepStrictEqual(result.devices, []);
-});
+/*
+ * There is deliberately no case here that calls setDefault or list with
+ * something valid.
+ *
+ * The first version did, asserting that a well-formed id "stops at the
+ * platform guard". On Windows there is no guard to stop at: the call went
+ * through, compiled the C# helper, asked Windows to switch to a device the
+ * runner does not have, and held the test run open for five minutes waiting
+ * for the PowerShell host to go idle. Which is both of this project's rules
+ * about tests at once -- a test that calls an action performs it, and logic
+ * tests do not touch anything that starts a process.
+ *
+ * What those cases were really about is the ordering of the check, and that is
+ * covered above: the refusal works on any machine, which is only possible
+ * because the check runs first. The real device list is exercised by the
+ * interface tests, which start the actual application.
+ */
 
 /* ---------------------------------------------------- the profile setting */
 

@@ -84,6 +84,15 @@ wiederholt, zahlt sie ein zweites Mal. Auf dem Windows-Runner waren das neunzig
 Sekunden pro winget-Aufruf und drei zusätzliche Minuten für die Suite. Geprüft wird,
 was die Ansicht anzeigt, nicht was sich noch einmal abrufen lässt.
 
+**Kein Logiktest behauptet „scheitert an der Plattform".** Die Zusicherung
+`assert.rejects(x(), /Windows/)` ist unter Linux wahr und unter Windows sinnlos: dort
+gibt es keine Sperre, an der etwas scheitert, also *tut* der Aufruf, was er soll. Das ist
+inzwischen dreimal passiert — `updates.run`, `audio.setDefault`, `discord.open` — und
+kostete beim zweiten Mal wieder fünf Minuten Testlauf, weil dabei der PowerShell-Host
+startete. Geprüft wird die Zurückweisung einer ungültigen Eingabe: die gilt überall
+gleich und beweist genau das, worum es ging — dass die Prüfung vor der Plattformabfrage
+steht.
+
 **Ein Test, der eine Aktion aufruft, führt sie auch aus.** Unter Linux warf
 `updates.run(null)` „nur unter Windows verfügbar", und genau das prüfte der
 Oberflächentest. Auf dem Windows-Runner warf derselbe Aufruf nichts — er startete

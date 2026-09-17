@@ -173,17 +173,23 @@ async function openStored(id) {
   return open(entry);
 }
 
+/*
+ * Repeated in the interface, because the gap between what was asked for and
+ * what exists is the thing worth being clear about. A constant rather than a
+ * string inside `state`, so it can be checked without asking for a process
+ * list -- which on Windows would start the PowerShell host.
+ */
+const LIMIT_NOTE = 'Chat und Sprache lassen sich nicht in den Hub holen: dafür müsste sich der Hub mit '
+  + 'deinem Account anmelden, was Discord als Selfbot verbietet und mit Accountsperre ahndet. '
+  + 'Was geht, sind Sprungmarken in den Client.';
+
 /** What the interface shows about the client, without pretending to more. */
 async function state() {
   return {
     running: await running(),
     shortcuts: list(),
     kinds: Object.entries(KINDS).map(([value, label]) => ({ value, label })),
-    // Repeated in the interface, because the gap between what was asked for
-    // and what exists is the thing worth being clear about.
-    note: 'Chat und Sprache lassen sich nicht in den Hub holen: dafür müsste sich der Hub mit '
-      + 'deinem Account anmelden, was Discord als Selfbot verbietet und mit Accountsperre ahndet. '
-      + 'Was geht, sind Sprungmarken in den Client.'
+    note: LIMIT_NOTE
   };
 }
 
@@ -198,5 +204,6 @@ module.exports = {
   running,
   state,
   KINDS,
-  SNOWFLAKE
+  SNOWFLAKE,
+  LIMIT_NOTE
 };
