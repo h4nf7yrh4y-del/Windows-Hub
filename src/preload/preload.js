@@ -69,6 +69,13 @@ contextBridge.exposeInMainWorld('hub', {
     epicGame: (uri) => invoke('updates:epicGame', uri),
     onProgress: (handler) => on('updates:progress', handler)
   },
+  selfupdate: {
+    state: () => invoke('selfupdate:state'),
+    check: () => invoke('selfupdate:check'),
+    download: () => invoke('selfupdate:download'),
+    install: () => invoke('selfupdate:install'),
+    onProgress: (handler) => on('selfupdate:progress', handler)
+  },
   media: {
     read: () => invoke('media:read'),
     command: (name) => invoke('media:command', name)

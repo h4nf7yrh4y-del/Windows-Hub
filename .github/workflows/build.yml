@@ -113,7 +113,13 @@ jobs:
           name: Windows Hub ${{ steps.pkg.outputs.version }}
           # Anything not built from a tag is a build of the working branch.
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-          files: release/*.exe
+          # latest.yml belongs here too: it is the file the hub's own updater
+          # reads to find out that a newer version exists. Without it the
+          # release looks complete and every update check answers with a 404.
+          files: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
           fail_on_unmatched_files: true
           body: |
             Fertige Windows-Dateien, gebaut auf einem Windows-Runner aus

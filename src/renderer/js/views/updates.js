@@ -27,6 +27,10 @@ export function createUpdatesView() {
   // part of a game scan. It arrives separately and until it does the view says
   // so rather than guessing "zu".
   let clients = null;
+  // The hub's own version. Its own request, because it talks to GitHub and
+  // has nothing to do with the three sources below it.
+  let self = null;
+  let releaseSelf = null;
   let busy = false;
   let running = false;
   let filter = '';
@@ -281,6 +285,69 @@ export function createUpdatesView() {
     return block;
   }
 
+  /**
+   * The hub itself.
+   *
+   * First section on purpose: it is the only entry on this screen the hub is
+   * fully responsible for. It also states plainly when it cannot update
+   * itself -- a missing button without a reason reads as a defect.
+   */
+  function renderSelf() {
+    const head = sectionHead(
+      'Windows Hub',
+      self ? `Installierte Fassung ${self.currentVersion}` : 'Version wird geprüft …',
+      self ? [
+        el('button', {
+          class: 'btn subtle sm',
+          disabled: self.status === 'checking' || self.status === 'downloading' ? '' : null,
+          onClick: () => checkSelf()
+        }, [svg(ICON_REFRESH, { width: 12, height: 12 }), 'Auf Update prüfen'])
+      ] : null
+    );
+
+    const block = el('section', { class: 'upd-section' }, [head]);
+    if (!self) return block;
+
+    if (self.status === 'error') {
+      block.appendChild(el('div', { class: 'upd-hint', text: self.error || 'Unbekannter Fehler' }));
+    }
+
+    if (self.availableVersion) {
+      const row = el('div', { class: 'upd-row' }, [
+        el('span', { class: `upd-dot ${self.status === 'downloading' ? 'busy' : 'wait'}` }),
+        el('div', { class: 'stack gap-2 grow', style: { minWidth: '0' } }, [
+          el('div', { class: 'upd-name truncate', text: `Version ${self.availableVersion} verfügbar` }),
+          el('div', { class: 'upd-id truncate', text: self.status === 'downloading'
+            ? `Wird geladen · ${self.percent}%`
+            : (self.status === 'ready' ? 'Heruntergeladen, wartet auf den Neustart' : 'Noch nicht heruntergeladen') }),
+          self.status === 'downloading' || self.status === 'ready'
+            ? el('div', { class: 'upd-bar' }, [el('i', { style: { width: `${self.percent}%` } })])
+            : null
+        ]),
+        self.supported && self.status === 'ready'
+          ? el('button', { class: 'btn primary sm', onClick: () => installSelf() },
+            ['Neu starten und installieren'])
+          : null,
+        self.supported && self.status !== 'ready' && self.status !== 'downloading'
+          ? el('button', { class: 'btn primary sm', onClick: () => downloadSelf() },
+            [svg(ICON_DOWN, { width: 12, height: 12 }), 'Herunterladen'])
+          : null,
+        !self.supported
+          ? el('button', { class: 'btn subtle sm', onClick: () => open('hub-releases') },
+            [svg(ICON_LINK, { width: 12, height: 12 }), 'Zur Download-Seite'])
+          : null
+      ]);
+      block.appendChild(row);
+    } else if (self.status === 'current') {
+      block.appendChild(el('div', { class: 'upd-hint', text: 'Der Hub ist auf dem neuesten Stand.' }));
+    }
+
+    if (self.reason) {
+      block.appendChild(el('div', { class: 'upd-hint', text: self.reason }));
+    }
+    return block;
+  }
+
   function renderSystem() {
     return el('section', { class: 'upd-section' }, [
       sectionHead('System', 'Windows-Updates und Store-Apps laufen über ihre eigenen Stellen.'),
@@ -315,7 +382,7 @@ export function createUpdatesView() {
 
   function render() {
     clear(listHost);
-    listHost.append(renderWinget(), renderSteam(), renderEpic(), renderSystem());
+    listHost.append(renderSelf(), renderWinget(), renderSteam(), renderEpic(), renderSystem());
     updateCounts();
   }
 
@@ -355,6 +422,42 @@ export function createUpdatesView() {
   function stopWatchingSteam() {
     if (steamTimer) clearInterval(steamTimer);
     steamTimer = null;
+  }
+
+  async function checkSelf() {
+    self = { ...(self || {}), status: 'checking' };
+    render();
+    try {
+      self = await api.selfupdate.check();
+    } catch (err) {
+      notifyError(err.message);
+    }
+    render();
+  }
+
+  async function downloadSelf() {
+    try {
+      await api.selfupdate.download();
+    } catch (err) {
+      notifyError(err.message);
+      self = await api.selfupdate.state().catch(() => self);
+      render();
+    }
+  }
+
+  async function installSelf() {
+    const sure = await confirmDialog({
+      title: 'Hub neu starten',
+      message: 'Der Hub schließt sich, installiert die neue Fassung und startet wieder.\n\n'
+        + 'Laufende Profile bleiben davon unberührt — der Hub beendet nur sich selbst.',
+      confirmLabel: 'Neu starten'
+    });
+    if (!sure) return;
+    try {
+      await api.selfupdate.install();
+    } catch (err) {
+      notifyError(err.message);
+    }
   }
 
   async function steamAll() {
@@ -425,6 +528,15 @@ export function createUpdatesView() {
       if ((result.steam.games || []).some((g) => g.running)) watchSteam();
     }).catch((err) => notifyError(err.message));
 
+    const own = api.selfupdate.state().then((result) => {
+      self = result;
+      render();
+      // Asked once when the view opens rather than on every render: it is a
+      // network call, and the answer does not change while someone reads it.
+      if (result.packaged && result.status === 'idle') return checkSelf();
+      return null;
+    }).catch(() => { self = null; });
+
     const running = api.updates.clients().then((result) => {
       clients = result;
       render();
@@ -439,7 +551,7 @@ export function createUpdatesView() {
     });
 
     try {
-      await Promise.all([games, running, packages]);
+      await Promise.all([own, games, running, packages]);
     } finally {
       busy = false;
       scanButton.removeAttribute('disabled');
@@ -499,6 +611,16 @@ export function createUpdatesView() {
   ]);
 
   function bind() {
+    if (!releaseSelf) {
+      releaseSelf = api.selfupdate.onProgress(async (event) => {
+        // The state is re-read rather than patched together from the event:
+        // the main process owns it, and two places deciding what "ready"
+        // means is how a button ends up offering the wrong action.
+        self = await api.selfupdate.state().catch(() => self);
+        if (event.kind === 'ready') notifyOk('Update heruntergeladen');
+        render();
+      });
+    }
     if (releaseProgress) return;
     releaseProgress = api.updates.onProgress((event) => {
       if (event.kind === 'line') { appendLog(event.text, event.stream); return; }
@@ -517,6 +639,7 @@ export function createUpdatesView() {
 
   view.addEventListener('view:mount', bind);
   view.addEventListener('view:unmount', () => {
+    if (releaseSelf) { releaseSelf(); releaseSelf = null; }
     if (releaseProgress) { releaseProgress(); releaseProgress = null; }
     stopWatchingSteam();
   });

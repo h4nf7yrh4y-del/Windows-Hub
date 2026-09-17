@@ -26,6 +26,7 @@ const tweaks = require('./tweaks');
 const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
 const claudesession = require('./claudesession');
+const selfupdate = require('./selfupdate');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -393,6 +394,15 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   /* --------------------------------------------------------------- updates */
 
   updates.setEmitter((event) => send('updates:progress', event));
+  selfupdate.setEmitter((event) => send('selfupdate:progress', event));
+
+  // The hub's own update. Kept apart from `updates:*` because it is a
+  // different thing entirely: that view reports on other people's software,
+  // this one replaces the running application.
+  ipcMain.handle('selfupdate:state', wrap(async () => selfupdate.state(), 'selfupdate:state'));
+  ipcMain.handle('selfupdate:check', wrap(async () => selfupdate.check(), 'selfupdate:check'));
+  ipcMain.handle('selfupdate:download', wrap(async () => selfupdate.download(), 'selfupdate:download'));
+  ipcMain.handle('selfupdate:install', wrap(async () => selfupdate.install(), 'selfupdate:install'));
 
   ipcMain.handle('updates:scan', wrap(async () => updates.scan(), 'updates:scan'));
   ipcMain.handle('updates:scanGames', wrap(async () => updates.scanGames(), 'updates:scanGames'));

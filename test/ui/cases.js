@@ -589,7 +589,7 @@ module.exports = [
       // deliberately short: winget took ninety seconds on the CI runner once,
       // and the whole view waited for it. Each source fills in its own section
       // when it answers, so none of them may gate the frame.
-      await t.waitFor(`document.querySelectorAll('#view-updates .upd-section').length >= 4`,
+      await t.waitFor(`document.querySelectorAll('#view-updates .upd-section').length >= 5`,
         { label: 'Update-Abschnitte', timeout: 15000 });
 
       // Checked before anything has had time to answer: an action that does
@@ -607,6 +607,7 @@ module.exports = [
       const titles = await t.evalExpr(
         `[...document.querySelectorAll('.upd-section-title')].map((n) => n.textContent)`
       );
+      t.assert(titles.includes('Windows Hub'), 'Abschnitt für den Hub selbst', JSON.stringify(titles));
       t.assert(titles.includes('Programme'), 'Abschnitt für winget-Programme', JSON.stringify(titles));
       t.assert(titles.includes('Steam-Spiele'), 'Abschnitt für Steam');
       t.assert(titles.includes('Epic Games'), 'Abschnitt für Epic');
@@ -636,17 +637,29 @@ module.exports = [
       // minute and a half; asking again bought nothing and cost the suite
       // three minutes. What is waited for here is the section leaving its
       // pending state -- whatever it then says, it has to say something.
-      await t.waitFor(
-        `!/wird abgefragt/.test(document.querySelectorAll('#view-updates .upd-section')[0].textContent)`,
+      // Found by its heading rather than by position. It used to be the first
+      // section; adding one above it silently moved the test to a different
+      // section, which still had text and so still passed the loose checks.
+      const WINGET_SECTION = `[...document.querySelectorAll('#view-updates .upd-section')]`
+        + `.find((n) => n.querySelector('.upd-section-title').textContent === 'Programme')`;
+      await t.waitFor(`!/wird abgefragt/.test(${WINGET_SECTION}.textContent)`,
         { label: 'winget-Abschnitt', timeout: 150000 });
-      const wingetText = await t.evalExpr(
-        `document.querySelectorAll('#view-updates .upd-section')[0].textContent`);
+      const wingetText = await t.evalExpr(`${WINGET_SECTION}.textContent`);
       t.assert(/Alles aktuell|Aktualisieren|winget steht nicht zur Verfügung/.test(wingetText),
         'Der Programmabschnitt sagt, was Sache ist', wingetText.slice(0, 200));
 
       // Nothing is running, so the log pane stays out of the way.
       t.eq(await t.evalExpr(`document.querySelector('.upd-log-pane').classList.contains('hidden')`), true,
         'Das Protokoll erscheint erst, wenn etwas läuft');
+
+      // Off Windows the hub cannot update itself, and the section has to say
+      // so rather than leave an empty space where a button would be.
+      const selfState = await t.evalExpr(`window.hub.selfupdate.state().then((r) => r.data)`);
+      t.assert(typeof selfState.supported === 'boolean', 'Der Hub weiß, ob er sich selbst ersetzen kann');
+      t.assert(selfState.supported || String(selfState.reason || '').length > 20,
+        'Kann er es nicht, steht der Grund dabei', JSON.stringify(selfState.reason));
+      t.assert(String(await t.text('#view-updates') || '').includes('Windows Hub'),
+        'Der Hub taucht im Update-Center auf');
 
       // Deliberately NOT `run(null)`: on Windows that is not an error, it is
       // `winget upgrade --all`, and a test that installed software on the CI

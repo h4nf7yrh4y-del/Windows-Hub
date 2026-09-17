@@ -472,7 +472,9 @@ const TARGETS = {
   'steam-downloads': 'steam://open/downloads',
   epic: 'com.epicgames.launcher://apps',
   'windows-update': 'ms-settings:windowsupdate',
-  store: 'ms-windows-store://downloadsandupdates'
+  store: 'ms-windows-store://downloadsandupdates',
+  // Where the portable build sends people, since it cannot replace itself.
+  'hub-releases': require('./selfupdate').RELEASES_URL
 };
 
 /**
