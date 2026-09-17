@@ -709,6 +709,12 @@ module.exports = [
 
       const after = (await t.text('.modal')) || '';
       t.assert(/Nur Systemzustand|Ganzes Profil/.test(after), 'Die Wirkung lässt sich wählen');
+
+      // The audio picker states its own caveat rather than implying the
+      // switch is a supported Windows feature.
+      t.assert(/Wiedergabegerät/.test(after), 'Das Wiedergabegerät lässt sich wählen');
+      await assertRejects(t, `window.hub.audio.setDefault('Lautsprecher')`, 'Gerätekennung',
+        'Eine unsinnige Gerätekennung wird abgewiesen');
       t.assert(/Leer heißt|Sobald einer dieser Prozesse/.test(after),
         'Es steht dabei, worauf geachtet wird');
 

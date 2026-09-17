@@ -1,0 +1,126 @@
+'use strict';
+
+/**
+ * Switching the default playback device.
+ *
+ * None of the switching can run here: it needs Windows, a compiled C# helper
+ * and real audio hardware. What can be checked is the gate in front of it --
+ * the device id ends up interpolated into a PowerShell string, so its shape is
+ * decided by a function of its own that runs before the platform is looked at.
+ * Behind the platform guard it would only ever run on Windows, which is to say
+ * never in a test.
+ *
+ * The second thing worth pinning down is that a profile carrying a device id
+ * counts as having system changes at all. Without that, `apply` returns early,
+ * the switch never happens, and nothing anywhere says why.
+ */
+
+const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const Module = require('module');
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-audio-'));
+
+const realResolve = Module._resolveFilename;
+const stub = {
+  app: { getPath: () => TMP, getVersion: () => '0.0.0', isPackaged: false },
+  shell: {},
+  powerSaveBlocker: { start: () => 1, stop: () => {}, isStarted: () => false }
+};
+Module._resolveFilename = function (request, ...rest) {
+  if (request === 'electron') return 'electron-stub';
+  return realResolve.call(this, request, ...rest);
+};
+require.cache['electron-stub'] = { id: 'electron-stub', filename: 'electron-stub', loaded: true, exports: stub };
+
+const audio = require('../src/main/audio');
+const tweaks = require('../src/main/tweaks');
+
+let passed = 0;
+
+async function test(name, fn) {
+  try {
+    await fn();
+    passed += 1;
+    console.log(`  ok   ${name}`);
+  } catch (err) {
+    console.error(`  FAIL ${name}\n       ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
+const queue = [];
+const add = (name, fn) => queue.push([name, fn]);
+
+// The shape Windows actually uses for a render endpoint.
+const REAL_ID = '{0.0.0.00000000}.{a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d}';
+
+console.log('Wiedergabegerät');
+
+/* ------------------------------------------------------------- the gate */
+
+add('a real endpoint id passes', () => {
+  assert.strictEqual(audio.checkDeviceId(REAL_ID), REAL_ID);
+});
+
+add('anything that is not one is refused', () => {
+  // The value is interpolated into a PowerShell string, so the shape is the
+  // whole defence.
+  assert.throws(() => audio.checkDeviceId('Speakers'), /Gerätekennung/);
+  assert.throws(() => audio.checkDeviceId(''), /Gerätekennung/);
+  assert.throws(() => audio.checkDeviceId(null), /Gerätekennung/);
+  assert.throws(() => audio.checkDeviceId('{0.0.0.00000000}'), /Gerätekennung/);
+});
+
+add('a quote cannot travel inside an id', () => {
+  // A single quote would end the PowerShell literal it is placed in.
+  assert.throws(() => audio.checkDeviceId(`${REAL_ID}'; calc; '`), /Gerätekennung/);
+  assert.throws(() => audio.checkDeviceId("{0.0.0.0}.{'}"), /Gerätekennung/);
+});
+
+add('the check runs before the platform, so it runs here', async () => {
+  // On Linux a bad id must still be refused as a bad id, not as "Windows only".
+  await assert.rejects(audio.setDefault('nonsense'), /Gerätekennung/);
+  // And a well-formed one gets past the shape check and stops at the platform.
+  await assert.rejects(audio.setDefault(REAL_ID), /Windows/);
+});
+
+add('listing off Windows reports why rather than an empty list', async () => {
+  const result = await audio.list();
+  assert.strictEqual(result.supported, false);
+  assert.ok(result.note && result.note.length > 10, String(result.note));
+  assert.deepStrictEqual(result.devices, []);
+});
+
+/* ---------------------------------------------------- the profile setting */
+
+add('a stored device id survives sanitising', () => {
+  const system = tweaks.sanitize({ audioDevice: REAL_ID });
+  assert.strictEqual(system.audioDevice, REAL_ID);
+});
+
+add('a hand-edited config cannot smuggle one in', () => {
+  // The config file is plain JSON on disk and people do edit it.
+  assert.strictEqual(tweaks.sanitize({ audioDevice: "'; calc; '" }).audioDevice, null);
+  assert.strictEqual(tweaks.sanitize({ audioDevice: 'Speakers' }).audioDevice, null);
+  assert.strictEqual(tweaks.sanitize({ audioDevice: 42 }).audioDevice, null);
+});
+
+add('a profile with only a device still counts as changing the system', () => {
+  // Otherwise apply() returns early, the switch never happens, and nothing
+  // says why.
+  assert.strictEqual(tweaks.isActive({ audioDevice: REAL_ID }), true);
+  assert.strictEqual(tweaks.isActive({}), false);
+});
+
+add('the default is not to touch the audio', () => {
+  assert.strictEqual(tweaks.defaults().audioDevice, null);
+});
+
+(async () => {
+  for (const [name, fn] of queue) await test(name, fn);
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+  console.log(`\n${passed} assertions passed.`);
+})();

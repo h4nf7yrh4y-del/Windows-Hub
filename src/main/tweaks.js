@@ -2,6 +2,7 @@
 
 const { powerSaveBlocker } = require('electron');
 const processes = require('./processes');
+const audio = require('./audio');
 const store = require('./store');
 const logger = require('./logger');
 
@@ -295,6 +296,8 @@ function defaults() {
     closeApps: [],
     restoreClosed: true,
     keepAwake: false,
+    // Endpoint id of the playback device this profile wants, or null.
+    audioDevice: null,
     restore: true
   };
 }
@@ -312,6 +315,9 @@ function sanitize(raw) {
       : [],
     restoreClosed: raw.restoreClosed !== false,
     keepAwake: !!raw.keepAwake,
+    // Checked against the same shape the audio module requires, so an id from
+    // an edited config file cannot reach a PowerShell string.
+    audioDevice: audio.DEVICE_ID.test(String(raw.audioDevice || '')) ? String(raw.audioDevice) : null,
     restore: raw.restore !== false
   };
 }
@@ -319,7 +325,8 @@ function sanitize(raw) {
 /** True when a profile actually asks for something, so the UI can stay quiet otherwise. */
 function isActive(system) {
   const s = sanitize(system);
-  return !!(s.powerPlan || (s.priority && s.priority !== 'normal') || s.closeApps.length || s.keepAwake);
+  return !!(s.powerPlan || (s.priority && s.priority !== 'normal') || s.closeApps.length
+    || s.keepAwake || s.audioDevice);
 }
 
 /* ---------------------------------------------------------------- runtime */
@@ -352,6 +359,7 @@ async function apply(profile, emit = () => {}) {
     profileName: profile.name,
     at: Date.now(),
     previousPowerPlan: null,
+    previousAudioDevice: null,
     closed: [],
     restoreClosed: system.restoreClosed,
     restore: system.restore
@@ -380,6 +388,23 @@ async function apply(profile, emit = () => {}) {
       report.applied.push(`Energieplan: ${chosen ? chosen.label : system.powerPlan}`);
     } catch (err) {
       report.failed.push(`Energieplan: ${err.message}`);
+    }
+  }
+
+  if (system.audioDevice) {
+    emit({ phase: 'tweak', step: 'audio' });
+    try {
+      // Remembered before switching, so the revert has somewhere to go back
+      // to. A failure here is reported and does not stop the profile: the
+      // interface it uses is undocumented and may be gone one Windows update
+      // from now, and a game that refuses to start over an audio device would
+      // be the worse outcome.
+      snapshot.previousAudioDevice = await audio.current();
+      await audio.setDefault(system.audioDevice);
+      report.applied.push('Wiedergabegerät umgeschaltet');
+    } catch (err) {
+      snapshot.previousAudioDevice = null;
+      report.failed.push(`Wiedergabegerät: ${err.message}`);
     }
   }
 
@@ -444,6 +469,15 @@ async function revert({ silent = false, profileId = null } = {}) {
       reverted.push('Energieplan zurückgesetzt');
     } catch (err) {
       failed.push(`Energieplan: ${err.message}`);
+    }
+  }
+
+  if (snapshot.restore !== false && snapshot.previousAudioDevice) {
+    try {
+      await audio.setDefault(snapshot.previousAudioDevice);
+      reverted.push('Wiedergabegerät zurückgesetzt');
+    } catch (err) {
+      failed.push(`Wiedergabegerät: ${err.message}`);
     }
   }
 

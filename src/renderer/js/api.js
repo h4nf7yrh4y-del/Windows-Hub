@@ -81,6 +81,10 @@ export const api = {
     epicGame: call(bridge.updates.epicGame),
     onProgress: bridge.updates.onProgress
   },
+  audio: {
+    list: call(bridge.audio.list),
+    setDefault: call(bridge.audio.setDefault)
+  },
   backup: {
     export: call(bridge.backup.export),
     inspect: call(bridge.backup.inspect),

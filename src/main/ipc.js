@@ -30,6 +30,7 @@ const selfupdate = require('./selfupdate');
 const storage = require('./storage');
 const triggers = require('./triggers');
 const backup = require('./backup');
+const audio = require('./audio');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -408,6 +409,13 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // different thing entirely: that view reports on other people's software,
   // this one replaces the running application.
   triggers.setNotifier((event) => send('triggers:event', event));
+  ipcMain.handle('audio:list', wrap(async (force) =>
+    audio.list({ force: force === true }), 'audio:list'));
+  // The id is passed through: it is checked in the audio module, where the
+  // check can also be tested, and a value normalised here could not be refused
+  // there.
+  ipcMain.handle('audio:setDefault', wrap(async (id) => audio.setDefault(id), 'audio:setDefault'));
+
   /* -------------------------------------------------------------- backup */
 
   // The file dialogs live here rather than in the renderer: the renderer never

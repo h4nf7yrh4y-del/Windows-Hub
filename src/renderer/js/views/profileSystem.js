@@ -21,6 +21,7 @@ const DEFAULTS = {
   closeApps: [],
   restoreClosed: true,
   keepAwake: false,
+  audioDevice: null,
   restore: true
 };
 
@@ -257,6 +258,43 @@ export function createSystemSection(profile) {
       : 'Keine Energiepläne gefunden.';
   }).catch((err) => { planHint.textContent = err.message; });
 
+  /* ----------------------------------------------------------------- audio */
+
+  const audioSelect = el('select', { class: 'select' }, [
+    el('option', { value: '', text: 'Nicht ändern' })
+  ]);
+  audioSelect.value = '';
+  audioSelect.addEventListener('change', () => { system.audioDevice = audioSelect.value || null; });
+
+  const audioHint = el('div', { class: 'setting-hint', text: 'Wird gelesen …' });
+
+  api.audio.list().then((result) => {
+    if (!result.supported) {
+      audioSelect.disabled = true;
+      audioHint.textContent = result.note || 'Auf diesem System nicht verfügbar.';
+      return;
+    }
+    for (const device of result.devices) {
+      audioSelect.appendChild(el('option', {
+        value: device.id,
+        text: device.active ? `${device.name} (aktiv)` : device.name
+      }));
+    }
+    if (system.audioDevice) audioSelect.value = system.audioDevice;
+    // A device that was unplugged since the profile was written would fall
+    // back to "do not change" without anyone being told.
+    if (system.audioDevice && audioSelect.value !== system.audioDevice) {
+      audioHint.textContent = 'Das gespeicherte Wiedergabegerät ist gerade nicht angeschlossen.';
+      audioHint.classList.add('warn');
+      return;
+    }
+    audioHint.textContent = result.devices.length
+      ? 'Beim Beenden wird das vorherige Gerät wiederhergestellt. Windows bietet dafür keine '
+        + 'offizielle Schnittstelle — der Hub nutzt dieselbe wie jedes andere Umschaltprogramm. '
+        + 'Sollte ein Windows-Update sie entfernen, startet das Profil trotzdem, nur ohne den Wechsel.'
+      : 'Keine Wiedergabegeräte gefunden.';
+  }).catch((err) => { audioHint.textContent = err.message; });
+
   /* -------------------------------------------------------------- priority */
 
   const prioritySelect = el('select', { class: 'select' });
@@ -388,6 +426,12 @@ export function createSystemSection(profile) {
         prioritySelect,
         priorityHint
       ])
+    ]),
+
+    el('div', { class: 'field' }, [
+      el('label', { text: 'Wiedergabegerät' }),
+      audioSelect,
+      audioHint
     ]),
 
     el('div', { class: 'field' }, [

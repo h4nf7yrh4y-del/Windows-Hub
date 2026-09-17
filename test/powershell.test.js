@@ -202,6 +202,27 @@ test('choice options are unique and non-empty', () => {
 });
 
 // The display helper is loaded by a preamble that compiles C# on first use.
+SCRIPTS['audio helper preamble'] = `
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+if (-not ('HubAudio' -as [type])) {
+  if (Test-Path -LiteralPath 'C:\\Users\\a\\HubAudio.dll') {
+    try { Add-Type -Path 'C:\\Users\\a\\HubAudio.dll' } catch { }
+  }
+}
+if (-not ('HubAudio' -as [type])) {
+  $src = Get-Content -Raw -LiteralPath 'C:\\Users\\a\\HubAudio.cs'
+  try {
+    Add-Type -TypeDefinition $src -OutputAssembly 'C:\\Users\\a\\HubAudio.dll'
+    Add-Type -Path 'C:\\Users\\a\\HubAudio.dll'
+  } catch {
+    Add-Type -TypeDefinition $src
+  }
+}
+[HubAudio]::List()
+`;
+
 SCRIPTS['display helper preamble'] = `
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -281,6 +302,35 @@ try {
       { encoding: 'utf8', timeout: 120000 }).trim();
     assert.ok(result.startsWith('COMPILED'), `compiler said:\n       ${result}`);
     for (const method of ['List', 'SetMode', 'SetPrimary', 'GetBrightness', 'SetBrightness']) {
+      assert.ok(result.includes(method), `missing method ${method}`);
+    }
+  } finally {
+    try { fs.unlinkSync(checker); } catch (_) { /* ignore */ }
+  }
+});
+
+test('the C# audio helper compiles', () => {
+  // The COM interfaces here are hand-written declarations of an interface
+  // Microsoft never documented. A wrong GUID or a method in the wrong slot
+  // compiles fine and fails at runtime with a bare HRESULT, so the compiler
+  // is only the first of two checks -- but it is the one that can run at all.
+  const csPath = path.join(__dirname, '..', 'src/main/ps/audio.cs.txt');
+  const checker = path.join(os.tmpdir(), `hub-cs-audio-${process.pid}.ps1`);
+  fs.writeFileSync(checker, `
+$src = Get-Content -Raw -LiteralPath $args[0]
+try {
+  Add-Type -TypeDefinition $src -ErrorAction Stop
+  $methods = ([HubAudio].GetMethods('Public,Static,DeclaredOnly') | ForEach-Object { $_.Name }) -join ','
+  Write-Output "COMPILED:$methods"
+} catch {
+  Write-Output ("FAILED: " + $_.Exception.Message)
+}
+`, 'utf8');
+  try {
+    const result = execFileSync(shell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', checker, csPath],
+      { encoding: 'utf8', timeout: 120000 }).trim();
+    assert.ok(result.startsWith('COMPILED'), `compiler said:\n       ${result}`);
+    for (const method of ['List', 'Current', 'SetDefault']) {
       assert.ok(result.includes(method), `missing method ${method}`);
     }
   } finally {
