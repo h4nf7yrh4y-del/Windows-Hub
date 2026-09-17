@@ -183,10 +183,17 @@ const LIMIT_NOTE = 'Chat und Sprache lassen sich nicht in den Hub holen: dafür 
   + 'deinem Account anmelden, was Discord als Selfbot verbietet und mit Accountsperre ahndet. '
   + 'Was geht, sind Sprungmarken in den Client.';
 
-/** What the interface shows about the client, without pretending to more. */
-async function state() {
+/**
+ * What the interface shows, and nothing it has to wait for.
+ *
+ * This used to await `running()`, which asks for the process list, which needs
+ * the PowerShell host. Everything here -- the note, the shortcuts, the kinds --
+ * comes from a constant and the config file, so on a busy machine the panel sat
+ * empty for half a minute waiting to be told something it already knew. Whether
+ * the client is up is a separate question and has its own call.
+ */
+function state() {
   return {
-    running: await running(),
     shortcuts: list(),
     kinds: Object.entries(KINDS).map(([value, label]) => ({ value, label })),
     note: LIMIT_NOTE

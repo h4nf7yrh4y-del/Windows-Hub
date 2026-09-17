@@ -413,6 +413,9 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   /* ------------------------------------------------------------- discord */
 
   ipcMain.handle('discord:state', wrap(async () => discord.state(), 'discord:state'));
+  // Its own channel because it needs the process list; the panel draws
+  // without it and fills this in when it arrives.
+  ipcMain.handle('discord:running', wrap(async () => discord.running(), 'discord:running'));
   ipcMain.handle('discord:save', wrap(async (entry) => discord.save(entry), 'discord:save'));
   ipcMain.handle('discord:remove', wrap(async (id) => discord.remove(id), 'discord:remove'));
   ipcMain.handle('discord:open', wrap(async (id) => discord.openStored(id), 'discord:open'));

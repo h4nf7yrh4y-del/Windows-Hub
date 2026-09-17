@@ -83,6 +83,7 @@ export const api = {
   },
   discord: {
     state: call(bridge.discord.state),
+    running: call(bridge.discord.running),
     save: call(bridge.discord.save),
     remove: call(bridge.discord.remove),
     open: call(bridge.discord.open),

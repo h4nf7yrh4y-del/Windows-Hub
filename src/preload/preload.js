@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld('hub', {
   },
   discord: {
     state: () => invoke('discord:state'),
+    running: () => invoke('discord:running'),
     save: (entry) => invoke('discord:save', entry),
     remove: (id) => invoke('discord:remove', id),
     open: (id) => invoke('discord:open', id),

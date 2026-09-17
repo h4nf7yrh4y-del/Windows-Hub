@@ -196,6 +196,16 @@ add('opening a shortcut that does not exist says so', async () => {
 
 /* ------------------------------------------------------------ the honesty */
 
+add('the state needs no process list', () => {
+  // Everything it returns is a constant or comes from the config. It used to
+  // await the process list, which on a busy machine left the panel empty for
+  // half a minute waiting to be told something it already knew.
+  store.state.discord = [];
+  const result = discord.state();
+  assert.ok(result.note && result.shortcuts && result.kinds);
+  assert.strictEqual(result.running, undefined, 'the client check is its own call');
+});
+
 add('the note says outright what is not possible', () => {
   // The constant rather than `state()`: that would ask for a process list,
   // which on Windows starts the PowerShell host and holds the run open.

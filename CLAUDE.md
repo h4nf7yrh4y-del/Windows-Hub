@@ -145,8 +145,11 @@ Platzhalter ersetzt die Liste, nicht den Abschnitt: „Steam-Updates starten" h�
 daran, ob die Bibliothek schon gelesen ist, und darf deshalb nicht verschwinden.
 
 **Langsame Abfragen dürfen die Oberfläche nicht aufhalten.** Was sofort da ist, wird
-sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon viermal
-passiert — Dateimanager-Seitenleiste, Funktionskatalog, Dashboard, Update-Center.
+sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon fünfmal
+passiert — Dateimanager-Seitenleiste, Funktionskatalog, Dashboard, Update-Center,
+Discord-Panel. Beim fünften Mal bestand der ganze Inhalt aus einer Konstante und der
+Konfiguration, und die Ansicht wartete trotzdem eine halbe Minute: eine einzige Zeile
+„läuft der Client?" hing mit dran. Eine Antwort, die man schon hat, wartet auf nichts.
 
 Beim vierten Mal kam eine Verschärfung dazu: eine Abfrage ist nicht schnell, nur weil
 sie wenig tut. `steamUpdates` las Manifestdateien in Millisekunden und hängte dann eine

@@ -110,8 +110,11 @@ module.exports = [
         { label: 'System als erster Treffer' });
       await t.js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));`);
       await t.waitFor(`!document.querySelector('.pal')`, { label: 'Palette nach Ausführung' });
+      // Generous because this actually builds the system view, which on the
+      // two-core runner has taken ten seconds on its own -- the default budget
+      // was shorter than the thing being waited for.
       await t.waitFor(`document.querySelector('.rail-btn.active').dataset.view === 'system'`,
-        { label: 'gewechselte Ansicht' });
+        { label: 'gewechselte Ansicht', timeout: 45000 });
       t.eq(await t.evalExpr(`document.querySelector('.rail-btn.active').dataset.view`), 'system',
         'Enter führt den gewählten Eintrag aus');
     }
@@ -576,10 +579,19 @@ module.exports = [
       t.atLeast(content.profiles, 1, 'Das gesäte Profil erscheint auf dem zweiten Schirm');
 
       // It must keep receiving values even though it never has focus.
+      //
+      // Waits for the second sample rather than counting how many arrive in a
+      // fixed window. The window version asked for two in 3.2 seconds, which
+      // is a coin flip on a two-core runner that is already busy -- and this
+      // project's rule is to wait for the event, not the clock. The deadline
+      // is only there so a genuinely dead stream still fails.
       const samples = await board.webContents.executeJavaScript(`new Promise((resolve) => {
         let count = 0;
-        const stop = window.hub.metrics.onSample(() => { count += 1; });
-        setTimeout(() => { stop(); resolve(count); }, 3200);
+        const stop = window.hub.metrics.onSample(() => {
+          count += 1;
+          if (count >= 2) { stop(); resolve(count); }
+        });
+        setTimeout(() => { stop(); resolve(count); }, 30000);
       })`, true);
       t.atLeast(samples, 2, 'Der Messstrom erreicht auch das zweite Fenster', `nur ${samples} Messungen`);
 
@@ -857,8 +869,11 @@ module.exports = [
     name: 'Discord: Sprungmarken und die Grenze',
     async run(t) {
       await t.view('settings');
+      // Short on purpose: the panel's contents are a constant and the stored
+      // shortcuts, so there is nothing legitimate to wait for. It used to take
+      // half a minute because it asked whether the client was running first.
       await t.waitFor(`/Selfbot/.test(document.querySelector('#view-settings').textContent)`,
-        { label: 'Discord-Panel', timeout: 30000 });
+        { label: 'Discord-Panel', timeout: 15000 });
 
       // The panel names what cannot be built, rather than leaving someone to
       // wonder why there is no chat window.

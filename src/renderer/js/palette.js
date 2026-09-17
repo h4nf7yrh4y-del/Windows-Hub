@@ -221,7 +221,10 @@ async function discordEntries() {
     return (data.shortcuts || []).filter((entry) => entry.link).map((entry) => ({
       kind: 'discord',
       title: entry.label,
-      hint: data.running ? 'Discord' : 'Discord (startet erst)',
+      // Deliberately not "is the client running": that needs the process list,
+      // and entries arriving late change what Enter does to whatever the
+      // person had already selected.
+      hint: 'Discord',
       run: async () => {
         try { await api.discord.open(entry.id); } catch (err) { notifyError(err.message); }
       }
