@@ -27,6 +27,7 @@ const diagnostics = require('./diagnostics');
 const claudecode = require('./claudecode');
 const claudesession = require('./claudesession');
 const selfupdate = require('./selfupdate');
+const storage = require('./storage');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -399,6 +400,14 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // The hub's own update. Kept apart from `updates:*` because it is a
   // different thing entirely: that view reports on other people's software,
   // this one replaces the running application.
+  ipcMain.handle('storage:overview', wrap(async () => storage.overview(), 'storage:overview'));
+  ipcMain.handle('storage:measure', wrap(async (dir) =>
+    storage.measure(requireString(dir, 'Ordner')), 'storage:measure'));
+  // The id is passed through unchanged: the module refuses a bad one, and a
+  // value normalised here could not be refused there.
+  ipcMain.handle('storage:uninstall', wrap(async (appId) =>
+    storage.uninstallSteamGame(appId), 'storage:uninstall'));
+
   ipcMain.handle('selfupdate:state', wrap(async () => selfupdate.state(), 'selfupdate:state'));
   ipcMain.handle('selfupdate:check', wrap(async () => selfupdate.check(), 'selfupdate:check'));
   ipcMain.handle('selfupdate:download', wrap(async () => selfupdate.download(), 'selfupdate:download'));

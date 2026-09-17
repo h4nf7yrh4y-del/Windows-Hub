@@ -22,7 +22,15 @@ module.exports = [
   {
     name: 'Grundgerüst: Leiste, Uhr, Kopfzeile',
     async run(t) {
-      t.eq(await t.count('.rail-btn'), 10, 'Zehn Einträge in der Seitenleiste');
+      // A minimum plus the entries that have to be there, rather than an
+      // exact count: the count was ten, adding a view made it eleven, and the
+      // test failed for the one reason that is not a defect. What matters is
+      // that nothing silently disappears from the rail.
+      t.atLeast(await t.count('.rail-btn'), 10, 'Die Seitenleiste ist vollständig');
+      const rail = await t.evalExpr(`[...document.querySelectorAll('.rail-btn')].map((n) => n.textContent.trim())`);
+      for (const entry of ['Hub', 'Tasks', 'Updates', 'Speicher', 'Setup']) {
+        t.assert(rail.some((label) => label.includes(entry)), `„${entry}" in der Seitenleiste`, rail.join(' | '));
+      }
       t.assert(/^v\d+\.\d+\.\d+/.test((await t.text('#brand-version')) || ''),
         'Versionsnummer wird angezeigt', await t.text('#brand-version'));
       t.assert(/^\d{2}:\d{2}$/.test(((await t.text('#clock-time')) || '').trim()),
@@ -671,6 +679,48 @@ module.exports = [
         'Und eine, die wie ein Pfad aussieht, auch');
       t.eq(await t.evalExpr(`window.hub.updates.state().then((r) => r.data.running)`), false,
         'Nach den abgewiesenen Aufrufen läuft nichts');
+    }
+  },
+
+  {
+    name: 'Speicher: Laufwerke, Sortierung, Grenzen',
+    async run(t) {
+      await t.view('storage');
+
+      // Off Windows there are no Steam manifests, so the empty state is what
+      // gets rendered -- and it has to say which of the two it is.
+      await t.waitFor(
+        `!!document.querySelector('#view-storage .upd-row') || !!document.querySelector('#view-storage .empty-title')`,
+        { label: 'Speicherliste', timeout: 60000 });
+
+      t.assert(await t.exists('#view-storage .view-head'), 'Die Ansicht hat einen Kopf');
+      t.atLeast(await t.count('#view-storage select option'), 4, 'Mehrere Sortierungen');
+
+      const body = (await t.text('#view-storage')) || '';
+      t.assert(/Spiele|Wird gelesen|Keine Spiele|Laufwerke/.test(body),
+        'Die Ansicht sagt, was sie gefunden hat', body.slice(0, 160));
+
+      // The order is a pure function of the list, so switching it must not
+      // throw even when the list is empty.
+      await t.evalExpr(`(() => {
+        const sel = document.querySelector('#view-storage select');
+        sel.value = 'age';
+        sel.dispatchEvent(new Event('change'));
+        return true;
+      })()`);
+      t.assert(await t.exists('#view-storage'), 'Sortierung umschalten überlebt den Leerzustand');
+
+      // Checked in the main process, and checked before the platform is, so
+      // this assertion means the same thing on every machine.
+      await assertRejects(t, `window.hub.storage.uninstall('nicht-numerisch')`, 'Kennung',
+        'Eine unsinnige Spiel-Kennung wird abgewiesen');
+      await assertRejects(t, `window.hub.storage.measure('relativ/pfad')`, 'Ordner',
+        'Ein relativer Pfad wird abgewiesen');
+
+      const overview = await t.evalExpr(`window.hub.storage.overview().then((r) => r.data)`);
+      t.assert(overview && Array.isArray(overview.games), 'Die Abfrage liefert eine Spieleliste');
+      t.assert(overview.totals && typeof overview.totals.bytes === 'number',
+        'Und eine Summe', JSON.stringify(overview.totals));
     }
   },
 

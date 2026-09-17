@@ -12,6 +12,7 @@ import { createFilesView } from './views/files.js';
 import { createOverlaysView } from './views/overlays.js';
 import { createWindowsView } from './views/windows.js';
 import { createUpdatesView } from './views/updates.js';
+import { createStorageView } from './views/storage.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
@@ -68,6 +69,13 @@ const VIEWS = [
     label: 'Updates',
     icon: ['M20 11a8 8 0 10-2.3 5.7', 'M20 5v6h-6'],
     factory: createUpdatesView,
+    keep: false
+  },
+  {
+    id: 'storage',
+    label: 'Speicher',
+    icon: ['M3 6h18v5H3z', 'M3 13h18v5H3z', 'M7 8.5h.01M7 15.5h.01'],
+    factory: createStorageView,
     keep: false
   },
   {

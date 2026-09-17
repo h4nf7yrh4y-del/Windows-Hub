@@ -81,6 +81,11 @@ export const api = {
     epicGame: call(bridge.updates.epicGame),
     onProgress: bridge.updates.onProgress
   },
+  storage: {
+    overview: call(bridge.storage.overview),
+    measure: call(bridge.storage.measure),
+    uninstall: call(bridge.storage.uninstall)
+  },
   selfupdate: {
     state: call(bridge.selfupdate.state),
     check: call(bridge.selfupdate.check),
