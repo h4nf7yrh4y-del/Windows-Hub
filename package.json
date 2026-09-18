@@ -1,7 +1,7 @@
 {
   "name": "windows-hub",
   "productName": "Windows Hub",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Cyberpunk fullscreen launcher hub for Windows: profiles, app orchestration and a built-in task manager.",
   "main": "src/main/main.js",
   "author": "Alexander",
