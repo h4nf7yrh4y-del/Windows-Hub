@@ -125,16 +125,30 @@ function systemSummary(profile) {
   return parts.length ? parts.join(' · ') : null;
 }
 
+// appId -> data URL, or null once confirmed there is none. Keyed by app id
+// rather than profile id: the image never changes for a given Steam game,
+// so a profile whose apps are re-ordered or renamed still hits the cache.
+const coverCache = new Map();
+
+function coverNode(dataUrl) {
+  return el('div', { class: 'card-cover', style: { backgroundImage: `url("${dataUrl}")` } });
+}
+
 function profileCard(profile, index) {
   const accent = profile.accent || colorFromString(profile.name);
   const status = profileStatus(profile, state.running);
+  // A picture someone chose on purpose in the editor always wins over one
+  // fetched automatically; the Steam lookup only fills in when there is none.
+  const appId = profile.cover ? null : steamAppId(profile.apps);
+  const cachedCover = appId ? coverCache.get(appId) : undefined;
+  const cover = profile.cover || cachedCover || null;
 
   const card = el('div', {
     class: 'profile-card',
     style: { '--card-accent': accent, animationDelay: `${index * 55}ms` },
     onDblClick: () => launchProfile(profile)
   }, [
-    profile.cover ? el('div', { class: 'card-cover', style: { backgroundImage: `url("${profile.cover}")` } }) : null,
+    cover ? coverNode(cover) : null,
     el('div', { class: 'card-scrim' }),
     el('div', { class: 'card-glow' }),
     el('div', { class: 'row between' }, [
@@ -187,6 +201,17 @@ function profileCard(profile, index) {
   // Fill icon into the play glyph without a stroke artifact.
   const playIcon = card.querySelector('.card-launch svg path');
   if (playIcon) playIcon.setAttribute('fill', 'currentColor');
+
+  // Drawn immediately without it; patched in once it arrives rather than
+  // held up on a network call nobody asked to wait for. Cached, so this
+  // only ever happens once per Steam app id per run of the hub.
+  if (appId && cachedCover === undefined) {
+    api.coverart.get(appId).then((result) => {
+      const dataUrl = result && result.ok ? result.dataUrl : null;
+      coverCache.set(appId, dataUrl);
+      if (dataUrl && card.isConnected) card.insertBefore(coverNode(dataUrl), card.firstChild);
+    }).catch(() => coverCache.set(appId, null));
+  }
 
   return card;
 }
@@ -396,6 +421,26 @@ const ATTENTION_DAY_MS = 24 * 60 * 60 * 1000;
  * directly -- the wording and the thresholds are the part worth getting
  * right, and neither needs a page to check.
  */
+
+/**
+ * The Steam app id a profile's cover art belongs to, or null.
+ *
+ * Read out of the launch URI rather than a separate stored field: the
+ * scanner already writes `steam://rungameid/<id>` for every Steam entry,
+ * and a second place to keep the same id current would be a second place
+ * for it to go stale. The first Steam app among the profile's enabled
+ * entries wins, matching the "games first" ordering the first-run wizard
+ * already uses -- a profile is usually built around one game.
+ */
+function steamAppId(apps) {
+  for (const app of apps || []) {
+    if (!app || app.enabled === false || !app.launch || app.launch.type !== 'uri') continue;
+    const match = /^steam:\/\/rungameid\/([1-9][0-9]{0,9})$/.exec(String(app.launch.target || ''));
+    if (match) return match[1];
+  }
+  return null;
+}
+
 function attentionItems({ expiringSoon, cold, collisions, steamActionable, wingetActionable }) {
   const items = [];
   const updateCount = steamActionable + (wingetActionable || 0);

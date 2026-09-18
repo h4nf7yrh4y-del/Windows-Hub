@@ -114,6 +114,9 @@ export const api = {
     measure: call(bridge.storage.measure),
     uninstall: call(bridge.storage.uninstall)
   },
+  coverart: {
+    get: call(bridge.coverart.get)
+  },
   selfupdate: {
     state: call(bridge.selfupdate.state),
     check: call(bridge.selfupdate.check),

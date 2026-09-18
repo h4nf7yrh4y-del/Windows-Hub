@@ -102,6 +102,9 @@ contextBridge.exposeInMainWorld('hub', {
     measure: (dir) => invoke('storage:measure', dir),
     uninstall: (appId) => invoke('storage:uninstall', appId)
   },
+  coverart: {
+    get: (appId) => invoke('coverart:get', appId)
+  },
   selfupdate: {
     state: () => invoke('selfupdate:state'),
     check: () => invoke('selfupdate:check'),

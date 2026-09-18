@@ -33,6 +33,7 @@ const backup = require('./backup');
 const audio = require('./audio');
 const trash = require('./trash');
 const discord = require('./discord');
+const coverart = require('./coverart');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -509,6 +510,10 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // value normalised here could not be refused there.
   ipcMain.handle('storage:uninstall', wrap(async (appId) =>
     storage.uninstallSteamGame(appId), 'storage:uninstall'));
+
+  // The id is passed through unchanged, same as storage:uninstall: the
+  // module refuses a bad one, and normalising it here could not.
+  ipcMain.handle('coverart:get', wrap(async (appId) => coverart.get(appId), 'coverart:get'));
 
   ipcMain.handle('selfupdate:state', wrap(async () => selfupdate.state(), 'selfupdate:state'));
   ipcMain.handle('selfupdate:check', wrap(async () => selfupdate.check(), 'selfupdate:check'));

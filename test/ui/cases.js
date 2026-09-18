@@ -988,6 +988,42 @@ module.exports = [
   },
 
   {
+    name: 'Titelbild: ein im Editor gesetztes Bild schlägt die Steam-Suche',
+    async run(t) {
+      await t.view('hub');
+      // A one-pixel PNG as a data url -- deterministic and offline, unlike
+      // the Steam CDN lookup this is specifically here to take priority over.
+      const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      const saved = await t.evalExpr(`window.hub.profiles.save({
+        name: 'Mit eigenem Bild', apps: [{
+          id: 'a1', name: 'Spiel', enabled: true,
+          launch: { type: 'uri', target: 'steam://rungameid/553850' }
+        }], cover: ${JSON.stringify(pixel)}
+      }).then((r) => r.data)`);
+
+      // Saved through the bridge directly, so the hub's own copy of the
+      // profile list does not know about it until asked -- the same
+      // "Aktualisieren" button a person would reach for.
+      await t.clickText('#view-hub .btn', 'Aktualisieren');
+
+      const style = await t.waitFor(
+        `(function () {
+          var cards = [...document.querySelectorAll('.profile-card')];
+          var card = cards.find((c) => c.textContent.includes('Mit eigenem Bild'));
+          var cover = card && card.querySelector('.card-cover');
+          return cover ? cover.style.backgroundImage : false;
+        })()`,
+        { label: 'Titelbild der Profilkarte' }
+      ).catch(() => '');
+      t.assert((style || '').includes('data:image/png'), 'Das eigene Bild wird gezeigt, nicht die Steam-Suche',
+        JSON.stringify(style));
+
+      await t.evalExpr(`window.hub.profiles.remove(${JSON.stringify(saved.id)})`);
+      await t.evalExpr(`window.hub.trash.empty()`);
+    }
+  },
+
+  {
     name: 'Papierkorb: Gelöschtes landet dort und kommt zurück',
     async run(t) {
       await t.view('hub');
