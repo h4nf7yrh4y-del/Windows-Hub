@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { setGamepadEnabled, gamepadState } from '../gamepad.js';
 import { state, saveSettings, applyTheme } from '../state.js';
 import { confirmDialog, openModal } from '../widgets/modal.js';
+import { openWelcome } from './welcome.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { THEMES, matchTheme, themePatch } from '../themes.js';
 
@@ -804,6 +805,16 @@ export function createSettingsView() {
               try { await api.settings.openConfigFolder(); } catch (err) { notifyError(err.message); }
             }
           })
+        ])
+      ]),
+
+      panel('Erste Schritte', [
+        el('div', { class: 'setting-hint', style: { lineHeight: '1.65' },
+          text: 'Der Assistent durchsucht Steam, Epic, das Startmenü und die Store-Apps '
+            + 'und legt aus einem gefundenen Spiel ein Profil an. Er erscheint einmal beim '
+            + 'ersten Start; hier lässt er sich jederzeit wieder öffnen.' }),
+        el('div', { class: 'row gap-8', style: { marginTop: '12px' } }, [
+          el('button', { class: 'btn subtle sm', text: 'Assistent öffnen', onClick: () => openWelcome() })
         ])
       ]),
 

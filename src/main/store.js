@@ -29,7 +29,9 @@ const DEFAULTS = {
     showGpu: true,
     gamepad: true,
     // Which monitor the hub opens on; null means the primary one.
-    hubDisplay: null
+    hubDisplay: null,
+    // Set once the first-run wizard has been finished or dismissed.
+    welcomeSeen: false
   },
   profiles: [],
   library: { customApps: [] },

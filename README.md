@@ -294,6 +294,13 @@ npm install
 npm start
 ```
 
+**Beim ersten Start** meldet sich ein Assistent: Er durchsucht Steam, Epic, das
+Startmenü und die Store-Apps und baut aus einem gefundenen Spiel ein Profil. Wer den
+Hub lieber selbst erkundet, überspringt ihn — er kommt dann nicht wieder, lässt sich
+aber unter *Setup → Erste Schritte* oder über die Befehlspalette jederzeit erneut
+öffnen. Bei einer Aktualisierung mit vorhandenen Profilen erscheint er gar nicht
+erst.
+
 ### Fertige exe herunterladen
 
 Die Windows-Dateien werden auf einem Windows-Runner gebaut und liegen unter

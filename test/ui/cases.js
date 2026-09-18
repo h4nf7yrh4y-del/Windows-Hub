@@ -866,6 +866,42 @@ module.exports = [
   },
 
   {
+    name: 'Erststart: Assistent erscheint nicht ungefragt, lässt sich aber holen',
+    async run(t) {
+      // The seeded configuration already has a profile, which is exactly the
+      // case that must NOT be greeted with a wizard: someone upgrading from a
+      // version without the flag has a full grid and no interest in one.
+      t.eq(await t.evalExpr(`!!document.querySelector('.modal')`), false,
+        'Bei vorhandenen Profilen erscheint der Assistent nicht von selbst');
+
+      await t.view('settings');
+      await t.waitFor(`/Erste Schritte/.test(document.querySelector('#view-settings').textContent)`,
+        { label: 'Erste-Schritte-Panel', timeout: 20000 });
+
+      await t.clickText('#view-settings .btn', 'Assistent öffnen');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Assistent' });
+
+      const text = (await t.text('.modal')) || '';
+      t.assert(/Ein Profil startet mehrere Programme/.test(text),
+        'Der Assistent erklärt, was ein Profil ist', text.slice(0, 120));
+      t.assert(/Überspringen/.test(text), 'Er lässt sich überspringen');
+
+      // Off Windows the scan finds nothing, and saying so is the point: an
+      // empty grid without explanation looks like a broken dialog.
+      await t.waitFor(
+        `/Es wurde nichts gefunden|Programme werden gesucht|wird angelegt|Ohne Auswahl/.test(document.querySelector('.modal').textContent)`,
+        { label: 'Ergebnis der Suche', timeout: 60000 });
+
+      await t.clickText('.modal .btn', 'Überspringen');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Assistent' });
+
+      // Dismissing counts: someone who closed it meant it.
+      const settings = await t.evalExpr(`window.hub.settings.get().then((r) => r.data.welcomeSeen)`);
+      t.eq(settings, true, 'Überspringen wird gemerkt');
+    }
+  },
+
+  {
     name: 'Discord: Sprungmarken und die Grenze',
     async run(t) {
       await t.view('settings');

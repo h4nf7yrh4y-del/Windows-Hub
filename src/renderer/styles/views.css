@@ -1857,3 +1857,39 @@
 .stor-dot.idle { background: #f5a623; }
 .stor-dot.cold { background: var(--danger); }
 .stor-dot.unknown { background: var(--line); }
+
+/* ------------------------------------------------------------- Erststart */
+/* A grid of choices rather than a dropdown: the whole point of the first run
+   is that the machine already knows these, and a list you have to open hides
+   that. */
+.wiz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.wiz-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  min-width: 0;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.wiz-card:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+
+.wiz-card.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.wiz-card svg { flex: 0 0 auto; opacity: 0.8; }
+.wiz-card.active svg { opacity: 1; color: var(--accent); }

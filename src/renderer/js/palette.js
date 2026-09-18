@@ -2,6 +2,7 @@ import { el, clear, svg } from './util.js';
 import { api } from './api.js';
 import { state } from './state.js';
 import { notifyError, notifyOk } from './widgets/toast.js';
+import { openWelcome } from './views/welcome.js';
 
 /**
  * One place to type what you want.
@@ -157,6 +158,7 @@ function actionEntries(showView, actions) {
     { title: 'Dashboard umschalten', hint: 'Zweiter Bildschirm', run: () => api.dashboard.toggle() },
     { title: 'Overlays umschalten', hint: 'Alle schwebenden Anzeigen', run: () => api.overlays.toggle() },
     { title: 'Claude-Konsole öffnen', hint: 'Eigenes Fenster', run: () => api.claude.openWindow() },
+    { title: 'Erste Schritte', hint: 'Assistent: aus einem gefundenen Spiel ein Profil bauen', run: () => openWelcome() },
     { title: 'Nach Updates suchen', hint: 'winget, Steam und Epic abfragen', run: () => showView('updates') },
     { title: 'Alle Programme aktualisieren', hint: 'Über winget, ohne Rückfrage je Paket', run: () => showView('updates') },
     { title: 'Spielzeit ansehen', hint: 'Wie lange welches Profil lief', run: async () => {

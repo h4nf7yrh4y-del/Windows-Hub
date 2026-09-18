@@ -13,6 +13,7 @@ import { createOverlaysView } from './views/overlays.js';
 import { createWindowsView } from './views/windows.js';
 import { createUpdatesView } from './views/updates.js';
 import { createStorageView } from './views/storage.js';
+import { maybeWelcome } from './views/welcome.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
 import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
@@ -373,6 +374,11 @@ async function init() {
   railIndicator = createRailIndicator($('#rail'));
   bindParallax($('#fx-layer'));
   showView('hub');
+
+  // Last, and only on a genuinely empty install. Deliberately not awaited:
+  // the hub is usable behind the dialog, and someone who wants to look around
+  // first should not have to answer a question to get at it.
+  maybeWelcome().catch((err) => console.warn('[welcome]', err.message));
 
   // A window resize moves the rail buttons; the indicator has to follow.
   window.addEventListener('resize', () => {

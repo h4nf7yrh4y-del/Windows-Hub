@@ -9,9 +9,9 @@ Ein Hauptprozess, mehrere Fenster, kein Bundler.
 ```bash
 npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
-npm run lint        # Syntaxprüfung aller Quelldateien
-npm test            # Logiktests, ~280 Zusicherungen
-npm run test:ui     # startet die echte App und bedient 26 Ansichten
+npm run lint        # Syntaxprüfung plus die maschinell prüfbaren Regeln
+npm test            # Logiktests, ~284 Zusicherungen
+npm run test:ui     # startet die echte App und bedient 27 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
 ```
