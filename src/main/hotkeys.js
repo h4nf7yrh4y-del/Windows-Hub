@@ -149,13 +149,109 @@ function list() {
   }));
 }
 
-function init(actionHandlers) {
-  handlers = actionHandlers || {};
-  return applyAll();
+/* --------------------------------------------------------- profile bindings */
+
+/**
+ * A key that starts one profile.
+ *
+ * Stored on the profile rather than in the hotkey table, because that is where
+ * it belongs: it travels with the profile into a backup, and it disappears
+ * when the profile does. The table here would otherwise fill up with entries
+ * pointing at profiles that no longer exist.
+ *
+ * Pressing it does exactly what pressing Start does, including when the
+ * profile is already running. That is on purpose: a global key that sometimes
+ * starts and sometimes stops -- and stopping closes programs -- is a key
+ * nobody can press with confidence. Consistency with the button beats
+ * cleverness here.
+ */
+const PROFILE_PREFIX = 'profile:';
+
+let launchProfile = null;
+
+function profileEntries() {
+  return (store.state.profiles || [])
+    .filter((profile) => profile && profile.id && (profile.hotkey || '').trim())
+    .map((profile) => ({ id: profile.id, name: profile.name, accelerator: profile.hotkey.trim() }));
+}
+
+/**
+ * Re-registers every profile key.
+ *
+ * Called whenever the profiles change, since a binding can appear, move or
+ * vanish with any edit. Everything is unregistered first: working out which
+ * single binding changed would be a second source of truth, and the wrong
+ * answer leaves a key bound to a profile that is gone.
+ */
+function applyProfiles() {
+  for (const action of Array.from(registered.keys())) {
+    if (action.startsWith(PROFILE_PREFIX)) unregister(action);
+  }
+
+  const results = [];
+  const taken = new Set(registered.values());
+
+  for (const entry of profileEntries()) {
+    const action = `${PROFILE_PREFIX}${entry.id}`;
+
+    // Checked before asking Electron, which answers a duplicate with the same
+    // bare `false` it uses for "another application owns this" -- two very
+    // different things to tell someone about.
+    if (taken.has(entry.accelerator)) {
+      // Carries the profile, not just the internal action id: a refusal that
+      // cannot be traced back to a row in the editor is a refusal nobody can
+      // act on.
+      results.push({
+        ok: false,
+        action,
+        profileId: entry.id,
+        name: entry.name,
+        accelerator: entry.accelerator,
+        reason: `${entry.accelerator} ist im Hub schon vergeben`
+      });
+      continue;
+    }
+
+    handlers[action] = () => { if (launchProfile) launchProfile(entry.id); };
+    const result = bind(action, entry.accelerator);
+    if (result.ok) taken.add(entry.accelerator);
+    else result.reason = result.reason || `${entry.accelerator} liess sich nicht belegen`;
+    results.push({ ...result, profileId: entry.id, name: entry.name });
+  }
+
+  return results;
+}
+
+/** What the interface shows per profile: the key, and whether it took. */
+function listProfiles() {
+  return profileEntries().map((entry) => ({
+    profileId: entry.id,
+    name: entry.name,
+    accelerator: entry.accelerator,
+    active: registered.has(`${PROFILE_PREFIX}${entry.id}`)
+  }));
+}
+
+function init(actionHandlers, { onProfile } = {}) {
+  handlers = { ...(actionHandlers || {}) };
+  launchProfile = typeof onProfile === 'function' ? onProfile : null;
+  const results = applyAll();
+  return [...results, ...applyProfiles()];
 }
 
 function dispose() {
   for (const action of Array.from(registered.keys())) unregister(action);
 }
 
-module.exports = { init, set, list, validate, dispose, applyAll, ACTIONS };
+module.exports = {
+  init,
+  set,
+  list,
+  validate,
+  dispose,
+  applyAll,
+  applyProfiles,
+  listProfiles,
+  ACTIONS,
+  PROFILE_PREFIX
+};

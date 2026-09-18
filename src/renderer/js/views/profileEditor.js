@@ -4,6 +4,7 @@ import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { api } from '../api.js';
 import { state, loadProfiles, loadLibrary, refreshRunning } from '../state.js';
 import { createSystemSection } from './profileSystem.js';
+import { toAccelerator, formatAccelerator } from '../keys.js';
 
 const ICON_TRASH = 'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13';
 const ICON_PLUS = 'M12 5v14M5 12h14';
@@ -27,6 +28,7 @@ function blankProfile() {
     cover: null,
     apps: [],
     alsoClose: [],
+    hotkey: '',
     minimizeOnLaunch: true
   };
 }
@@ -393,10 +395,94 @@ export function openProfileEditor(existing, onSaved) {
   };
   ctx.renderApps();
 
+  /* ----------------------------------------------------------- hotkey */
+
+  /**
+   * A global key that starts this profile.
+   *
+   * Captured rather than typed, for the same reason the settings panel does
+   * it: nobody knows that Electron spells it "CommandOrControl+Shift+1", and
+   * a field that accepts free text accepts combinations that can never be
+   * registered.
+   */
+  const hotkeyButton = el('button', {
+    class: 'btn subtle',
+    style: { minWidth: '160px' },
+    text: profile.hotkey ? formatAccelerator(profile.hotkey) : 'Taste zuweisen'
+  });
+
+  const hotkeyHint = el('div', { class: 'setting-hint', text:
+    'Startet dieses Profil von überall — auch aus einem laufenden Spiel heraus. '
+    + 'Der Druck tut genau das, was der Start-Knopf tut.' });
+
+  let capturing = false;
+
+  function stopCapture() {
+    capturing = false;
+    document.removeEventListener('keydown', onCapture, true);
+    hotkeyButton.textContent = profile.hotkey ? formatAccelerator(profile.hotkey) : 'Taste zuweisen';
+  }
+
+  function onCapture(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'Escape') { stopCapture(); return; }
+
+    const accelerator = toAccelerator(event);
+    if (!accelerator) return;
+    profile.hotkey = accelerator;
+    stopCapture();
+    // Nothing is registered until the profile is saved: binding a key to an
+    // unsaved profile would leave it pointing at something that may never
+    // exist.
+    hotkeyHint.textContent = `${formatAccelerator(accelerator)} — wirkt nach dem Speichern.`;
+  }
+
+  /**
+   * Whether the stored key actually took.
+   *
+   * A combination another program owns registers as nothing, and without this
+   * the editor would show it as set while pressing it does nothing at all --
+   * which people blame on the key, not on the hub.
+   */
+  if (profile.hotkey) {
+    api.hotkeys.profiles().then((rows) => {
+      const mine = (rows || []).find((row) => row.profileId === profile.id);
+      if (mine && !mine.active) {
+        hotkeyHint.textContent = `${formatAccelerator(profile.hotkey)} ist belegt — von einem anderen `
+          + 'Profil oder einem anderen Programm. Das Kürzel wirkt nicht.';
+        hotkeyHint.classList.add('warn');
+      }
+    }).catch(() => { /* the hint stays as it is */ });
+  }
+
+  hotkeyButton.addEventListener('click', () => {
+    if (capturing) { stopCapture(); return; }
+    capturing = true;
+    hotkeyButton.textContent = 'Taste drücken …';
+    document.addEventListener('keydown', onCapture, true);
+  });
+
+  const hotkeyClear = el('button', {
+    class: 'btn subtle',
+    text: 'Löschen',
+    onClick: () => {
+      profile.hotkey = '';
+      stopCapture();
+      hotkeyHint.textContent = 'Kein Tastenkürzel. Wirkt nach dem Speichern.';
+    }
+  });
+
   const basics = el('div', { class: 'stack gap-16' }, [
     el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' } }, [
       el('div', { class: 'field' }, [el('label', { text: 'Profilname' }), nameInput]),
       el('div', { class: 'field' }, [el('label', { text: 'Untertitel' }), taglineInput])
+    ]),
+
+    el('div', { class: 'field' }, [
+      el('label', { text: 'Tastenkürzel' }),
+      el('div', { class: 'row gap-8' }, [hotkeyButton, hotkeyClear]),
+      hotkeyHint
     ]),
 
     el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' } }, [
@@ -489,6 +575,9 @@ export function openProfileEditor(existing, onSaved) {
     title: existing ? 'Profil bearbeiten' : 'Neues Profil',
     width: '780px',
     render: () => body,
+    // Capturing a key puts a listener on the document; leaving the dialog with
+    // it still attached would swallow the next key press anywhere in the hub.
+    onClose: () => stopCapture(),
     actions: (close) => [
       existing
         ? el('button', {

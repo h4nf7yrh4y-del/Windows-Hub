@@ -294,6 +294,12 @@ npm install
 npm start
 ```
 
+**Tastenkürzel pro Profil.** Im Profileditor lässt sich jedem Profil eine
+systemweite Tastenkombination zuweisen — sie startet es von überall, auch aus einem
+laufenden Spiel heraus, und tut dabei genau das, was der Start-Knopf tut. Ist die
+Kombination schon von einem anderen Profil oder einem anderen Programm belegt, sagt der
+Editor das, statt sie als gesetzt anzuzeigen und nie auszulösen.
+
 **Beim ersten Start** meldet sich ein Assistent: Er durchsucht Steam, Epic, das
 Startmenü und die Store-Apps und baut aus einem gefundenen Spiel ein Profil. Wer den
 Hub lieber selbst erkundet, überspringt ihn — er kommt dann nicht wieder, lässt sich

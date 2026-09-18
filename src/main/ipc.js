@@ -101,6 +101,10 @@ function sanitizeProfile(raw) {
     minimizeOnLaunch: raw.minimizeOnLaunch !== false,
     system: tweaks.sanitize(raw.system),
     trigger: triggers.sanitize(raw.trigger),
+    // Checked with the same rule the hotkey panel uses. A combination that
+    // cannot be registered is stored as none rather than as something that
+    // looks bound and never fires.
+    hotkey: hotkeys.validate(raw.hotkey) ? '' : String(raw.hotkey || '').trim(),
     createdAt: Number(raw.createdAt) || Date.now(),
     lastLaunched: Number(raw.lastLaunched) || 0,
     launchCount: Number(raw.launchCount) || 0
@@ -247,6 +251,8 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     // The watcher polls only while at least one profile wants it, so every
     // change to the profiles has to be told.
     triggers.refresh();
+    // A key can appear, move or vanish with any edit, so they are all rebound.
+    hotkeys.applyProfiles();
     return profile;
   }, 'profiles:save'));
 
@@ -258,6 +264,7 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     if (state.lastProfileId === profileId) state.lastProfileId = null;
     store.save();
     triggers.refresh();
+    hotkeys.applyProfiles();
     return { removed: before - state.profiles.length };
   }, 'profiles:delete'));
 
@@ -468,10 +475,14 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   ipcMain.handle('backup:import', wrap(async (text, mode) => {
     const result = await backup.importFrom(requireString(text, 'Sicherung'), { mode });
     triggers.refresh();
+    hotkeys.applyProfiles();
     return result;
   }, 'backup:import'));
 
   ipcMain.handle('triggers:list', wrap(async () => triggers.list(), 'triggers:list'));
+  // What actually took: a key the system refused is stored but not active,
+  // and the editor has to be able to say so.
+  ipcMain.handle('hotkeys:profiles', wrap(async () => hotkeys.listProfiles(), 'hotkeys:profiles'));
   ipcMain.handle('triggers:refresh', wrap(async () => triggers.refresh(), 'triggers:refresh'));
 
   ipcMain.handle('storage:overview', wrap(async () => storage.overview(), 'storage:overview'));

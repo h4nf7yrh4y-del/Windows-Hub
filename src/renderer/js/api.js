@@ -163,7 +163,8 @@ export const api = {
   },
   hotkeys: {
     list: call(bridge.hotkeys.list),
-    set: call(bridge.hotkeys.set)
+    set: call(bridge.hotkeys.set),
+    profiles: call(bridge.hotkeys.profiles)
   },
   settings: {
     get: call(bridge.settings.get),

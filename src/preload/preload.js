@@ -150,7 +150,8 @@ contextBridge.exposeInMainWorld('hub', {
   },
   hotkeys: {
     list: () => invoke('hotkeys:list'),
-    set: (action, accelerator) => invoke('hotkeys:set', action, accelerator)
+    set: (action, accelerator) => invoke('hotkeys:set', action, accelerator),
+    profiles: () => invoke('hotkeys:profiles')
   },
   settings: {
     get: () => invoke('settings:get'),

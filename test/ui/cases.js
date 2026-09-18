@@ -145,6 +145,13 @@ module.exports = [
       t.assert(await t.exists('.editor-apps'), 'Editor listet die Programme');
       t.assert(await t.exists('.accent-swatches'), 'Farbwahl im Editor vorhanden');
 
+      // A profile key is captured, not typed: nobody knows Electron spells it
+      // "CommandOrControl+Shift+1", and a free-text field accepts things that
+      // can never be registered.
+      const editor = (await t.text('.modal')) || '';
+      t.assert(/Tastenkürzel/.test(editor), 'Der Editor bietet ein Tastenkürzel an');
+      t.assert(/Taste zuweisen/.test(editor), 'Es wird zugewiesen statt getippt');
+
       // Cancelling must leave no profile behind and no dialog on screen.
       await t.clickText('.modal .btn', 'Abbrechen');
       await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
@@ -862,6 +869,39 @@ module.exports = [
       const loadVar = await t.evalExpr(`getComputedStyle(document.documentElement).getPropertyValue('--load').trim()`);
       t.assert(loadVar !== '' && Number(loadVar) >= 0 && Number(loadVar) <= 1,
         'Die Hintergrundeffekte bekommen die aktuelle Auslastung', JSON.stringify(loadVar));
+    }
+  },
+
+  {
+    name: 'Profil-Tastenkürzel: gespeichert, gemeldet, entfernt',
+    async run(t) {
+      // The list only ever contains keys that are stored on a profile, and
+      // says per entry whether the system actually gave it to us -- a key that
+      // never fires must not look bound.
+      const rows = await t.evalExpr(`window.hub.hotkeys.profiles().then((r) => r.data)`);
+      t.assert(Array.isArray(rows), 'Die Profil-Kürzel lassen sich auflisten');
+      for (const row of rows) {
+        t.assert(typeof row.active === 'boolean', 'Jeder Eintrag sagt, ob er greift', JSON.stringify(row));
+      }
+
+      // Stored on the profile, so a rubbish combination is dropped rather than
+      // kept as something that looks bound. `A` alone would swallow that key
+      // in every other application.
+      const saved = await t.evalExpr(`window.hub.profiles.save({
+        name: 'Kürzeltest', apps: [], hotkey: 'A'
+      }).then((r) => r.data)`);
+      t.eq(saved.hotkey, '', 'Eine Taste ohne Zusatztaste wird nicht gespeichert');
+
+      const good = await t.evalExpr(`window.hub.profiles.save({
+        id: ${JSON.stringify('ui-hotkey-test')}, name: 'Kürzeltest', apps: [], hotkey: 'Alt+Shift+9'
+      }).then((r) => r.data)`);
+      t.eq(good.hotkey, 'Alt+Shift+9', 'Eine gültige Kombination bleibt erhalten');
+
+      await t.evalExpr(`window.hub.profiles.remove('ui-hotkey-test')`);
+      await t.evalExpr(`window.hub.profiles.remove(${JSON.stringify(saved.id)})`);
+      const after = await t.evalExpr(`window.hub.hotkeys.profiles().then((r) => r.data)`);
+      t.assert(!after.some((row) => row.profileId === 'ui-hotkey-test'),
+        'Mit dem Profil verschwindet auch sein Kürzel', JSON.stringify(after));
     }
   },
 

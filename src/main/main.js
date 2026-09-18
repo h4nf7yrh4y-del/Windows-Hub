@@ -9,6 +9,7 @@ const store = require('./store');
 const metrics = require('./metrics');
 const { registerIpc } = require('./ipc');
 const overlays = require('./overlays');
+const launcher = require('./launcher');
 const hotkeys = require('./hotkeys');
 const claudesession = require('./claudesession');
 const tweaks = require('./tweaks');
@@ -280,6 +281,18 @@ function registerShortcuts() {
     toggleOverlays,
     openClaude: () => createClaudeWindow(),
     toggleDashboard: () => dashboard.toggle()
+  }, {
+    // A profile key does exactly what its Start button does. Failures are
+    // logged rather than surfaced: the key was pressed from inside a game,
+    // where a dialog would be worse than a line in the log.
+    onProfile: (profileId) => {
+      const profile = (store.state.profiles || []).find((p) => p.id === profileId);
+      if (!profile) return;
+      log.info(`Profil „${profile.name}" über Tastenkürzel gestartet`);
+      launcher.launchProfile(profile, (event) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('profile:progress', event);
+      }).catch((err) => log.error(`Tastenkürzel-Start fehlgeschlagen: ${err.message}`));
+    }
   });
   for (const result of results) {
     if (!result.ok) console.warn(`[hotkeys] ${result.action}: ${result.reason}`);
