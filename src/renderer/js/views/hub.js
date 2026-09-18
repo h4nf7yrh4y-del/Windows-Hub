@@ -8,6 +8,7 @@ import { LaunchOverlay } from './launchOverlay.js';
 import { createMediaBar } from '../widgets/media.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { confirmDialog, openModal } from '../widgets/modal.js';
+import { list as activityList, onChange as onActivityChange, clear as clearActivity } from '../activity.js';
 
 const ICON_PLUS = 'M12 5v14M5 12h14';
 const ICON_PLAY = 'M7 4l13 8-13 8z';
@@ -313,8 +314,63 @@ function openTrash() {
   return modal;
 }
 
+/**
+ * The last few things that happened, not just the one that just did.
+ *
+ * A toast answers "did that work" for whoever is looking at the screen at
+ * that exact moment and then is gone -- minimize the hub while a trigger
+ * fires in the background, or step away for a minute, and there was never
+ * anything to come back to. This is the same events, kept a little longer.
+ *
+ * Absent entirely when there is nothing to show: an empty "Aktivität" panel
+ * sitting there by default would be one more thing on a screen that already
+ * has a lot on it, for no information at all.
+ */
+function activityPanel() {
+  const rows = el('div', { class: 'activity-rows' });
+  const panel = el('div', { class: 'panel activity-panel hidden' }, [
+    el('div', { class: 'panel-head' }, [
+      el('div', { class: 'panel-title', text: 'Aktivität' }),
+      el('button', {
+        class: 'btn subtle sm',
+        text: 'Leeren',
+        onClick: () => clearActivity()
+      })
+    ]),
+    rows
+  ]);
+
+  function paint(entries) {
+    panel.classList.toggle('hidden', !entries.length);
+    clear(rows);
+    for (const entry of entries.slice(0, 6)) {
+      rows.appendChild(el('div', { class: `activity-row ${entry.kind}` }, [
+        el('span', { class: 'activity-dot' }),
+        el('span', { class: 'activity-msg truncate', text: entry.message }),
+        el('span', { class: 'activity-time', text: relativeTime(entry.at) })
+      ]));
+    }
+  }
+
+  let unsubscribe = null;
+  function start() {
+    paint(activityList());
+    if (!unsubscribe) unsubscribe = onActivityChange(paint);
+  }
+  function stop() {
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  }
+
+  // Started immediately, the same way the media bar is: the very first time
+  // a view is created, app.js does not fire `view:mount` for it, only for
+  // the views it returns to.
+  start();
+  return { node: panel, start, stop };
+}
+
 export function createHubView() {
   const mediaBar = createMediaBar();
+  const activity = activityPanel();
 
   host = el('section', { class: 'view', id: 'view-hub' }, [
     el('div', { class: 'view-head' }, [
@@ -331,6 +387,7 @@ export function createHubView() {
       ])
     ]),
     mediaBar.node,
+    activity.node,
     el('div', { class: 'profile-grid' })
   ]);
 
@@ -342,10 +399,12 @@ export function createHubView() {
     if (releaseWatch) { releaseWatch(); releaseWatch = null; }
     // Each read is a system call; it stops with the view.
     mediaBar.stop();
+    activity.stop();
   });
   host.addEventListener('view:mount', () => {
     if (!releaseWatch) releaseWatch = watchRunning();
     mediaBar.start();
+    activity.start();
   });
 
   render();

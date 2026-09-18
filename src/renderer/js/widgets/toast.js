@@ -1,8 +1,14 @@
 import { el, $ } from '../util.js';
+import { record } from '../activity.js';
 
 const TITLES = { info: 'System', ok: 'Erfolg', warn: 'Achtung', error: 'Fehler' };
+// Info-level toasts are mostly transient progress ("Scanne …") and would
+// drown out the events actually worth remembering after the fact.
+const REMEMBERED = new Set(['ok', 'warn', 'error']);
 
 export function toast(message, kind = 'info', ttl = 4200) {
+  if (REMEMBERED.has(kind)) record(kind, message);
+
   const host = $('#toasts');
   if (!host) return;
   const node = el('div', { class: `toast ${kind}` }, [

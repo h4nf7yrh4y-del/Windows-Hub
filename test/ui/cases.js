@@ -909,6 +909,39 @@ module.exports = [
   },
 
   {
+    name: 'Aktivität: ein Ereignis erscheint im Hub und lässt sich leeren',
+    async run(t) {
+      // A theme change is a convenient, harmless 'ok' toast: it does not
+      // depend on anything else in the suite and nothing else depends on it.
+      await t.view('settings');
+      await t.js(`
+        const cards = [...document.querySelectorAll('.theme-card')];
+        const other = cards.find((c) => !c.classList.contains('active'));
+        other.click();
+        return true;
+      `);
+      await t.wait(300);
+
+      await t.view('hub');
+      const shown = await t.waitFor(
+        `(function () {
+          var panel = document.querySelector('.activity-panel');
+          var row = document.querySelector('.activity-row .activity-msg');
+          return (panel && !panel.classList.contains('hidden') && row) ? row.textContent : false;
+        })()`,
+        { label: 'Aktivitätszeile im Hub' }
+      ).catch(() => '');
+      t.assert(/Thema/.test(shown || ''), 'Der Themenwechsel erscheint im Aktivitätsverlauf', JSON.stringify(shown));
+
+      await t.click('.activity-panel .btn');
+      t.eq(await t.waitFor(
+        `document.querySelector('.activity-panel').classList.contains('hidden')`,
+        { label: 'geleerter Aktivitätsverlauf' }
+      ).catch(() => false), true, 'Leeren blendet das Panel aus, statt eine leere Liste zu zeigen');
+    }
+  },
+
+  {
     name: 'Papierkorb: Gelöschtes landet dort und kommt zurück',
     async run(t) {
       await t.view('hub');

@@ -16,6 +16,7 @@ import { createStorageView } from './views/storage.js';
 import { maybeWelcome } from './views/welcome.js';
 import { createSettingsView } from './views/settings.js';
 import { notifyError } from './widgets/toast.js';
+import { recordTrigger } from './activity.js';
 import { countTo, createRailIndicator, enterView, bindParallax } from './motion.js';
 import { initGamepad, setGamepadEnabled } from './gamepad.js';
 import { createPalette } from './palette.js';
@@ -364,6 +365,9 @@ async function init() {
 
   bindMetrics();
   bindTopbar();
+  // Subscribed once, globally: a trigger can fire while any other view is
+  // open, and the point of the activity feed is to catch that too.
+  api.triggers.onEvent(recordTrigger);
   initGamepad({
     onToggleOverlays: () => api.overlays.toggle().catch((err) => notifyError(err.message))
   });
