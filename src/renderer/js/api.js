@@ -98,6 +98,12 @@ export const api = {
     inspect: call(bridge.backup.inspect),
     import: call(bridge.backup.import)
   },
+  trash: {
+    list: call(bridge.trash.list),
+    restore: call(bridge.trash.restore),
+    drop: call(bridge.trash.drop),
+    empty: call(bridge.trash.empty)
+  },
   triggers: {
     list: call(bridge.triggers.list),
     refresh: call(bridge.triggers.refresh),

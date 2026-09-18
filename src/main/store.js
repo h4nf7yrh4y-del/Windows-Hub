@@ -50,7 +50,9 @@ const DEFAULTS = {
   // How long each profile actually ran. Appended when a session ends.
   playSessions: [],
   // Jump marks into the Discord client. Not chat -- see discord.js for why.
-  discord: []
+  discord: [],
+  // Deleted profiles, kept for two weeks so a misclick is recoverable.
+  trash: []
 };
 
 let cache = null;

@@ -873,6 +873,38 @@ module.exports = [
   },
 
   {
+    name: 'Papierkorb: Gelöschtes landet dort und kommt zurück',
+    async run(t) {
+      await t.view('hub');
+      t.assert(/Papierkorb/.test((await t.text('#view-hub')) || ''),
+        'Der Papierkorb ist aus der Profilansicht erreichbar');
+
+      // Deleting has to put the whole profile aside, not just its name.
+      const made = await t.evalExpr(`window.hub.profiles.save({
+        name: 'Wegwerfprofil', tagline: 'Zum Löschen', apps: []
+      }).then((r) => r.data)`);
+      await t.evalExpr(`window.hub.profiles.remove(${JSON.stringify('PLACEHOLDER')})`
+        .replace('PLACEHOLDER', made.id));
+
+      const binned = await t.evalExpr(`window.hub.trash.list().then((r) => r.data)`);
+      const entry = binned.find((row) => row.name === 'Wegwerfprofil');
+      t.assert(entry, 'Das gelöschte Profil liegt im Papierkorb', JSON.stringify(binned));
+      t.assert(entry.expiresAt > Date.now(), 'Und hat eine Restlaufzeit');
+
+      const restored = await t.evalExpr(
+        `window.hub.trash.restore(${JSON.stringify(entry.id)}).then((r) => r.data)`);
+      t.eq(restored.profile.tagline, 'Zum Löschen', 'Es kommt vollständig zurück');
+      t.eq(restored.renamed, false, 'Und unter seinem alten Namen, weil der Platz frei war');
+
+      // Cleaned up after itself, so the next case starts where it expects to.
+      await t.evalExpr(`window.hub.profiles.remove(${JSON.stringify(restored.profile.id)})`);
+      await t.evalExpr(`window.hub.trash.empty()`);
+      t.eq((await t.evalExpr(`window.hub.trash.list().then((r) => r.data.length)`)), 0,
+        'Leeren räumt den Papierkorb');
+    }
+  },
+
+  {
     name: 'Profil-Tastenkürzel: gespeichert, gemeldet, entfernt',
     async run(t) {
       // The list only ever contains keys that are stored on a profile, and

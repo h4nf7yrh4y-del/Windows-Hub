@@ -294,6 +294,12 @@ npm install
 npm start
 ```
 
+**Papierkorb.** Ein gelöschtes Profil ist nicht sofort weg: es liegt zwei Wochen im
+Papierkorb, erreichbar über den gleichnamigen Knopf in der Profilansicht, und kommt
+vollständig zurück — samt Programmen, Systemeinstellungen und Tastenkürzel. Wurde
+inzwischen ein neues Profil an derselben Stelle angelegt, entsteht beim Zurückholen
+eine Kopie statt einer Überschreibung, und der Hub sagt das auch.
+
 **Tastenkürzel pro Profil.** Im Profileditor lässt sich jedem Profil eine
 systemweite Tastenkombination zuweisen — sie startet es von überall, auch aus einem
 laufenden Spiel heraus, und tut dabei genau das, was der Start-Knopf tut. Ist die

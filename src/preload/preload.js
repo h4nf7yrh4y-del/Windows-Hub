@@ -86,6 +86,12 @@ contextBridge.exposeInMainWorld('hub', {
     inspect: () => invoke('backup:inspect'),
     import: (text, mode) => invoke('backup:import', text, mode)
   },
+  trash: {
+    list: () => invoke('trash:list'),
+    restore: (id) => invoke('trash:restore', id),
+    drop: (id) => invoke('trash:drop', id),
+    empty: () => invoke('trash:empty')
+  },
   triggers: {
     list: () => invoke('triggers:list'),
     refresh: () => invoke('triggers:refresh'),

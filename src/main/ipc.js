@@ -31,6 +31,7 @@ const storage = require('./storage');
 const triggers = require('./triggers');
 const backup = require('./backup');
 const audio = require('./audio');
+const trash = require('./trash');
 const discord = require('./discord');
 const logger = require('./logger');
 
@@ -260,6 +261,10 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     const profileId = requireString(id, 'Profile id');
     const state = store.state;
     const before = state.profiles.length;
+    // Copied aside before it goes. A profile is twenty minutes of work and
+    // deleting one is a single click.
+    const going = state.profiles.find((p) => p.id === profileId);
+    if (going) trash.remember(going);
     state.profiles = state.profiles.filter((p) => p.id !== profileId);
     if (state.lastProfileId === profileId) state.lastProfileId = null;
     store.save();
@@ -482,6 +487,18 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   ipcMain.handle('triggers:list', wrap(async () => triggers.list(), 'triggers:list'));
   // What actually took: a key the system refused is stored but not active,
   // and the editor has to be able to say so.
+  /* --------------------------------------------------------------- trash */
+
+  ipcMain.handle('trash:list', wrap(async () => trash.list(), 'trash:list'));
+  ipcMain.handle('trash:restore', wrap(async (id) => {
+    const result = trash.restore(requireString(id, 'Eintrag'));
+    triggers.refresh();
+    hotkeys.applyProfiles();
+    return result;
+  }, 'trash:restore'));
+  ipcMain.handle('trash:drop', wrap(async (id) => trash.drop(requireString(id, 'Eintrag')), 'trash:drop'));
+  ipcMain.handle('trash:empty', wrap(async () => trash.empty(), 'trash:empty'));
+
   ipcMain.handle('hotkeys:profiles', wrap(async () => hotkeys.listProfiles(), 'hotkeys:profiles'));
   ipcMain.handle('triggers:refresh', wrap(async () => triggers.refresh(), 'triggers:refresh'));
 

@@ -7,7 +7,7 @@ import { openStats } from './stats.js';
 import { LaunchOverlay } from './launchOverlay.js';
 import { createMediaBar } from '../widgets/media.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
-import { confirmDialog } from '../widgets/modal.js';
+import { confirmDialog, openModal } from '../widgets/modal.js';
 
 const ICON_PLUS = 'M12 5v14M5 12h14';
 const ICON_PLAY = 'M7 4l13 8-13 8z';
@@ -212,6 +212,107 @@ function render() {
   if (counter) counter.textContent = `${state.profiles.length} Profile geladen`;
 }
 
+/**
+ * Deleted profiles, and the way back.
+ *
+ * A dialog rather than a view: it is somewhere you go once, in the minute
+ * after realising the mistake, not a place to navigate to.
+ */
+function openTrash() {
+  const body = el('div', { class: 'stack gap-12' });
+
+  const modal = openModal({
+    title: 'Papierkorb',
+    width: '560px',
+    render: () => body
+  });
+
+  function days(entry) {
+    const left = Math.ceil((entry.expiresAt - Date.now()) / (24 * 3600 * 1000));
+    if (left <= 0) return 'läuft heute ab';
+    return left === 1 ? 'noch einen Tag' : `noch ${left} Tage`;
+  }
+
+  async function render() {
+    clear(body);
+    let entries = [];
+    try {
+      entries = await api.trash.list();
+    } catch (err) {
+      body.appendChild(el('div', { class: 'faint', text: err.message }));
+      return;
+    }
+
+    if (!entries.length) {
+      body.appendChild(el('div', { class: 'empty', style: { padding: '28px' } }, [
+        el('div', { class: 'empty-title', text: 'Nichts gelöscht' }),
+        el('div', { style: { fontSize: '12px' },
+          text: 'Gelöschte Profile landen hier und bleiben zwei Wochen.' })
+      ]));
+      return;
+    }
+
+    for (const entry of entries) {
+      body.appendChild(el('div', { class: 'row gap-8 between' }, [
+        el('div', { class: 'stack gap-2 grow', style: { minWidth: '0' } }, [
+          el('div', { class: 'setting-label truncate', text: entry.name }),
+          el('div', { class: 'setting-hint', text: `${entry.apps} Programme · ${days(entry)}` })
+        ]),
+        el('button', {
+          class: 'btn primary sm',
+          text: 'Zurückholen',
+          onClick: async () => {
+            try {
+              const result = await api.trash.restore(entry.id);
+              await loadProfiles();
+              // Said out loud rather than silently: a restore that landed
+              // under a different name is not the thing that was expected.
+              toast(result.renamed
+                ? `„${result.profile.name}" — der alte Platz war belegt`
+                : `„${result.profile.name}" zurückgeholt`);
+              render();
+            } catch (err) { notifyError(err.message); }
+          }
+        }),
+        el('button', {
+          class: 'btn danger sm',
+          text: 'Endgültig',
+          onClick: async () => {
+            const sure = await confirmDialog({
+              title: `„${entry.name}" endgültig löschen`,
+              message: 'Danach ist das Profil weg. Es gibt keinen zweiten Papierkorb.',
+              confirmLabel: 'Endgültig löschen',
+              danger: true
+            });
+            if (!sure) return;
+            try { await api.trash.drop(entry.id); render(); } catch (err) { notifyError(err.message); }
+          }
+        })
+      ]));
+    }
+
+    body.appendChild(el('div', { class: 'row gap-8', style: { marginTop: '8px' } }, [
+      el('button', {
+        class: 'btn subtle sm',
+        text: 'Papierkorb leeren',
+        onClick: async () => {
+          const sure = await confirmDialog({
+            title: 'Papierkorb leeren',
+            message: `${entries.length} gelöschte Profile werden endgültig entfernt.`,
+            confirmLabel: 'Leeren',
+            danger: true
+          });
+          if (!sure) return;
+          try { await api.trash.empty(); render(); } catch (err) { notifyError(err.message); }
+        }
+      })
+    ]));
+  }
+
+  render();
+  return modal;
+}
+
 export function createHubView() {
   const mediaBar = createMediaBar();
 
@@ -222,6 +323,7 @@ export function createHubView() {
         el('div', { class: 'view-sub', dataset: { role: 'profile-count' }, text: '' })
       ]),
       el('div', { class: 'view-actions' }, [
+        el('button', { class: 'btn subtle', text: 'Papierkorb', title: 'Gelöschte Profile zurückholen', onClick: () => openTrash() }),
         el('button', { class: 'btn subtle', text: 'Spielzeit', title: 'Wie lange welches Profil lief', onClick: () => openStats() }),
         el('button', { class: 'btn subtle', text: 'Zeitplan', title: 'Profile zu festen Zeiten starten oder beenden', onClick: () => openScheduleManager() }),
         el('button', { class: 'btn subtle', text: 'Aktualisieren', onClick: async () => { await loadProfiles(); toast('Profile neu geladen'); } }),
