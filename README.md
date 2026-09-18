@@ -296,8 +296,8 @@ npm start
 
 ### Fertige exe herunterladen
 
-Jeder Push baut die Windows-Dateien auf einem Windows-Runner und veröffentlicht sie
-unter **Releases**. Du musst nichts selbst kompilieren:
+Die Windows-Dateien werden auf einem Windows-Runner gebaut und liegen unter
+**Releases**. Du musst nichts selbst kompilieren:
 
 | Datei | Wofür |
 |---|---|
@@ -309,9 +309,15 @@ Repository privat ist, musst du dafür allerdings bei GitHub mit deinem Konto
 angemeldet sein; ein anonymer Download ergibt einen 404. Erst wenn du das
 Repository öffentlich stellst, funktioniert der Link für jeden.
 
-Dieselben Dateien liegen zusätzlich unter **Actions** beim jeweiligen Lauf als
-Artefakte. Die sind immer in ein Zip verpackt und ebenfalls nur angemeldet
-erreichbar, deshalb ist der Release der bequemere Weg.
+**Wann es eine neue Release gibt.** Gebaut und getestet wird bei jedem Push,
+veröffentlicht wird nur, wenn die Version in `package.json` sich geändert hat, bei
+einem `v*`-Tag, oder wenn du den Workflow unter **Actions → Build Windows → Run
+workflow** von Hand mit dem Schalter „Release" startest. Der Grund steht jeweils in
+der Zusammenfassung des Laufs.
+
+Das ist kein Geiz, sondern Rechnung: Die beiden Dateien sind je rund 106 MB, und ihr
+Upload dauert eine Viertelstunde. Bei jedem Push, auch für einen geänderten Kommentar,
+wäre das der längste Teil des Laufs.
 
 Beide Dateien sind nicht signiert. Windows SmartScreen warnt beim ersten Start,
 über *Weitere Informationen* und *Trotzdem ausführen* kommst du daran vorbei. Ein

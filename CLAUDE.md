@@ -179,7 +179,15 @@ erklärt, ist besser als einer, der sie verschweigt.
 ## Bauen und Veröffentlichen
 
 Jeder Push auf einen Branch löst den Workflow in `.github/workflows/build.yml` aus:
-Tests unter Linux, dann Bauen und dieselben Oberflächentests auf einem Windows-Runner,
-dann Veröffentlichen unter dem Tag `v<version aus package.json>`. Nur ein grüner Lauf
+Tests unter Linux, dann Bauen und dieselben Oberflächentests auf einem Windows-Runner.
+Gebaut wird immer, **veröffentlicht nur, wenn es etwas zu veröffentlichen gibt**: wenn
+die Version in `package.json` sich gegenüber dem vorherigen Commit geändert hat, bei
+einem Push auf einen `v*`-Tag, oder wenn der Workflow von Hand mit dem Schalter
+„Release" gestartet wird. Der Grund steht in der Zusammenfassung des Laufs, damit eine
+ausbleibende Release nie stillschweigend passiert.
+
+Das hat einen handfesten Grund: Die beiden exe sind je rund 106 MB, und ihr Upload hat
+eine Viertelstunde gedauert — bei jedem Push, auch wenn sich nur ein Kommentar geändert
+hat. Eine neue exe ist also eine Entscheidung, keine Nebenwirkung. Nur ein grüner Lauf
 veröffentlicht. Der Windows-Runner hat zwei Kerne und eine kaputte WMI-Energieverwaltung
 — was dort langsam ist, ist oft ein echter Engpass und nicht nur CI.

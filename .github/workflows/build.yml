@@ -9,6 +9,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Fertige Dateien veröffentlichen, auch ohne neue Versionsnummer'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -54,6 +59,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Two commits, so the publish step can see whether the version moved.
+          # The default is one, and the comparison would then have nothing to
+          # compare against.
+          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -103,6 +113,53 @@ jobs:
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
           "version=$v" >> $env:GITHUB_OUTPUT
 
+      # Uploading the two executables takes a quarter of an hour, and it ran on
+      # every push -- including the ones that only changed a comment. A release
+      # is worth that when there is a new version to release, and not otherwise.
+      #
+      # Published when the version in package.json moved, when the push is a
+      # tag, or when someone asked for it from the Actions page. Anything else
+      # builds and tests as before and says why it stopped short, because an
+      # exe that quietly stays old is worse than one that is not there.
+      - name: Decide whether to publish
+        id: decide
+        shell: pwsh
+        run: |
+          $reason = ''
+          $publish = $false
+
+          if ('${{ github.event_name }}' -eq 'pull_request') {
+            $reason = 'Pull Request veröffentlicht nie.'
+          } elseif ('${{ github.ref }}'.StartsWith('refs/tags/v')) {
+            $publish = $true
+            $reason = 'Push auf einen Versions-Tag.'
+          } elseif ('${{ inputs.release }}' -eq 'true') {
+            $publish = $true
+            $reason = 'Von Hand angefordert.'
+          } else {
+            $previous = $null
+            try { $previous = (git show HEAD~1:package.json | ConvertFrom-Json).version } catch { }
+            if (-not $previous) {
+              # No previous commit to compare against: publishing is the safer
+              # guess, since the alternative is silently shipping nothing.
+              $publish = $true
+              $reason = 'Vorherige Version nicht lesbar, im Zweifel veroeffentlichen.'
+            } elseif ($previous -ne '${{ steps.pkg.outputs.version }}') {
+              $publish = $true
+              $reason = "Version von $previous auf ${{ steps.pkg.outputs.version }} gehoben."
+            } else {
+              $reason = "Version unveraendert bei ${{ steps.pkg.outputs.version }}."
+            }
+          }
+
+          "publish=$($publish.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          $headline = if ($publish) { 'Wird veroeffentlicht' } else { 'Wird nicht veroeffentlicht' }
+          Write-Output "$headline - $reason"
+          "## $headline`n`n$reason" >> $env:GITHUB_STEP_SUMMARY
+          if (-not $publish) {
+            "`nDie fertigen Dateien liegen im Lauf, aber nicht als Release. Fuer eine neue Release: Version in package.json erhoehen, oder den Workflow von Hand mit ,Release' starten." >> $env:GITHUB_STEP_SUMMARY
+          }
+
       # Artifacts are only reachable while signed in and always arrive zipped.
       # A release gives a plain .exe link that anyone can download directly.
       #
@@ -116,7 +173,7 @@ jobs:
       # turns the run red.
       - name: Publish release
         id: publish
-        if: github.event_name != 'pull_request'
+        if: steps.decide.outputs.publish == 'true'
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
@@ -152,7 +209,7 @@ jobs:
             Windows 10 ab Version 1709.
 
       - name: Publish release (zweiter Versuch)
-        if: github.event_name != 'pull_request' && steps.publish.outcome == 'failure'
+        if: steps.decide.outputs.publish == 'true' && steps.publish.outcome == 'failure'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.pkg.outputs.version) }}
