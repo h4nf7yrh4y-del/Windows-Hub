@@ -9,6 +9,7 @@ import { createMediaBar } from '../widgets/media.js';
 import { notifyError, notifyOk, toast } from '../widgets/toast.js';
 import { confirmDialog, openModal } from '../widgets/modal.js';
 import { list as activityList, onChange as onActivityChange, clear as clearActivity } from '../activity.js';
+import { wingetCache } from '../updatesCache.js';
 
 const ICON_PLUS = 'M12 5v14M5 12h14';
 const ICON_PLAY = 'M7 4l13 8-13 8z';
@@ -368,9 +369,126 @@ function activityPanel() {
   return { node: panel, start, stop };
 }
 
+const ATTENTION_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Four things the hub already knows, pulled into one place: a pending
+ * winget or Steam update, a game nobody has played in a year, a deleted
+ * profile about to age out of the bin, a hotkey that looks bound but does
+ * not fire. Every one of them lives behind its own view today and stays
+ * there unless someone happens to open it.
+ *
+ * Three of the four reads are cheap manifest and in-memory lookups and are
+ * safe to repeat on every profile change. winget is not -- it can take the
+ * better part of a minute on a cold cache, which is accepted on the Updates
+ * view because opening it is a deliberate choice. It must not become a
+ * hidden cost of the hub simply existing, so this never calls it: it only
+ * reads `updatesCache.js`, which the Updates view fills in when a real scan
+ * already happened. Nothing checked yet reads as nothing to report, the
+ * same as the query having found no updates -- both mean there is nothing
+ * this card can usefully say right now.
+ */
+
+/* ------------------------------------------------------------------- pure */
+/*
+ * What the card says, kept separate from how it says it (the click targets,
+ * the DOM). `test/hub-attention.test.js` lifts this out and runs it
+ * directly -- the wording and the thresholds are the part worth getting
+ * right, and neither needs a page to check.
+ */
+function attentionItems({ expiringSoon, cold, collisions, steamActionable, wingetActionable }) {
+  const items = [];
+  const updateCount = steamActionable + (wingetActionable || 0);
+
+  if (updateCount > 0) {
+    items.push({ key: 'updates', text: `${updateCount} ${updateCount === 1 ? 'Update verfügbar' : 'Updates verfügbar'}` });
+  }
+  if (cold > 0) {
+    items.push({ key: 'storage', text: `${cold} ${cold === 1 ? 'Spiel liegt' : 'Spiele liegen'} seit über einem Jahr ungenutzt` });
+  }
+  if (expiringSoon > 0) {
+    items.push({
+      key: 'trash',
+      text: `${expiringSoon} ${expiringSoon === 1 ? 'gelöschtes Profil läuft' : 'gelöschte Profile laufen'} bald aus dem Papierkorb`
+    });
+  }
+  if (collisions > 0) {
+    items.push({ key: 'hotkeys', text: `${collisions} ${collisions === 1 ? 'Tastenkürzel greift' : 'Tastenkürzel greifen'} nicht` });
+  }
+  return items;
+}
+
+/* --------------------------------------------------------------- end pure */
+
+function attentionPanel() {
+  const rows = el('div', { class: 'attention-rows' });
+  const panel = el('div', { class: 'panel attention-panel hidden' }, [
+    el('div', { class: 'panel-head' }, [el('div', { class: 'panel-title', text: 'Braucht Aufmerksamkeit' })]),
+    rows
+  ]);
+
+  function go(viewId) {
+    const button = document.querySelector(`.rail-btn[data-view="${viewId}"]`);
+    if (button) button.click();
+  }
+
+  // What each item's key does when clicked, kept apart from the pure
+  // function that decides which keys appear at all.
+  const ACTIONS = {
+    updates: () => go('updates'),
+    storage: () => go('storage'),
+    trash: () => openTrash(),
+    hotkeys: () => go('settings')
+  };
+
+  async function refresh() {
+    let trash = [];
+    let storage = null;
+    let hotkeyRows = [];
+    let steamActionable = 0;
+    try {
+      const [trashRes, storageRes, hotkeyRes, gamesRes] = await Promise.all([
+        api.trash.list().catch(() => []),
+        api.storage.overview().catch(() => null),
+        api.hotkeys.profiles().catch(() => []),
+        api.updates.scanGames().catch(() => null)
+      ]);
+      trash = trashRes;
+      storage = storageRes;
+      hotkeyRows = hotkeyRes;
+      steamActionable = (gamesRes && gamesRes.steam && gamesRes.steam.games) ? gamesRes.steam.games.length : 0;
+    } catch (_) { /* an empty card below is the honest result of a failed read */ }
+
+    const winget = wingetCache();
+    const items = attentionItems({
+      expiringSoon: trash.filter((e) => e.expiresAt - Date.now() < 2 * ATTENTION_DAY_MS).length,
+      cold: storage ? storage.totals.coldCount : 0,
+      collisions: hotkeyRows.filter((r) => !r.active).length,
+      steamActionable,
+      wingetActionable: winget ? winget.actionable : 0
+    });
+
+    panel.classList.toggle('hidden', !items.length);
+    clear(rows);
+    for (const item of items) {
+      rows.appendChild(el('button', {
+        class: 'attention-row',
+        onClick: ACTIONS[item.key]
+      }, [
+        el('span', { class: 'attention-msg', text: item.text }),
+        svg('M9 6l6 6-6 6', { width: 12, height: 12 })
+      ]));
+    }
+  }
+
+  refresh();
+  return { node: panel, refresh };
+}
+
 export function createHubView() {
   const mediaBar = createMediaBar();
   const activity = activityPanel();
+  const attention = attentionPanel();
 
   host = el('section', { class: 'view', id: 'view-hub' }, [
     el('div', { class: 'view-head' }, [
@@ -386,12 +504,13 @@ export function createHubView() {
         el('button', { class: 'btn primary', onClick: () => openProfileEditor(null, render) }, [svg(ICON_PLUS, { width: 13, height: 13 }), 'Neues Profil'])
       ])
     ]),
+    attention.node,
     mediaBar.node,
     activity.node,
     el('div', { class: 'profile-grid' })
   ]);
 
-  on('profiles', render);
+  on('profiles', () => { render(); attention.refresh(); });
   on('running', render);
 
   let releaseWatch = watchRunning();
@@ -405,6 +524,10 @@ export function createHubView() {
     if (!releaseWatch) releaseWatch = watchRunning();
     mediaBar.start();
     activity.start();
+    // Trash and hotkeys have no push event of their own; a revisit is the
+    // moment to notice whatever changed about them while the hub was not
+    // the thing on screen.
+    attention.refresh();
   });
 
   render();

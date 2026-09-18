@@ -2,6 +2,7 @@ import { el, clear, svg, bytes, debounce } from '../util.js';
 import { api } from '../api.js';
 import { confirmDialog } from '../widgets/modal.js';
 import { notifyError, notifyOk } from '../widgets/toast.js';
+import { rememberWinget } from '../updatesCache.js';
 
 /**
  * What has an update waiting, and what the hub can do about it.
@@ -544,6 +545,7 @@ export function createUpdatesView() {
 
     const packages = api.updates.scanWinget().then((result) => {
       data.winget = result.winget;
+      rememberWinget(result.actionable);
       render();
     }).catch((err) => {
       statusLine.textContent = err.message;
