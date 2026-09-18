@@ -20,6 +20,7 @@ const sessions = require('./sessions');
 const display = require('./display');
 const screens = require('./screens');
 const dashboard = require('./dashboard');
+const tray = require('./tray');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -360,6 +361,13 @@ app.on('ready', () => {
 
   registerShortcuts();
 
+  tray.init({
+    iconPath: path.join(__dirname, '..', '..', 'build', 'icon.png'),
+    onOpen: revealWindow,
+    onToggle: toggleWindow,
+    onQuit: () => app.quit()
+  });
+
   // Start the PowerShell host before anything asks for it, so the first
   // process list is not the one that pays for the runtime loading itself.
   if (IS_WIN) {
@@ -427,6 +435,7 @@ app.on('will-quit', () => {
   hotkeys.dispose();
   globalShortcut.unregisterAll();
   metrics.stop();
+  tray.destroy();
   store.save();
 });
 
