@@ -63,4 +63,39 @@ test('order is preserved, since that is the order the profiles were created in',
   assert.deepStrictEqual(entries.map((e) => e.label), ['Erst', 'Zweit']);
 });
 
+/* --------------------------------------------------------------- playback */
+
+test('before the first poll resolves, the menu says so rather than guessing', () => {
+  // Not checked and checked-but-idle must not look the same: one is "there
+  // is no answer yet", the other is a real answer.
+  assert.deepStrictEqual(tray.mediaStatus(null, false), { state: 'checking' });
+  assert.deepStrictEqual(tray.mediaStatus({ available: true, playing: true, title: 'X' }, false),
+    { state: 'checking' }, 'a stale answer from before the poll started is not the current one either');
+});
+
+test('nothing playing is idle, not an error', () => {
+  assert.deepStrictEqual(tray.mediaStatus(null, true), { state: 'idle' });
+  assert.deepStrictEqual(tray.mediaStatus({ available: false }, true), { state: 'idle' });
+  assert.deepStrictEqual(tray.mediaStatus({ available: true, title: '' }, true), { state: 'idle' },
+    'available with no title is the same as nothing playing');
+});
+
+test('a track without an artist is still a usable label', () => {
+  const status = tray.mediaStatus({ available: true, title: 'Intro', playing: false }, true);
+  assert.strictEqual(status.label, 'Intro');
+});
+
+test('artist is appended when there is one', () => {
+  const status = tray.mediaStatus({ available: true, title: 'Intro', artist: 'Band', playing: true }, true);
+  assert.strictEqual(status.label, 'Intro — Band');
+  assert.strictEqual(status.playing, true);
+});
+
+test('prev/next reflect what the session actually allows', () => {
+  const status = tray.mediaStatus(
+    { available: true, title: 'X', canPrev: false, canNext: true }, true);
+  assert.strictEqual(status.canPrev, false);
+  assert.strictEqual(status.canNext, true);
+});
+
 console.log(`\n${passed} assertions passed.`);
