@@ -38,6 +38,15 @@ fehlzuschlagen.
 
 ## Regeln, die nicht offensichtlich sind
 
+Sechs davon prüft `scripts/rules-check.js` bei jedem `npm run lint` mit. Die Auswahl
+ist nicht willkürlich: es sind die, die schon einen Build gekostet haben und danach
+noch einmal gebrochen wurden — einmal Stunden, nachdem die Regel hier hinzugefügt
+worden war. Eine Regel in einer Datei ist ein Hinweis für den, der daran denkt
+nachzulesen. `test/rules.test.js` füttert jede Regel mit genau der Zeile, die damals
+den Build gekostet hat, und prüft außerdem, dass sie bei der korrigierten Fassung
+schweigt — ein Prüfer, der nur auf einem sauberen Baum gelaufen ist, hat nie gezeigt,
+dass er etwas findet.
+
 **Der Renderer gilt als nicht vertrauenswürdig.** `contextIsolation: true`,
 `nodeIntegration: false`. Jeder IPC-Handler prüft seine eigenen Eingaben. Ein neuer
 Kanal braucht einen Eintrag in `ipc.js`, in `preload.js` und in `renderer/js/api.js`.
