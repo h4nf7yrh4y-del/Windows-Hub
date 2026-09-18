@@ -7,9 +7,11 @@ const store = require('./store');
 /**
  * Floating always-on-top performance widgets.
  *
- * Each overlay is its own frameless, transparent BrowserWindow driven by the
- * same metrics stream as the dashboard. Position and scale are persisted per
- * type so a widget comes back where the user left it.
+ * Each overlay is its own frameless, transparent BrowserWindow. Most are
+ * driven by the same metrics stream as the dashboard; `media` is the one
+ * exception, polling `media.js` on its own timer because playback state is
+ * not part of that stream. Position and scale are persisted per type so a
+ * widget comes back where the user left it.
  *
  * Known limit: Windows composites exclusive-fullscreen games directly on the
  * GPU, so nothing drawn by another process appears above them. These overlays
@@ -23,7 +25,8 @@ const OVERLAY_TYPES = {
   ram:   { label: 'Speicher',   width: 224, height: 118 },
   gpu:   { label: 'Grafik',     width: 224, height: 132 },
   net:   { label: 'Netzwerk',   width: 224, height: 118 },
-  disk:  { label: 'Datenträger',width: 224, height: 118 }
+  disk:  { label: 'Datenträger',width: 224, height: 118 },
+  media: { label: 'Wiedergabe', width: 240, height: 134 }
 };
 
 const windows = new Map(); // type -> BrowserWindow

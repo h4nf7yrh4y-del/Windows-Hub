@@ -1,4 +1,4 @@
-import { el, clear, bytes, bytesPerSec, pct, severity } from './util.js';
+import { el, clear, svg, bytes, bytesPerSec, pct, severity } from './util.js';
 
 /**
  * Entry point for a floating overlay window.
@@ -266,13 +266,107 @@ function buildCombo() {
   };
 }
 
+function time(ms) {
+  if (!ms || ms < 0) return '';
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Playback, driven by its own timer instead of the metrics stream.
+ *
+ * Everything else here gets pushed a sample every tick; media has no such
+ * stream, so this polls `media.js` directly through the bridge, the same way
+ * the hub's media bar does. The returned update function is a no-op because
+ * there is nothing for `start()` to hand it.
+ */
+function buildMedia() {
+  const track = el('div', { class: 'ov-media-track', text: 'Keine Wiedergabe' });
+  const artist = el('div', { class: 'ov-media-artist', text: '' });
+  const progress = el('i');
+  const elapsed = el('span', { class: 'ov-media-time', text: '' });
+  const duration = el('span', { class: 'ov-media-time', text: '' });
+
+  let data = null;
+  let busy = false;
+
+  function control(icon, label, command, enabled) {
+    const btn = el('button', {
+      class: 'ov-media-btn',
+      title: label,
+      onClick: async (event) => {
+        event.stopPropagation();
+        if (enabled && !enabled()) return;
+        try { data = await bridge.media.command(command); paint(); }
+        catch (_) { /* the control staying put is feedback enough */ }
+      }
+    }, [svg(icon, { width: 12, height: 12, strokeWidth: 0 })]);
+    btn.querySelector('svg path').setAttribute('fill', 'currentColor');
+    return btn;
+  }
+
+  const prevBtn = control('M19 5v14l-9-7zM6 5h2v14H6z', 'Vorheriger Titel', 'previous', () => data && data.canPrev);
+  const playBtn = control('M7 4l13 8-13 8z', 'Abspielen oder anhalten', 'playpause');
+  const nextBtn = control('M5 5v14l9-7zM16 5h2v14h-2z', 'Nächster Titel', 'next', () => data && data.canNext);
+
+  const node = el('div', { class: 'ov-media' }, [
+    el('div', { class: 'ov-head' }, [el('span', { class: 'ov-title', text: 'WIEDERGABE' })]),
+    track,
+    artist,
+    el('div', { class: 'ov-bar' }, [progress]),
+    el('div', { class: 'ov-media-times' }, [elapsed, duration]),
+    el('div', { class: 'ov-media-controls' }, [prevBtn, playBtn, nextBtn])
+  ]);
+  content.appendChild(node);
+
+  function paint() {
+    const active = !!(data && data.available && data.title);
+    node.classList.toggle('idle', !active);
+    prevBtn.classList.toggle('off', !active || !data.canPrev);
+    nextBtn.classList.toggle('off', !active || !data.canNext);
+
+    if (!active) {
+      track.textContent = (data && data.note) || 'Keine Wiedergabe';
+      artist.textContent = '';
+      progress.style.width = '0%';
+      elapsed.textContent = '';
+      duration.textContent = '';
+      playBtn.querySelector('svg path').setAttribute('d', 'M7 4l13 8-13 8z');
+      return;
+    }
+
+    track.textContent = data.title;
+    artist.textContent = data.artist || '';
+    const percent = data.durationMs ? Math.min(100, (data.positionMs / data.durationMs) * 100) : 0;
+    progress.style.width = `${percent}%`;
+    elapsed.textContent = time(data.positionMs);
+    duration.textContent = time(data.durationMs);
+    playBtn.querySelector('svg path').setAttribute('d', data.playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M7 4l13 8-13 8z');
+  }
+
+  async function poll() {
+    if (busy || !bridge.media) return;
+    busy = true;
+    try { data = await bridge.media.read(); } catch (_) { data = null; }
+    busy = false;
+    paint();
+  }
+
+  paint();
+  poll();
+  setInterval(poll, 6000);
+
+  return () => {};
+}
+
 const BUILDERS = {
   cpu: buildCpu,
   ram: buildRam,
   gpu: buildGpu,
   net: buildNet,
   disk: buildDisk,
-  combo: buildCombo
+  combo: buildCombo,
+  media: buildMedia
 };
 
 /* -------------------------------------------------------------------- boot */

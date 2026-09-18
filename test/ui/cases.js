@@ -506,6 +506,42 @@ module.exports = [
   },
 
   {
+    name: 'Overlays: Wiedergabe zeigt einen Titel oder sagt, dass keiner läuft',
+    async run(t) {
+      // Unlike the metric overlays, media has nothing to show on a runner
+      // with no player open — the assertion is that it says so, not a blank
+      // frame with just a close button.
+      await t.view('overlays');
+      const opened = await t.js(`
+        const card = [...document.querySelectorAll('.overlay-card')]
+          .find((c) => (c.querySelector('.overlay-type') || {}).textContent === 'media');
+        if (!card) return false;
+        card.querySelector('.toggle').click();
+        return true;
+      `);
+      t.assert(opened, 'Das Wiedergabe-Overlay ist in der Liste');
+      if (!opened) return;
+
+      const overlayWindow = await t.waitForWindow('overlay.html?type=media');
+      t.assert(!!overlayWindow, 'Das Wiedergabe-Overlay-Fenster öffnet sich');
+      if (overlayWindow) {
+        t.watchConsole(overlayWindow.webContents, 'overlay-media');
+        const track = await t.waitIn(overlayWindow,
+          `(document.querySelector('.ov-media-track') || {}).textContent || false`,
+          { label: 'Titelzeile im Wiedergabe-Overlay' }).catch(() => '');
+        t.assert((track || '').length > 0, 'Zeigt einen Titel oder „Keine Wiedergabe“ an, nie eine leere Zeile');
+        const buttons = await t.waitIn(overlayWindow,
+          `document.querySelectorAll('.ov-media-btn').length`,
+          { label: 'Steuerknöpfe im Wiedergabe-Overlay' }).catch(() => 0);
+        t.eq(buttons, 3, 'Zurück, Wiedergabe und Weiter sind vorhanden');
+      }
+
+      await t.clickText('#view-overlays .btn', 'Alle schließen');
+      t.eq(await t.waitForNoWindow('overlay.html?type=media'), true, 'Schließt sich mit den anderen Overlays');
+    }
+  },
+
+  {
     name: 'Windows: Bildschirme und Funktionen',
     async run(t) {
       await t.view('windows');

@@ -17,7 +17,8 @@ const DESCRIPTIONS = {
   ram: 'Belegter Arbeitsspeicher mit Verlauf und absoluten Werten.',
   gpu: 'Grafikauslastung, Temperatur und Videospeicher.',
   net: 'Download- und Upload-Rate mit Verlauf.',
-  disk: 'Lese- und Schreibdurchsatz aller Datenträger.'
+  disk: 'Lese- und Schreibdurchsatz aller Datenträger.',
+  media: 'Titel, Interpret und Steuerung der aktuellen Wiedergabe, zum Beispiel aus Spotify.'
 };
 
 const SCALES = [
