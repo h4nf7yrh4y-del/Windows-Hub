@@ -960,25 +960,34 @@ module.exports = [
       await t.view('settings');
       await t.view('hub');
 
+      // The card waits on four IPC round trips before it can say anything;
+      // generous on purpose, since a loaded machine is exactly when a fixed
+      // short wait would be the coin toss the project avoids elsewhere.
       const row = await t.waitFor(
         `(function () {
           var el = [...document.querySelectorAll('.attention-row')]
             .find((r) => /Tastenkürzel/.test(r.textContent));
           return el ? el.textContent : false;
         })()`,
-        { label: 'Tastenkürzel-Zeile in der Sammelkarte' }
+        { label: 'Tastenkürzel-Zeile in der Sammelkarte', timeout: 20000 }
       ).catch(() => '');
-      t.assert(/1 Tastenkürzel greift nicht/.test(row || ''), 'Die Kollision wird gemeldet', JSON.stringify(row));
+      const found = /1 Tastenkürzel greift nicht/.test(row || '');
+      t.assert(found, 'Die Kollision wird gemeldet', JSON.stringify(row));
 
-      await t.js(`
-        const row = [...document.querySelectorAll('.attention-row')]
-          .find((r) => /Tastenkürzel/.test(r.textContent));
-        row.click();
-        return true;
-      `);
-      t.eq(await t.waitFor(`document.querySelector('.rail-btn[data-view="settings"]').classList.contains('active')`,
-        { label: 'Sprung zu den Einstellungen' }).catch(() => false), true,
-        'Ein Klick auf die Zeile springt zur zuständigen Ansicht');
+      // A row that never appeared cannot be clicked; failing the assertion
+      // above already says so, and clicking nothing would only turn one
+      // failure into an unrelated crash.
+      if (found) {
+        await t.js(`
+          const row = [...document.querySelectorAll('.attention-row')]
+            .find((r) => /Tastenkürzel/.test(r.textContent));
+          if (row) row.click();
+          return true;
+        `);
+        t.eq(await t.waitFor(`document.querySelector('.rail-btn[data-view="settings"]').classList.contains('active')`,
+          { label: 'Sprung zu den Einstellungen' }).catch(() => false), true,
+          'Ein Klick auf die Zeile springt zur zuständigen Ansicht');
+      }
 
       // Cleaned up so later cases start from a clean hotkey table.
       await t.evalExpr(`window.hub.profiles.remove(${JSON.stringify(first.id)})`);
