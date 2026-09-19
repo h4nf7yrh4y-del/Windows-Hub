@@ -154,11 +154,21 @@ Platzhalter ersetzt die Liste, nicht den Abschnitt: „Steam-Updates starten" h�
 daran, ob die Bibliothek schon gelesen ist, und darf deshalb nicht verschwinden.
 
 **Langsame Abfragen dürfen die Oberfläche nicht aufhalten.** Was sofort da ist, wird
-sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon fünfmal
+sofort gezeichnet; was dauert, wird nachgetragen. Dieser Fehler ist hier schon sechsmal
 passiert — Dateimanager-Seitenleiste, Funktionskatalog, Dashboard, Update-Center,
-Discord-Panel. Beim fünften Mal bestand der ganze Inhalt aus einer Konstante und der
-Konfiguration, und die Ansicht wartete trotzdem eine halbe Minute: eine einzige Zeile
-„läuft der Client?" hing mit dran. Eine Antwort, die man schon hat, wartet auf nichts.
+Discord-Panel, Sammelkarte. Beim fünften Mal bestand der ganze Inhalt aus einer Konstante
+und der Konfiguration, und die Ansicht wartete trotzdem eine halbe Minute: eine einzige
+Zeile „läuft der Client?" hing mit dran. Eine Antwort, die man schon hat, wartet auf
+nichts.
+
+Das sechste Mal ist das teuerste bisher und zeigt, warum `Promise.all` die falsche Form
+ist: die Sammelkarte holte vier Zahlen auf einmal — Papierkorb und Tastenkürzel aus dem
+Speicher, Plattenübersicht und Steam-Bibliothek vom Dateisystem — und zeichnete erst,
+wenn alle vier da waren. Auf einem Windows-Runner mit kriechender Platte blieb damit
+eine Kollision unsichtbar, die längst feststand, weil ein Bibliotheks-Scan im selben
+Bündel noch lief. Das hat vier Builds gekostet, und die ersten drei davon habe ich auf
+den Runner geschoben statt auf den Code: die Zahlen waren da, sie wurden nur nicht
+gezeichnet. Vier Antworten sind vier Zeichnungen, nicht eine.
 
 Beim vierten Mal kam eine Verschärfung dazu: eine Abfrage ist nicht schnell, nur weil
 sie wenig tut. `steamUpdates` las Manifestdateien in Millisekunden und hängte dann eine

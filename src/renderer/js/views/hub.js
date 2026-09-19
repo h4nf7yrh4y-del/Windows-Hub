@@ -403,12 +403,16 @@ const ATTENTION_DAY_MS = 24 * 60 * 60 * 1000;
  * not fire. Every one of them lives behind its own view today and stays
  * there unless someone happens to open it.
  *
- * Three of the four reads are cheap manifest and in-memory lookups and are
- * safe to repeat on every profile change. winget is not -- it can take the
- * better part of a minute on a cold cache, which is accepted on the Updates
- * view because opening it is a deliberate choice. It must not become a
- * hidden cost of the hub simply existing, so this never calls it: it only
- * reads `updatesCache.js`, which the Updates view fills in when a real scan
+ * Each of the four is drawn as it is answered rather than all together:
+ * two are in-memory reads, two walk the filesystem, and on a slow disk the
+ * difference between them is minutes. Whoever is waiting for the fast half
+ * should not pay for the slow half.
+ *
+ * winget is excluded from the four entirely -- it can take the better part
+ * of a minute on a cold cache, which is accepted on the Updates view
+ * because opening it is a deliberate choice. It must not become a hidden
+ * cost of the hub simply existing, so this never calls it: it only reads
+ * `updatesCache.js`, which the Updates view fills in when a real scan
  * already happened. Nothing checked yet reads as nothing to report, the
  * same as the query having found no updates -- both mean there is nothing
  * this card can usefully say right now.
@@ -486,32 +490,14 @@ function attentionPanel() {
     hotkeys: () => go('settings')
   };
 
-  async function refresh() {
-    let trash = [];
-    let storage = null;
-    let hotkeyRows = [];
-    let steamActionable = 0;
-    try {
-      const [trashRes, storageRes, hotkeyRes, gamesRes] = await Promise.all([
-        api.trash.list().catch(() => []),
-        api.storage.overview().catch(() => null),
-        api.hotkeys.profiles().catch(() => []),
-        api.updates.scanGames().catch(() => null)
-      ]);
-      trash = trashRes;
-      storage = storageRes;
-      hotkeyRows = hotkeyRes;
-      steamActionable = (gamesRes && gamesRes.steam && gamesRes.steam.games) ? gamesRes.steam.games.length : 0;
-    } catch (_) { /* an empty card below is the honest result of a failed read */ }
+  // What is known so far. Kept across refreshes on purpose: a slow answer
+  // that has not come back yet should leave the previous one standing rather
+  // than blink the row away and back.
+  const facts = { expiringSoon: 0, cold: 0, collisions: 0, steamActionable: 0 };
 
+  function paint() {
     const winget = wingetCache();
-    const items = attentionItems({
-      expiringSoon: trash.filter((e) => e.expiresAt - Date.now() < 2 * ATTENTION_DAY_MS).length,
-      cold: storage ? storage.totals.coldCount : 0,
-      collisions: hotkeyRows.filter((r) => !r.active).length,
-      steamActionable,
-      wingetActionable: winget ? winget.actionable : 0
-    });
+    const items = attentionItems({ ...facts, wingetActionable: winget ? winget.actionable : 0 });
 
     panel.classList.toggle('hidden', !items.length);
     clear(rows);
@@ -524,6 +510,43 @@ function attentionPanel() {
         svg('M9 6l6 6-6 6', { width: 12, height: 12 })
       ]));
     }
+  }
+
+  /**
+   * Four independent questions, drawn one by one as they are answered.
+   *
+   * Not `Promise.all`: two of these are in-memory reads that are always
+   * instant, and two walk the filesystem -- the Steam library scan and the
+   * disk overview. Waiting for the slowest before drawing the fastest is the
+   * mistake this file's own rules warn about, and it is not hypothetical:
+   * on a Windows runner where the disk crawled, a hotkey collision that was
+   * known in a millisecond stayed invisible for over twenty seconds, because
+   * a Steam scan in the same batch had not finished.
+   */
+  function refresh() {
+    paint();
+
+    api.trash.list()
+      .then((list) => {
+        facts.expiringSoon = (list || []).filter((e) => e.expiresAt - Date.now() < 2 * ATTENTION_DAY_MS).length;
+        paint();
+      })
+      .catch(() => { /* the row for it simply stays as it was */ });
+
+    api.hotkeys.profiles()
+      .then((list) => { facts.collisions = (list || []).filter((r) => !r.active).length; paint(); })
+      .catch(() => {});
+
+    api.storage.overview()
+      .then((overview) => { facts.cold = overview ? overview.totals.coldCount : 0; paint(); })
+      .catch(() => {});
+
+    api.updates.scanGames()
+      .then((games) => {
+        facts.steamActionable = (games && games.steam && games.steam.games) ? games.steam.games.length : 0;
+        paint();
+      })
+      .catch(() => {});
   }
 
   refresh();
