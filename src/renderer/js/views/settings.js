@@ -710,7 +710,10 @@ export function createSettingsView() {
         toggleRow('Im Vollbild starten', 'Der Hub öffnet sich formatfüllend. F11 schaltet jederzeit um.', 'startFullscreen'),
         toggleRow('Kiosk-Modus', 'Blockiert das Verlassen des Vollbilds. Beenden weiterhin über Strg+Umschalt+Q.', 'kiosk'),
         toggleRow('Beim Profilstart minimieren', 'Der Hub tritt in den Hintergrund, sobald ein Profil gestartet wird.', 'minimizeOnLaunch'),
-        toggleRow('Boot-Animation', 'Die Startsequenz beim Öffnen des Hubs.', 'bootAnimation')
+        toggleRow('Boot-Animation', 'Die Startsequenz beim Öffnen des Hubs.', 'bootAnimation'),
+        toggleRow('Windows-Benachrichtigungen',
+          'Meldet ausgelöste Profile, fertige Updates und Zeitplan-Starts — aber nur, wenn der Hub gerade nicht vor dir liegt.',
+          'notifications')
       ]),
 
       panel('Bildschirme', [

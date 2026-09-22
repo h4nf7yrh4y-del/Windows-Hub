@@ -22,6 +22,7 @@ const screens = require('./screens');
 const dashboard = require('./dashboard');
 const tray = require('./tray');
 const windowlayout = require('./windowlayout');
+const notify = require('./notify');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -362,6 +363,11 @@ app.on('ready', () => {
 
   registerShortcuts();
 
+  notify.init({
+    getWindow: () => mainWindow,
+    icon: path.join(__dirname, '..', '..', 'build', 'icon.png')
+  });
+
   tray.init({
     iconPath: path.join(__dirname, '..', '..', 'build', 'icon.png'),
     onOpen: revealWindow,
@@ -401,6 +407,14 @@ app.on('ready', () => {
 
   scheduler.start((channel, payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+
+    // A scheduled profile starts without anyone pressing anything, which is
+    // exactly the case where a window nobody is looking at cannot report it.
+    if (channel === 'schedule:fired' && payload && payload.profileName) {
+      const action = payload.action === 'stop' ? 'beendet' : 'gestartet';
+      if (payload.ok) notify.show('Zeitplan', `„${payload.profileName}" wurde ${action}.`);
+      else notify.show('Zeitplan fehlgeschlagen', `„${payload.profileName}": ${payload.error || 'unbekannter Fehler'}`);
+    }
   });
 
   // Starts polling only if a profile actually asks for it, so a hub without

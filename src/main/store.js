@@ -28,6 +28,8 @@ const DEFAULTS = {
     confirmExit: true,
     showGpu: true,
     gamepad: true,
+    // Only ever shown while the hub is not the window on screen.
+    notifications: true,
     // Which monitor the hub opens on; null means the primary one.
     hubDisplay: null,
     // Set once the first-run wizard has been finished or dismissed.

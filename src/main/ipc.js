@@ -35,6 +35,7 @@ const trash = require('./trash');
 const discord = require('./discord');
 const coverart = require('./coverart');
 const windowlayout = require('./windowlayout');
+const notify = require('./notify');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -421,12 +422,27 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   /* --------------------------------------------------------------- updates */
 
   updates.setEmitter((event) => send('updates:progress', event));
-  selfupdate.setEmitter((event) => send('selfupdate:progress', event));
+  selfupdate.setEmitter((event) => {
+    send('selfupdate:progress', event);
+    // A download finishing is the one selfupdate event that asks something of
+    // the user; the rest are progress nobody needs pulled out of a game for.
+    if (event && event.kind === 'ready') {
+      notify.show('Update bereit', `Version ${event.version || ''} ist heruntergeladen und wird beim nächsten Start installiert.`.trim());
+    }
+  });
 
   // The hub's own update. Kept apart from `updates:*` because it is a
   // different thing entirely: that view reports on other people's software,
   // this one replaces the running application.
-  triggers.setNotifier((event) => send('triggers:event', event));
+  triggers.setNotifier((event) => {
+    send('triggers:event', event);
+    // Only the case where the hub actually did something to the machine. A
+    // blocked or reverted trigger is worth a line in the activity feed, not
+    // an interruption.
+    if (event && event.kind === 'applied' && event.name) {
+      notify.show('Profil erkannt', `„${event.name}" — der Systemzustand wurde übernommen.`);
+    }
+  });
   /* ------------------------------------------------------------- discord */
 
   ipcMain.handle('discord:state', wrap(async () => discord.state(), 'discord:state'));
