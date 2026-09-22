@@ -21,6 +21,7 @@ const display = require('./display');
 const screens = require('./screens');
 const dashboard = require('./dashboard');
 const tray = require('./tray');
+const windowlayout = require('./windowlayout');
 const log = logger.scoped('main');
 
 const IS_DEV = process.argv.includes('--dev');
@@ -382,6 +383,20 @@ app.on('ready', () => {
         else if (!result.ok) log.warn(`Bildschirm-Hilfsklasse: ${result.reason}`);
       })
       .catch((err) => log.warn(`Bildschirm-Hilfsklasse: ${err.message}`));
+
+    // The window helper is only warmed up for someone who actually uses it.
+    // Compiling it for every hub that never remembers a window position would
+    // be a compiler run nobody asked for; leaving it entirely lazy would make
+    // the first profile launch pay it, and the layout would time out waiting
+    // for its own helper.
+    if ((store.state.profiles || []).some((p) => p && (p.layout || []).length)) {
+      windowlayout.ensureCompiled()
+        .then((result) => {
+          if (result.ok && !result.cached) log.info(`Fenster-Hilfsklasse übersetzt (${result.ms} ms)`);
+          else if (!result.ok) log.warn(`Fenster-Hilfsklasse: ${result.reason}`);
+        })
+        .catch((err) => log.warn(`Fenster-Hilfsklasse: ${err.message}`));
+    }
   }
 
   scheduler.start((channel, payload) => {

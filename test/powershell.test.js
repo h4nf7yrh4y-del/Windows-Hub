@@ -271,7 +271,8 @@ for (const file of [
   'src/main/files.js',
   'src/main/scanner.js',
   'src/main/winfeatures.js',
-  'src/main/display.js'
+  'src/main/display.js',
+  'src/main/windowlayout.js'
 ]) {
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const blocks = [...source.matchAll(/runPowerShell\(\s*(?:String\.raw)?`([\s\S]*?)`/g)].map((m) => m[1]);
@@ -302,6 +303,35 @@ try {
       { encoding: 'utf8', timeout: 120000 }).trim();
     assert.ok(result.startsWith('COMPILED'), `compiler said:\n       ${result}`);
     for (const method of ['List', 'SetMode', 'SetPrimary', 'GetBrightness', 'SetBrightness']) {
+      assert.ok(result.includes(method), `missing method ${method}`);
+    }
+  } finally {
+    try { fs.unlinkSync(checker); } catch (_) { /* ignore */ }
+  }
+});
+
+test('the C# window helper compiles', () => {
+  // Two callbacks marshalled into native code, one of them taking a struct by
+  // reference. Get the delegate signature wrong and it compiles anyway, then
+  // corrupts the stack at runtime -- so the compiler is the cheap half of the
+  // check, and the enumeration returning anything at all is the other.
+  const csPath = path.join(__dirname, '..', 'src/main/ps/windows.cs.txt');
+  const checker = path.join(os.tmpdir(), `hub-cs-windows-${process.pid}.ps1`);
+  fs.writeFileSync(checker, `
+$src = Get-Content -Raw -LiteralPath $args[0]
+try {
+  Add-Type -TypeDefinition $src -ErrorAction Stop
+  $methods = ([HubWindows].GetMethods('Public,Static,DeclaredOnly') | ForEach-Object { $_.Name }) -join ','
+  Write-Output "COMPILED:$methods"
+} catch {
+  Write-Output ("FAILED: " + $_.Exception.Message)
+}
+`, 'utf8');
+  try {
+    const result = execFileSync(shell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', checker, csPath],
+      { encoding: 'utf8', timeout: 120000 }).trim();
+    assert.ok(result.startsWith('COMPILED'), `compiler said:\n       ${result}`);
+    for (const method of ['List', 'Monitors', 'Move']) {
       assert.ok(result.includes(method), `missing method ${method}`);
     }
   } finally {

@@ -152,6 +152,13 @@ module.exports = [
       t.assert(/Tastenkürzel/.test(editor), 'Der Editor bietet ein Tastenkürzel an');
       t.assert(/Taste zuweisen/.test(editor), 'Es wird zugewiesen statt getippt');
 
+      // Only what the editor shows. Pressing "Jetzt merken" would compile the
+      // C# helper and enumerate every window on the machine -- a real action
+      // with a real cost, which a smoke test has no business triggering.
+      t.assert(/Fensterlayout/.test(editor), 'Der Editor bietet das Fensterlayout an');
+      t.assert(/Jetzt merken/.test(editor), 'Die Position wird aufgezeichnet, nicht eingetippt');
+      t.assert(/Nichts gemerkt/.test(editor), 'Ein neues Profil sagt, dass noch nichts gemerkt ist');
+
       // Cancelling must leave no profile behind and no dialog on screen.
       await t.clickText('.modal .btn', 'Abbrechen');
       await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });

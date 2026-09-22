@@ -29,6 +29,7 @@ function blankProfile() {
     apps: [],
     alsoClose: [],
     hotkey: '',
+    layout: [],
     minimizeOnLaunch: true
   };
 }
@@ -340,6 +341,84 @@ function addManual(ctx) {
 
 /* ------------------------------------------------------------------ editor */
 
+/**
+ * Where this profile's windows belong.
+ *
+ * Recorded rather than typed: nobody knows the pixel coordinates of their own
+ * Discord window, but everybody can drag it where they want it once. So the
+ * flow is "arrange it, then press remember", and what gets stored is whatever
+ * is on screen at that moment for the programs this profile starts.
+ */
+function layoutRow(profile) {
+  const summary = el('div', { class: 'setting-hint' });
+  const forget = el('button', { class: 'btn subtle sm', text: 'Vergessen' });
+
+  function paint() {
+    const count = (profile.layout || []).length;
+    summary.textContent = count
+      ? `${count} ${count === 1 ? 'Fenster wird' : 'Fenster werden'} beim Start an die gemerkte Stelle gesetzt: `
+        + profile.layout.map((e) => e.process).join(', ')
+      : 'Nichts gemerkt. Ordne die Fenster so an, wie du sie willst, und drücke „Jetzt merken".';
+    forget.style.display = count ? '' : 'none';
+  }
+
+  forget.addEventListener('click', () => {
+    profile.layout = [];
+    paint();
+    toast('Fensterlayout vergessen');
+  });
+
+  const remember = el('button', {
+    class: 'btn subtle sm',
+    text: 'Jetzt merken',
+    onClick: async (event) => {
+      const button = event.currentTarget;
+      button.setAttribute('aria-disabled', 'true');
+      try {
+        // The same process names the profile is watched and stopped by, so a
+        // window the hub cannot identify is not silently half-supported.
+        const names = (profile.apps || [])
+          .filter((app) => app && app.enabled !== false)
+          .map((app) => resolveProcessName(app))
+          .filter(Boolean);
+
+        if (!names.length) {
+          notifyError('Für dieses Profil lässt sich kein Programm als Prozess erkennen.');
+          return;
+        }
+
+        const entries = await api.layout.snapshot(names);
+        profile.layout = entries;
+        paint();
+
+        if (!entries.length) {
+          notifyError('Keines dieser Programme hat gerade ein Fenster offen. Starte das Profil zuerst.');
+        } else {
+          notifyOk(`${entries.length} Fensterposition${entries.length === 1 ? '' : 'en'} gemerkt`);
+        }
+      } catch (err) {
+        notifyError(err.message);
+      } finally {
+        button.removeAttribute('aria-disabled');
+      }
+    }
+  });
+
+  paint();
+
+  return el('div', { class: 'stack gap-8' }, [
+    el('div', { class: 'row between' }, [
+      el('span', { class: 'label', text: 'Fensterlayout' }),
+      el('div', { class: 'row gap-8' }, [forget, remember])
+    ]),
+    summary,
+    el('div', { class: 'faint', style: { fontSize: '11px', lineHeight: '1.6' }, text:
+      'Gemerkt wird die größte offene Fensterposition je Programm. Steckst du einen anderen '
+      + 'Monitor an, werden Positionen übersprungen, die dann auf keinem Bildschirm mehr liegen — '
+      + 'statt das Fenster irgendwohin zu schieben, wo es niemand erreicht.' })
+  ]);
+}
+
 export function openProfileEditor(existing, onSaved) {
   const profile = existing
     ? JSON.parse(JSON.stringify(existing))
@@ -550,7 +629,9 @@ export function openProfileEditor(existing, onSaved) {
           event.currentTarget.setAttribute('aria-checked', String(profile.minimizeOnLaunch));
         }
       })
-    ])
+    ]),
+
+    layoutRow(profile)
   ]);
 
   // Two tabs rather than one long scroll: the system settings are the half a

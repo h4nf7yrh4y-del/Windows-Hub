@@ -117,6 +117,11 @@ export const api = {
   coverart: {
     get: call(bridge.coverart.get)
   },
+  layout: {
+    windows: call(bridge.layout.windows),
+    snapshot: call(bridge.layout.snapshot),
+    apply: call(bridge.layout.apply)
+  },
   selfupdate: {
     state: call(bridge.selfupdate.state),
     check: call(bridge.selfupdate.check),

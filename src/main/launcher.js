@@ -6,6 +6,10 @@ const { spawn } = require('child_process');
 const { shell } = require('electron');
 const processes = require('./processes');
 const tweaks = require('./tweaks');
+const windowlayout = require('./windowlayout');
+const logger = require('./logger');
+
+const log = logger.scoped('launcher');
 
 /**
  * Launches single apps and whole profiles.
@@ -132,6 +136,15 @@ async function launchProfile(profile, emit = () => {}) {
   tweaks.applyLatePriority(profile)
     .then((outcome) => { if (outcome && outcome.applied) emit({ phase: 'priority', ...outcome }); })
     .catch(() => { /* reported through the log */ });
+
+  // Same reasoning, one step further out: a window appears later than the
+  // process does, and a game can take half a minute to get there. Nobody
+  // waits in front of the launch dialog for that.
+  if ((profile.layout || []).length) {
+    windowlayout.apply(profile.layout)
+      .then((outcome) => emit({ phase: 'layout', ...outcome }))
+      .catch((err) => log.debug(`Fensterlayout nicht angewendet: ${err.message}`));
+  }
 
   return { ok: results.every((r) => r.ok), results, tweaks: tweakReport };
 }

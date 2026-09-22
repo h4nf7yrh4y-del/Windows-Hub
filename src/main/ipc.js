@@ -34,6 +34,7 @@ const audio = require('./audio');
 const trash = require('./trash');
 const discord = require('./discord');
 const coverart = require('./coverart');
+const windowlayout = require('./windowlayout');
 const logger = require('./logger');
 
 const log = logger.scoped('ipc');
@@ -99,6 +100,9 @@ function sanitizeProfile(raw) {
     cover: typeof raw.cover === 'string' ? raw.cover : null,
     icon: typeof raw.icon === 'string' ? raw.icon : null,
     apps: Array.isArray(raw.apps) ? raw.apps.map(sanitizeApp) : [],
+    // Where this profile's windows belong. Validated by the module that will
+    // have to act on it, so a stored position and an applied one cannot drift.
+    layout: windowlayout.sanitizeLayout(raw.layout),
     alsoClose: Array.isArray(raw.alsoClose) ? raw.alsoClose.filter((x) => typeof x === 'string') : [],
     minimizeOnLaunch: raw.minimizeOnLaunch !== false,
     system: tweaks.sanitize(raw.system),
@@ -514,6 +518,15 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
   // The id is passed through unchanged, same as storage:uninstall: the
   // module refuses a bad one, and normalising it here could not.
   ipcMain.handle('coverart:get', wrap(async (appId) => coverart.get(appId), 'coverart:get'));
+
+  /* ------------------------------------------------------- window layout */
+
+  ipcMain.handle('layout:windows', wrap(async () => windowlayout.list(), 'layout:windows'));
+  // The process names come from the renderer, which is not trusted: the module
+  // reduces each to a bare name before it compares anything.
+  ipcMain.handle('layout:snapshot', wrap(async (processes_) =>
+    windowlayout.snapshot(Array.isArray(processes_) ? processes_ : []), 'layout:snapshot'));
+  ipcMain.handle('layout:apply', wrap(async (layout) => windowlayout.apply(layout), 'layout:apply'));
 
   ipcMain.handle('selfupdate:state', wrap(async () => selfupdate.state(), 'selfupdate:state'));
   ipcMain.handle('selfupdate:check', wrap(async () => selfupdate.check(), 'selfupdate:check'));

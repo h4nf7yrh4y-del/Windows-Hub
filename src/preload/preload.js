@@ -105,6 +105,11 @@ contextBridge.exposeInMainWorld('hub', {
   coverart: {
     get: (appId) => invoke('coverart:get', appId)
   },
+  layout: {
+    windows: () => invoke('layout:windows'),
+    snapshot: (processes) => invoke('layout:snapshot', processes),
+    apply: (layout) => invoke('layout:apply', layout)
+  },
   selfupdate: {
     state: () => invoke('selfupdate:state'),
     check: () => invoke('selfupdate:check'),

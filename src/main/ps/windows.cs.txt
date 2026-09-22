@@ -1,0 +1,248 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+
+// Native window placement for Windows Hub.
+//
+// There is no PowerShell equivalent for any of this: moving another
+// application's window is EnumWindows to find it and SetWindowPos to place it,
+// both Win32 and nothing else.
+//
+// The filtering is the part that matters. EnumWindows returns every top-level
+// window there is, and most of them are not what anyone means by "a window":
+// invisible helpers, tool windows, owned dialogs, and -- the one that catches
+// people out -- cloaked UWP windows, which are fully valid, fully invisible,
+// and report a sensible rectangle. Handing those to the hub would produce a
+// list where half the entries cannot be seen and moving them does nothing.
+public static class HubWindows
+{
+    /* ------------------------------------------------------------ interop */
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WINDOWPLACEMENT
+    {
+        public int length;
+        public int flags;
+        public int showCmd;
+        public POINT ptMinPosition;
+        public POINT ptMaxPosition;
+        public RECT rcNormalPosition;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowTextLengthW(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hWnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
+    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public int dwFlags;
+    }
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const uint GW_OWNER = 4;
+    private const int DWMWA_CLOAKED = 14;
+
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    private const int SW_RESTORE = 9;
+    private const int SW_MAXIMIZE = 3;
+    private const int SW_SHOWMAXIMIZED = 3;
+
+    /* ------------------------------------------------------------- shapes */
+
+    public class WindowInfo
+    {
+        public long Handle;
+        public int ProcessId;
+        public string Process;
+        public string Title;
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+        public bool Maximized;
+    }
+
+    /* -------------------------------------------------------------- query */
+
+    // True for a window a person would point at and call "the Discord window".
+    private static bool IsRealWindow(IntPtr hWnd)
+    {
+        if (!IsWindowVisible(hWnd)) return false;
+        if (GetWindowTextLengthW(hWnd) == 0) return false;
+        if (GetWindow(hWnd, GW_OWNER) != IntPtr.Zero) return false;
+        if ((GetWindowLong(hWnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return false;
+
+        // Cloaked windows are the UWP trap: visible by every other measure and
+        // not on screen at all. DwmGetWindowAttribute fails on versions that
+        // predate the attribute, which is not a reason to drop the window.
+        int cloaked;
+        if (DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out cloaked, sizeof(int)) == 0 && cloaked != 0) return false;
+
+        RECT rect;
+        if (!GetWindowRect(hWnd, out rect)) return false;
+        // A window smaller than this is a splash, a tooltip or a leftover.
+        if (rect.Right - rect.Left < 80 || rect.Bottom - rect.Top < 60) return false;
+
+        return true;
+    }
+
+    private static string ProcessName(int pid)
+    {
+        try { return Process.GetProcessById(pid).ProcessName; }
+        catch (Exception) { return ""; }
+    }
+
+    public static List<WindowInfo> List()
+    {
+        List<WindowInfo> result = new List<WindowInfo>();
+
+        EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+        {
+            if (!IsRealWindow(hWnd)) return true;
+
+            RECT rect;
+            if (!GetWindowRect(hWnd, out rect)) return true;
+
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+
+            int length = GetWindowTextLengthW(hWnd);
+            StringBuilder title = new StringBuilder(length + 1);
+            GetWindowTextW(hWnd, title, title.Capacity);
+
+            WINDOWPLACEMENT placement = new WINDOWPLACEMENT();
+            placement.length = Marshal.SizeOf(typeof(WINDOWPLACEMENT));
+            bool maximized = GetWindowPlacement(hWnd, ref placement) && placement.showCmd == SW_SHOWMAXIMIZED;
+
+            WindowInfo info = new WindowInfo();
+            info.Handle = hWnd.ToInt64();
+            info.ProcessId = (int)pid;
+            info.Process = ProcessName((int)pid);
+            info.Title = title.ToString();
+            info.X = rect.Left;
+            info.Y = rect.Top;
+            info.Width = rect.Right - rect.Left;
+            info.Height = rect.Bottom - rect.Top;
+            info.Maximized = maximized;
+            result.Add(info);
+            return true;
+        }, IntPtr.Zero);
+
+        return result;
+    }
+
+    /* ----------------------------------------------------------- monitors */
+
+    public class MonitorRect
+    {
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+        public bool Primary;
+    }
+
+    // Reported in the same physical pixels as the window rectangles above.
+    // Electron's own screen API reports device-independent pixels instead, and
+    // comparing the two silently goes wrong the moment anything is scaled past
+    // 100 percent -- which is most laptops.
+    public static List<MonitorRect> Monitors()
+    {
+        List<MonitorRect> result = new List<MonitorRect>();
+
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, delegate(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data)
+        {
+            MONITORINFO info = new MONITORINFO();
+            info.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+            if (!GetMonitorInfoW(hMonitor, ref info)) return true;
+
+            MonitorRect entry = new MonitorRect();
+            entry.X = info.rcWork.Left;
+            entry.Y = info.rcWork.Top;
+            entry.Width = info.rcWork.Right - info.rcWork.Left;
+            entry.Height = info.rcWork.Bottom - info.rcWork.Top;
+            entry.Primary = (info.dwFlags & 1) != 0;
+            result.Add(entry);
+            return true;
+        }, IntPtr.Zero);
+
+        return result;
+    }
+
+    /* --------------------------------------------------------------- move */
+
+    // A maximized window ignores SetWindowPos, so it is restored first and
+    // maximized again afterwards. Doing it the other way round leaves the
+    // window maximized on whichever screen it already was.
+    public static bool Move(long handle, int x, int y, int width, int height, bool maximize)
+    {
+        IntPtr hWnd = new IntPtr(handle);
+        if (!IsWindow(hWnd)) return false;
+
+        ShowWindow(hWnd, SW_RESTORE);
+        if (!SetWindowPos(hWnd, IntPtr.Zero, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE)) return false;
+        if (maximize) ShowWindow(hWnd, SW_MAXIMIZE);
+        return true;
+    }
+}
