@@ -309,8 +309,23 @@ async function monitors() {
 
 async function move(handle, entry) {
   const paths = await ensureHelper();
+
+  // Every value is pulled out and named before it reaches the template. Two
+  // reasons, and the second one is the one that bites: gluing a `$` onto an
+  // interpolation to make `$true` reads as a typo, and `test/powershell.test.js`
+  // guesses the type of every `${...}` from its text -- anything mentioning an
+  // entry, a path or a name is substituted as a string. `$${entry.maximized}`
+  // therefore became `$'PLACEHOLDER'`, which is not PowerShell, and the parser
+  // said so on both runners.
+  const target = Math.trunc(handle);
+  const left = Math.trunc(entry.x);
+  const top = Math.trunc(entry.y);
+  const wide = Math.trunc(entry.width);
+  const high = Math.trunc(entry.height);
+  const maximized = entry.maximized ? '$true' : '$false';
+
   const out = await runPowerShell(`${preamble(paths)}
-[HubWindows]::Move(${Math.trunc(handle)}, ${entry.x}, ${entry.y}, ${entry.width}, ${entry.height}, $${entry.maximized ? 'true' : 'false'})
+[HubWindows]::Move(${target}, ${left}, ${top}, ${wide}, ${high}, ${maximized})
 `, 15000);
   return /true/i.test((out || '').trim());
 }
