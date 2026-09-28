@@ -140,8 +140,15 @@ const asArray = (value) => (value === null || value === undefined ? [] : (Array.
 async function nativeList(includeModes) {
   await ensureCompiled();
   const paths = await ensureHelper();
+  // The boolean is built as a value rather than a `$` welded onto an
+  // interpolation. It worked here only by luck: the parser test replaces
+  // every interpolation and guesses its type from the text, and `includeModes`
+  // happens to match none of the words that make it a quoted string. Rename it
+  // and `$${...}` silently becomes `$'PLACEHOLDER'`, which is what it did in
+  // windowlayout.js and what cost that build.
+  const modes = includeModes ? '$true' : '$false';
   const out = await runPowerShell(`${preamble(paths)}
-[HubDisplay]::List($${includeModes ? 'true' : 'false'}) | ConvertTo-Json -Compress -Depth 4
+[HubDisplay]::List(${modes}) | ConvertTo-Json -Compress -Depth 4
 `, 30000);
   return asArray(parseJson(out));
 }

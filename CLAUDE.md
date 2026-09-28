@@ -9,8 +9,8 @@ Ein Hauptprozess, mehrere Fenster, kein Bundler.
 ```bash
 npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
-npm run lint        # Syntaxprüfung plus die maschinell prüfbaren Regeln
-npm test            # Logiktests, ~369 Zusicherungen
+npm run lint        # Syntaxprüfung, die maschinell prüfbaren Regeln, die erzeugten Skripte
+npm test            # Logiktests, ~378 Zusicherungen
 npm run test:ui     # startet die echte App und bedient 29 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
@@ -65,6 +65,23 @@ der teure Teil, und der Host bezahlt ihn einmal. Hintergrundabfragen übergeben
 verschluckt sie, und ein Registrierungspfad ohne Backslashes schlägt nicht fehl,
 sondern liefert stillschweigend nichts. Jedes erzeugte Skript gehört in
 `test/powershell.test.js`, das sie durch den echten Parser schickt.
+
+**Kein `$` an eine Einsetzung kleben.** `$${wert ? 'true' : 'false'}` ergibt zur
+Laufzeit korrektes PowerShell und im Test unparsbares: der Parser-Test ersetzt jede
+Einsetzung und rät ihren Typ am Text, und alles mit `entry`, `path` oder `name` wird
+ein String. Aus `$${entry.maximized}` wurde `$'PLACEHOLDER'`. Der Wert wird als
+`'$true'`/`'$false'` gebaut und benannt, bevor er ins Template geht.
+
+Dahinter steckt die teurere Lektion: `test/powershell.test.js` überspringt sich
+vollständig, wenn keine PowerShell installiert ist — auf einer Linux-Maschine also
+immer. Ein neu geschriebenes Skript hatte damit lokal null Abdeckung, `npm test`
+meldete grün, und der Build war der erste, der es überhaupt ansah. Die strukturelle
+Hälfte läuft deshalb jetzt in `scripts/psscripts-check.js` bei jedem `npm run lint`,
+ohne PowerShell: sie kennt keine Syntax, aber `$'` und eine nicht aufgelöste
+`${`-Einsetzung sind nie gültig. Beide Prüfer ziehen ihre Skripte aus demselben
+`scripts/generated-ps.js`, damit der billige Prüfer nicht von dem abdriftet, was der
+echte sieht. Und die Übersprungen-Meldung sagt jetzt, *wie viele* Skripte ungeprüft
+blieben — „skipped" allein liest sich wie „in Ordnung".
 
 **Lange Vorgänge gehören nicht in den PowerShell-Host.** Der Host hat genau eine
 Leitung. Ein `winget upgrade` dauert Minuten und würde Prozessliste, Messwerte und

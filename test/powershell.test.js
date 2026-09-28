@@ -18,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
+const { collect } = require('../scripts/generated-ps');
 const gpu = require('../src/main/gpu');
 const processes = require('../src/main/processes');
 const tweaks = require('../src/main/tweaks');
@@ -41,9 +42,17 @@ function findPowerShell() {
 const shell = findPowerShell();
 
 if (!shell) {
+  // Says how much went unchecked, not just that something did. A line reading
+  // "skipped" is easy to read as "fine"; a count of the scripts nobody looked
+  // at is not. The structural half of this runs regardless, in
+  // `scripts/psscripts-check.js` on every lint.
+  const { collect } = require('../scripts/generated-ps');
+  let inline = 0;
+  try { inline = collect().length; } catch (_) { /* reported as zero */ }
+
   console.log('PowerShell script validation');
-  console.log('  skipped: no pwsh or powershell binary found');
-  console.log('  (set PWSH_PATH to enable these checks)');
+  console.log(`  skipped: no pwsh or powershell binary found — ${inline} erzeugte Skripte ungeprüft`);
+  console.log('  (set PWSH_PATH to enable these checks; npm run lint prüft sie weiterhin strukturell)');
   module.exports = { skipped: true };
   return;
 }
@@ -244,42 +253,13 @@ if (-not ('HubDisplay' -as [type])) {
 [HubDisplay]::List($true) | ConvertTo-Json -Compress -Depth 4
 `;
 
-/**
- * Several scripts are JavaScript templates. The interpolations are replaced
- * with values of the right shape so PowerShell sees a realistic script rather
- * than a literal `${...}`, which is not valid syntax in any language.
- */
-function fillPlaceholders(block) {
-  let out = block.replace(/\$\{preamble\(paths\)\}/g, '');
-  // Interpolations nest, so the innermost are replaced first and the pass is
-  // repeated until none are left.
-  for (let pass = 0; pass < 8 && out.includes('${'); pass += 1) {
-    out = out.replace(/\$\{[^{}]*\}/g, (match) => (
-      // Anything naming a path, device or identifier stands in as a string;
-      // everything else is treated as a number.
-      /psLiteral|device|path|name|target|entry|spec|args/i.test(match)
-        ? "'PLACEHOLDER'"
-        : '50'
-    ));
-  }
-  return out;
-}
-
-// Pull the inline scripts straight out of the sources so a newly added one
-// cannot slip past this test.
-for (const file of [
-  'src/main/files.js',
-  'src/main/scanner.js',
-  'src/main/winfeatures.js',
-  'src/main/display.js',
-  'src/main/windowlayout.js'
-]) {
-  const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-  const blocks = [...source.matchAll(/runPowerShell\(\s*(?:String\.raw)?`([\s\S]*?)`/g)].map((m) => m[1]);
-  blocks.forEach((block, i) => {
-    SCRIPTS[`${path.basename(file)} #${i + 1}`] = fillPlaceholders(block);
-  });
-}
+// Pulled straight out of the sources so a newly added script cannot slip past
+// this test. The collecting lives in `scripts/generated-ps.js` because
+// `scripts/psscripts-check.js` needs exactly the same corpus: that one runs
+// its structural checks on every lint, including where no PowerShell exists,
+// and two copies of the extraction would let the cheap check drift away from
+// what the real parser sees here.
+for (const entry of collect()) SCRIPTS[entry.name] = entry.script;
 
 /* ------------------------------------------------ native helper compiles */
 
