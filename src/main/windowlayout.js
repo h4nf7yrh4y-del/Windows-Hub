@@ -39,6 +39,14 @@ const WAIT_MS = 25000;
 const POLL_MS = 700;
 const MAX_ENTRIES = 20;
 
+// A whole desktop is not a profile layout: twenty entries is plenty for the
+// programs one profile starts and nowhere near enough for everything a person
+// has open. Putting it back needs no waiting either — every window that is
+// coming back already exists — except for the seconds Windows spends settling
+// after a monitor arrangement changes back.
+const DESKTOP_MAX = 60;
+const RESTORE_MS = 6000;
+
 let helperPaths = null;
 let compiling = null;
 
@@ -158,8 +166,9 @@ function sanitizeEntry(raw) {
 }
 
 /** The stored layout: one entry per process, bounded, in the order given. */
-function sanitizeLayout(raw) {
+function sanitizeLayout(raw, max = MAX_ENTRIES) {
   if (!Array.isArray(raw)) return [];
+  const limit = Number.isFinite(max) && max > 0 ? Math.min(Math.round(max), DESKTOP_MAX) : MAX_ENTRIES;
   const seen = new Set();
   const entries = [];
   for (const item of raw) {
@@ -167,7 +176,7 @@ function sanitizeLayout(raw) {
     if (!entry || seen.has(entry.process)) continue;
     seen.add(entry.process);
     entries.push(entry);
-    if (entries.length >= MAX_ENTRIES) break;
+    if (entries.length >= limit) break;
   }
   return entries;
 }
@@ -238,6 +247,23 @@ function snapshotFrom(windows, processes) {
     if (entry) entries.push(entry);
   }
   return entries;
+}
+
+/**
+ * What the whole desktop looks like, from a window listing.
+ *
+ * One entry per program, same as everywhere else here, and that is the limit
+ * worth saying out loud: three Explorer windows come back as one, the largest.
+ * Restoring the main window of each program is the part worth having; following
+ * every window of every program by handle would be a promise this could not
+ * keep across a monitor change anyway, since handles survive and positions do
+ * not.
+ */
+function desktopFrom(windows) {
+  return sanitizeLayout(
+    snapshotFrom(windows, (windows || []).map((win) => win && win.process)),
+    DESKTOP_MAX
+  );
 }
 
 /* --------------------------------------------------------------- end pure */
@@ -394,12 +420,73 @@ async function apply(layout, { timeoutMs = WAIT_MS, intervalMs = POLL_MS } = {})
   return { applied, skipped, missing };
 }
 
+/* ------------------------------------------------- the desktop, before and after */
+
+/**
+ * Where everything was before a profile rearranged the desk.
+ *
+ * Deliberately not the profile's own windows: stopping a profile closes the
+ * programs it started, so putting their windows back is an instruction to move
+ * something that no longer exists. What a profile really disturbs is
+ * everything else — switching to one monitor and back leaves every editor,
+ * browser and Explorer window squashed onto the primary screen, and that is
+ * the mess this can undo.
+ *
+ * Kept in memory on purpose. Positions from a previous run of the hub describe
+ * windows that are gone, and storing them would mean offering to restore a
+ * desktop nobody has any more.
+ */
+const heldDesktops = new Map();
+
+async function holdDesktop(profileId) {
+  if (typeof profileId !== 'string' || !profileId) throw new Error('Profil fehlt');
+  if (!IS_WIN) return { held: 0, reason: 'Nur unter Windows verfügbar' };
+
+  const entries = desktopFrom(await list());
+  if (!entries.length) {
+    heldDesktops.delete(profileId);
+    return { held: 0, reason: 'Keine Fenster gefunden' };
+  }
+  heldDesktops.set(profileId, entries);
+  log.info(`Desktop gemerkt: ${entries.length} Fenster`);
+  return { held: entries.length };
+}
+
+/** How many windows are remembered for this profile right now. */
+function heldDesktop(profileId) {
+  return (heldDesktops.get(profileId) || []).slice();
+}
+
+function forgetDesktop(profileId) {
+  return heldDesktops.delete(profileId);
+}
+
+/**
+ * Puts the remembered desktop back, once.
+ *
+ * The snapshot is dropped whether or not it worked. A second attempt would be
+ * working from a picture of the desk that has since been rearranged by the
+ * first attempt, which is how a window ends up somewhere nobody put it.
+ */
+async function restoreDesktop(profileId, opts = {}) {
+  const entries = heldDesktops.get(profileId) || [];
+  heldDesktops.delete(profileId);
+  if (!entries.length) return { applied: [], skipped: [], missing: [], held: 0 };
+
+  const outcome = await apply(entries, { timeoutMs: RESTORE_MS, intervalMs: POLL_MS, ...opts });
+  return { ...outcome, held: entries.length };
+}
+
 module.exports = {
   list,
   monitors,
   snapshot,
   apply,
   ensureCompiled,
+  holdDesktop,
+  restoreDesktop,
+  heldDesktop,
+  forgetDesktop,
   // Pure, and the part worth testing.
   processKey,
   sanitizeEntry,
@@ -407,6 +494,9 @@ module.exports = {
   pickWindow,
   fitsAnyMonitor,
   snapshotFrom,
+  desktopFrom,
   WAIT_MS,
-  MAX_ENTRIES
+  MAX_ENTRIES,
+  DESKTOP_MAX,
+  RESTORE_MS
 };

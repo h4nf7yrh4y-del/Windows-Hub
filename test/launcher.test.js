@@ -124,4 +124,126 @@ test('an empty profile produces an empty plan rather than throwing', () => {
   assert.deepStrictEqual(launcher.stopPlan({}), { names: [], unresolved: [] });
 });
 
-console.log(`\n${passed} assertions passed.`);
+/* ------------------------------------------------------ waiting for a step */
+/*
+ * The setting that replaces "wait two seconds and hope". What can go wrong here
+ * is not the polling but the decision: a wait on an entry the hub cannot
+ * recognise would tick along to its deadline and look like a slow program,
+ * when in truth nothing was ever being watched for.
+ */
+
+console.log('\nWarten auf ein Programm');
+
+test('no wait is the default, and it stays the default', () => {
+  assert.strictEqual(launcher.readyPlan(app('X', 'exe', 'C:\\x.exe')).kind, 'none');
+  assert.strictEqual(launcher.readyPlan(app('X', 'exe', 'C:\\x.exe', { waitFor: 'none' })).kind, 'none');
+  assert.strictEqual(launcher.readyPlan(null).kind, 'none');
+});
+
+test('a wait on an entry with a process name is planned as asked', () => {
+  const plan = launcher.readyPlan(app('Spiel', 'exe', 'D:\\hd2.exe', { waitFor: 'process' }));
+  assert.strictEqual(plan.kind, 'process');
+  assert.deepStrictEqual(plan.names, ['hd2']);
+  assert.strictEqual(plan.reason, undefined);
+});
+
+test('an entry without a process name cannot be waited for, and says so', () => {
+  // The exact case: a steam:// game id names a game, not a process. Waiting for
+  // it would run the full budget every launch and look like a slow game.
+  const plan = launcher.readyPlan(app('Spiel', 'uri', 'steam://rungameid/553850', { waitFor: 'window' }));
+  assert.strictEqual(plan.kind, 'none');
+  assert.strictEqual(plan.asked, 'window');
+  assert.match(plan.reason, /Prozessname/);
+});
+
+test('a window wait falls back to the process when the helper is unavailable', () => {
+  const plan = launcher.readyPlan(app('Discord', 'uri', 'discord://', { waitFor: 'window' }), { windows: false });
+  assert.strictEqual(plan.kind, 'process');
+  assert.strictEqual(plan.asked, 'window');
+  assert.match(plan.reason, /Prozess/);
+});
+
+test('an unknown condition is reported, never silently turned into a wait', () => {
+  const plan = launcher.readyPlan(app('X', 'exe', 'C:\\x.exe', { waitFor: 'fenster' }));
+  assert.strictEqual(plan.kind, 'none');
+  assert.match(plan.reason, /Unbekannte Wartebedingung/);
+});
+
+test('a process counts as up whatever case or extension it is reported in', () => {
+  assert.ok(launcher.isUp('process', ['Spotify'], { running: ['chrome', 'SPOTIFY.exe'] }));
+  assert.ok(launcher.isUp('process', ['hd2'], { running: ['hd2'] }));
+  assert.ok(!launcher.isUp('process', ['hd2'], { running: ['hd2launcher'] }));
+});
+
+test('a window wait is not satisfied by the process alone', () => {
+  const running = { running: ['hd2'], windows: [] };
+  assert.ok(!launcher.isUp('window', ['hd2'], running));
+  assert.ok(launcher.isUp('window', ['hd2'], { windows: [{ process: 'hd2.exe' }] }));
+});
+
+test('nothing to watch for is not the same as already up', () => {
+  // Answering true here would turn "cannot be waited for" into a silent pass.
+  assert.ok(!launcher.isUp('process', [], { running: ['hd2'] }));
+});
+
+test('the wait budget has a floor, a ceiling and a default', () => {
+  assert.strictEqual(launcher.readyTimeout({}), launcher.READY_MS);
+  assert.strictEqual(launcher.readyTimeout({ waitTimeoutMs: 0 }), launcher.READY_MS);
+  assert.strictEqual(launcher.readyTimeout({ waitTimeoutMs: 50 }), 2000);
+  assert.strictEqual(launcher.readyTimeout({ waitTimeoutMs: 999999 }), 180000);
+  assert.strictEqual(launcher.readyTimeout({ waitTimeoutMs: 8000 }), 8000);
+});
+
+/* The loop itself, with the machine replaced by a counter. */
+
+const later = [];
+const asyncTest = (name, fn) => later.push([name, fn]);
+
+asyncTest('the wait ends when the program appears, not when a timer runs out', async () => {
+  let calls = 0;
+  const outcome = await launcher.waitUntilUp(
+    { kind: 'process', names: ['hd2'] },
+    {
+      timeoutMs: 20000,
+      intervalMs: 1,
+      probe: async () => {
+        calls += 1;
+        return { running: calls >= 3 ? ['hd2'] : [] };
+      }
+    }
+  );
+  assert.strictEqual(outcome.ok, true);
+  assert.strictEqual(calls, 3, 'stopped on the third answer, not after a fixed wait');
+});
+
+asyncTest('an exhausted budget reports it and does not throw', async () => {
+  const outcome = await launcher.waitUntilUp(
+    { kind: 'process', names: ['hd2'] },
+    { timeoutMs: 0, intervalMs: 1, probe: async () => ({ running: [] }) }
+  );
+  assert.strictEqual(outcome.ok, false);
+  assert.match(outcome.reason, /Zeit/);
+});
+
+asyncTest('a probe that fails ends the wait instead of looping on the error', async () => {
+  const outcome = await launcher.waitUntilUp(
+    { kind: 'process', names: ['hd2'] },
+    { timeoutMs: 20000, intervalMs: 1, probe: async () => { throw new Error('Host weg'); } }
+  );
+  assert.strictEqual(outcome.ok, false);
+  assert.strictEqual(outcome.reason, 'Host weg');
+});
+
+(async () => {
+  for (const [name, fn] of later) {
+    try {
+      await fn();
+      passed += 1;
+      console.log(`  ok   ${name}`);
+    } catch (err) {
+      console.error(`  FAIL ${name}\n       ${err.message}`);
+      process.exitCode = 1;
+    }
+  }
+  console.log(`\n${passed} assertions passed.`);
+})();

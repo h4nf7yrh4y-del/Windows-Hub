@@ -10,8 +10,8 @@ Ein Hauptprozess, mehrere Fenster, kein Bundler.
 npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
 npm run lint        # Syntaxprüfung, die maschinell prüfbaren Regeln, die erzeugten Skripte
-npm test            # Logiktests, ~378 Zusicherungen
-npm run test:ui     # startet die echte App und bedient 29 Ansichten
+npm test            # Logiktests, ~401 Zusicherungen
+npm run test:ui     # startet die echte App und bedient 34 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
 ```
@@ -164,7 +164,22 @@ können — `killByName` meldet deshalb `matched`.
 **Nie auf eine Stoppuhr warten, immer auf ein Ereignis.** Weder im Code noch in Tests.
 Feste Pausen sind auf einem ausgelasteten Rechner eine Münze, und genau dann wird
 diese Anwendung benutzt. Die Testtreiber haben dafür `waitFor`, `waitIn`,
-`waitForWindow`.
+`waitForWindow`. Wo Windows kein Ereignis anbietet — „ein fremder Prozess hat jetzt ein
+Fenster" gibt es nur mit einem Hook in diesem Prozess — wird die Bedingung abgefragt,
+nicht die Zeit abgewartet: eine Schleife mit Frist, wie in `windowlayout.apply` und in
+`launcher.waitUntilUp`. Der Unterschied ist nicht die Wartezeit, sondern woraufhin sie
+endet. `delayMs` in der Startsequenz bleibt trotzdem, weil ein Programm, das der Hub
+nicht erkennen kann, anders nicht abwartbar ist — und genau das sagt der Editor auch,
+statt einen Wartepunkt anzubieten, der nur in seine Frist laufen kann.
+
+**Eine Position zurückzusetzen ist nur für Fenster sinnvoll, die es danach noch gibt.**
+„Fensterlayout beim Beenden zurücksetzen" klingt nach der eigenen Fensterliste des
+Profils und wäre damit ein Placebo: das Beenden schließt genau diese Programme, ihre
+Position ist danach gegenstandslos. Was ein Profil wirklich durcheinanderbringt, ist
+alles andere — ein Monitorwechsel schiebt jeden Editor, Browser und Explorer auf den
+Hauptschirm, und das überlebt das Profil. Der Schnappschuss nimmt deshalb den ganzen
+Desktop, vor den Tweaks, und wird nach ihrem Zurücknehmen angewendet: erst die Monitore,
+dann die Fenster, sonst liegen sie auf einer Anordnung, die sich gerade ändert.
 
 **Was ohne die Daten funktioniert, bleibt während des Ladens bedienbar.** Ein
 Platzhalter ersetzt die Liste, nicht den Abschnitt: „Steam-Updates starten" hängt nicht

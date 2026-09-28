@@ -78,6 +78,10 @@ async function stopProfile(profile) {
     );
   }
 
+  if (profile.restoreDesktop) {
+    lines.push('Danach werden die Fenster, die vor dem Start offen waren, an ihre gemerkte Stelle zurückgesetzt.');
+  }
+
   const sure = await confirmDialog({
     title: `„${profile.name}" beenden`,
     message: lines.join('\n\n'),
@@ -100,6 +104,18 @@ async function stopProfile(profile) {
       // Saying "stopped" when nothing was running is how the old bug hid.
       notifyOk(`${profile.name}: es lief nichts mehr`);
     }
+
+    // Reported separately, because it is a different promise: a profile that
+    // said it would put the desktop back has to say whether it did. "Nothing
+    // was remembered" is the answer worth seeing — it means the snapshot never
+    // happened, not that there was nothing to do.
+    const desktop = result.desktop;
+    if (desktop) {
+      if (desktop.error) notifyError(`Desktop nicht wiederhergestellt: ${desktop.error}`);
+      else if ((desktop.applied || []).length) toast(`${desktop.applied.length} Fenster zurückgesetzt`);
+      else if (!desktop.held) toast('Kein gemerkter Desktop vorhanden');
+    }
+
     // Give the processes a moment to disappear before re-reading the list.
     setTimeout(() => refreshRunning(), 1200);
   } catch (err) {

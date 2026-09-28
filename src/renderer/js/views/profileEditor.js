@@ -12,6 +12,18 @@ const ICON_GRIP = 'M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01';
 
 const PRESET_ACCENTS = ['#00f0ff', '#ff2e88', '#ffb400', '#26e08a', '#8b5cf6', '#ff6b35', '#4d9fff', '#ff0044'];
 
+/**
+ * What a step waits for once it has been started.
+ *
+ * The labels say what is waited for, not how long: the point of this setting is
+ * that nobody has to guess a number that only holds on their own machine.
+ */
+const WAIT_OPTIONS = [
+  { value: 'none', label: 'nicht warten' },
+  { value: 'process', label: 'bis der Prozess läuft' },
+  { value: 'window', label: 'bis das Fenster steht' }
+];
+
 const LAUNCH_TYPE_LABELS = {
   exe: 'Programm',
   uri: 'URI / Protokoll',
@@ -30,6 +42,7 @@ function blankProfile() {
     alsoClose: [],
     hotkey: '',
     layout: [],
+    restoreDesktop: false,
     minimizeOnLaunch: true
   };
 }
@@ -121,9 +134,38 @@ function appRow(app, ctx) {
       const value = normalizeProcessName(event.target.value);
       app.processName = value || null;
       event.target.value = value;
+      paintWaitNote();
       if (ctx.onStatusFieldChange) ctx.onStatusFieldChange();
     }
   });
+
+  // Whether the next entry waits for this one, and for what. A wait needs a
+  // process name to watch, so the hint changes with the field above rather than
+  // letting someone set a wait that can only run into its deadline.
+  const waitNote = el('span', { class: 'faint', style: { fontSize: '10.5px' } });
+
+  const waitSelect = el('select', {
+    class: 'input',
+    style: { maxWidth: '190px' },
+    title: 'Nach dem Start warten, bis das Programm da ist, statt eine Zeit zu raten',
+    onChange: (event) => {
+      app.waitFor = event.target.value;
+      paintWaitNote();
+    }
+  }, WAIT_OPTIONS.map((option) => el('option', { value: option.value, text: option.label })));
+  waitSelect.value = WAIT_OPTIONS.some((o) => o.value === app.waitFor) ? app.waitFor : 'none';
+
+  function paintWaitNote() {
+    if (waitSelect.value === 'none') {
+      waitNote.textContent = '';
+      return;
+    }
+    const name = resolveProcessName(app);
+    waitNote.textContent = name
+      ? `wartet auf ${name}`
+      : 'Ohne Prozessnamen nicht möglich — der Start geht sofort weiter';
+  }
+  paintWaitNote();
 
   const meta = el('div', { class: 'stack gap-4', style: { minWidth: '0' } }, [
     el('div', { class: 'app-name truncate', text: app.name }),
@@ -135,8 +177,13 @@ function appRow(app, ctx) {
         class: 'btn subtle xs',
         text: 'wählen',
         title: 'Aus den gerade laufenden Prozessen auswählen',
-        onClick: () => pickProcess(app, procInput)
+        onClick: () => pickProcess(app, procInput, paintWaitNote)
       })
+    ]),
+    el('div', { class: 'proc-row' }, [
+      el('span', { class: 'label', text: 'Danach' }),
+      waitSelect,
+      waitNote
     ])
   ]);
 
@@ -610,8 +657,11 @@ export function openProfileEditor(existing, onSaved) {
       appsHost,
       el('div', {
         class: 'faint',
-        style: { fontSize: '11px' },
-        text: 'Die Verzögerung gilt vor dem jeweiligen Start. Starte das Spiel zuletzt, damit es den Fokus behält.'
+        style: { fontSize: '11px', lineHeight: '1.6' },
+        text: 'Die Verzögerung gilt vor dem jeweiligen Start, „Danach" nach dem Start des Eintrags. '
+          + 'Ein Wartepunkt ist einer Verzögerung vorzuziehen: er passt sich der Maschine an, statt '
+          + 'eine Sekundenzahl zu sein, die auf einem schnelleren oder langsameren Rechner falsch ist. '
+          + 'Starte das Spiel zuletzt, damit es den Fokus behält.'
       })
     ]),
 
@@ -631,7 +681,27 @@ export function openProfileEditor(existing, onSaved) {
       })
     ]),
 
-    layoutRow(profile)
+    layoutRow(profile),
+
+    el('div', { class: 'setting-row' }, [
+      el('div', {}, [
+        el('div', { class: 'setting-label', text: 'Desktop beim Beenden wiederherstellen' }),
+        el('div', { class: 'setting-hint', text:
+          'Merkt vor dem Start, wo alle offenen Fenster liegen, und setzt sie beim Beenden zurück. '
+          + 'Gemeint sind die Fenster, die nicht zu diesem Profil gehören: Editor, Browser, Explorer. '
+          + 'Die Programme des Profils werden beim Beenden geschlossen, ihre Position ist dann gegenstandslos. '
+          + 'Nützlich vor allem, wenn das Profil die Monitore umstellt — danach liegt sonst alles auf dem Hauptschirm.' })
+      ]),
+      el('div', {
+        class: 'toggle',
+        role: 'switch',
+        'aria-checked': String(!!profile.restoreDesktop),
+        onClick: (event) => {
+          profile.restoreDesktop = !profile.restoreDesktop;
+          event.currentTarget.setAttribute('aria-checked', String(profile.restoreDesktop));
+        }
+      })
+    ])
   ]);
 
   // Two tabs rather than one long scroll: the system settings are the half a

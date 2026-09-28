@@ -395,7 +395,15 @@ app.on('ready', () => {
     // be a compiler run nobody asked for; leaving it entirely lazy would make
     // the first profile launch pay it, and the layout would time out waiting
     // for its own helper.
-    if ((store.state.profiles || []).some((p) => p && (p.layout || []).length)) {
+    //
+    // Three features need it now, so all three are asked: a remembered layout,
+    // a profile that restores the desktop, and a step that waits for a window.
+    const needsWindows = (store.state.profiles || []).some((p) => p && (
+      (p.layout || []).length
+      || p.restoreDesktop
+      || (p.apps || []).some((a) => a && a.waitFor === 'window')
+    ));
+    if (needsWindows) {
       windowlayout.ensureCompiled()
         .then((result) => {
           if (result.ok && !result.cached) log.info(`Fenster-Hilfsklasse übersetzt (${result.ms} ms)`);

@@ -168,6 +168,75 @@ module.exports = [
   },
 
   {
+    /**
+     * Waiting for the program instead of for a number of seconds.
+     *
+     * The assertion that matters is not that the field saves: it is that the
+     * editor says upfront which entry cannot be waited for. The seeded profile
+     * has one of each — Spotify resolves to a process, `steam://rungameid/...`
+     * names a game and resolves to nothing — and without that hint the second
+     * one would look set and quietly do nothing for forty-five seconds.
+     */
+    name: 'Startsequenz: Wartepunkte und der Desktop-Schalter',
+    async run(t) {
+      await t.view('hub');
+      await t.click('.profile-card .card-actions .icon-btn:last-child');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Editor-Dialog' });
+
+      const editor = (await t.text('.modal')) || '';
+      t.assert(/Danach/.test(editor), 'Jeder Eintrag hat einen Wartepunkt');
+      t.assert(/Desktop beim Beenden wiederherstellen/.test(editor), 'Der Desktop-Schalter ist da');
+
+      // Found by the name of the entry, never by its row number: the seed grows
+      // and a position assertion breaks on the next feature instead of on a bug.
+      const hints = await t.js(`
+        const rowFor = (name) => [...document.querySelectorAll('.modal .editor-app')]
+          .find((r) => r.querySelector('.app-name').textContent.trim() === name);
+        const setWait = (name, value) => {
+          const row = rowFor(name);
+          if (!row) return null;
+          const select = [...row.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'window'));
+          select.value = value;
+          select.dispatchEvent(new Event('change'));
+          return row.querySelector('.faint').textContent.trim();
+        };
+        return { spotify: setWait('Spotify', 'process'), game: setWait('Spiel', 'window') };
+      `);
+
+      t.assert(hints && /spotify/i.test(hints.spotify || ''),
+        'Ein Eintrag mit Prozess sagt, auf wen gewartet wird', JSON.stringify(hints));
+      t.assert(hints && /Ohne Prozessnamen/.test(hints.game || ''),
+        'Ein Eintrag ohne Prozess sagt, dass es nicht geht', JSON.stringify(hints));
+
+      const toggled = await t.js(`
+        const row = [...document.querySelectorAll('.modal .setting-row')]
+          .find((r) => r.textContent.includes('Desktop beim Beenden'));
+        if (!row) return null;
+        const toggle = row.querySelector('.toggle');
+        toggle.click();
+        return toggle.getAttribute('aria-checked');
+      `);
+      t.eq(toggled, 'true', 'Der Desktop-Schalter lässt sich einschalten');
+
+      await t.clickText('.modal .btn', 'Speichern');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
+
+      // Read back rather than trusted: the wait condition has to survive the
+      // sanitizer in the main process, which refuses anything it does not know.
+      const stored = await t.evalExpr(`window.hub.profiles.list().then((r) => {
+        const p = r.data.profiles[0];
+        return { restoreDesktop: p.restoreDesktop, waits: p.apps.map((a) => [a.name, a.waitFor]) };
+      })`);
+      t.eq(stored && stored.restoreDesktop, true, 'Der Desktop-Schalter ist gespeichert', JSON.stringify(stored));
+      t.assert(stored && stored.waits.some((w) => w[0] === 'Spotify' && w[1] === 'process'),
+        'Der Wartepunkt überlebt das Speichern', JSON.stringify(stored));
+      t.assert(stored && stored.waits.some((w) => w[0] === 'Spiel' && w[1] === 'window'),
+        'Auch ein Wartepunkt, der nicht greifen kann, wird gespeichert statt verworfen',
+        JSON.stringify(stored));
+    }
+  },
+
+  {
     name: 'Profileditor: Systemreiter speichert die Einstellungen',
     async run(t) {
       await t.view('hub');

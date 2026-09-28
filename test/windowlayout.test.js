@@ -196,5 +196,51 @@ test('asking for the same program twice records it once', () => {
   assert.strictEqual(entries.length, 1);
 });
 
+/* ---------------------------------------------------------- whole desktop */
+/*
+ * The snapshot taken before a profile rearranges the desk. Nothing here calls
+ * the system: `holdDesktop` and `restoreDesktop` run PowerShell, and a logic
+ * test that touches those is how a Linux-green suite hung the Windows runner
+ * for five minutes on a warming host.
+ */
+
+console.log('\nDesktop-Schnappschuss');
+
+test('the desktop is one entry per program, largest window first seen', () => {
+  const entries = layout.desktopFrom([
+    win('explorer', 0, 0, 600, 400),
+    win('explorer', 100, 100, 1200, 900),
+    win('code', 50, 50, 1400, 1000)
+  ]);
+  assert.deepStrictEqual(entries.map((e) => e.process), ['explorer', 'code']);
+  // The bigger Explorer window wins, which is the documented limit rather than
+  // an accident: three file windows come back as one.
+  assert.strictEqual(entries[0].width, 1200);
+});
+
+test('a desktop snapshot may hold far more than a profile layout', () => {
+  const many = Array.from({ length: 40 }, (_, i) => win(`prog${i}`, i, i, 800, 600));
+  assert.strictEqual(layout.desktopFrom(many).length, 40);
+  // The profile layout keeps its own, much smaller bound.
+  assert.strictEqual(layout.sanitizeLayout(layout.desktopFrom(many)).length, layout.MAX_ENTRIES);
+});
+
+test('the desktop bound is a ceiling, not a suggestion', () => {
+  const many = Array.from({ length: layout.DESKTOP_MAX + 25 }, (_, i) => win(`prog${i}`, i, i, 800, 600));
+  assert.strictEqual(layout.desktopFrom(many).length, layout.DESKTOP_MAX);
+  // Asking for more than the ceiling does not raise it.
+  assert.strictEqual(layout.sanitizeLayout(layout.desktopFrom(many), 500).length, layout.DESKTOP_MAX);
+});
+
+test('a window too small to put back is not remembered', () => {
+  // Same rule as a profile entry: a 20x10 rectangle restored is a lost window.
+  assert.deepStrictEqual(layout.desktopFrom([win('tiny', 0, 0, 20, 10)]), []);
+});
+
+test('nothing is remembered for a profile that never held a desktop', () => {
+  assert.deepStrictEqual(layout.heldDesktop('kein-profil'), []);
+  assert.strictEqual(layout.forgetDesktop('kein-profil'), false);
+});
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) { /* best effort */ }
 console.log(`\n${passed} assertions passed.`);

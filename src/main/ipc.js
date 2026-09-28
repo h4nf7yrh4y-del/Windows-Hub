@@ -75,6 +75,21 @@ function sanitizeLaunch(raw) {
   return out;
 }
 
+/**
+ * What a step waits for after it has been started.
+ *
+ * Refused rather than reset to "wait for nothing". The pattern has cost this
+ * project three times already, and the shape here is the same: a mistyped
+ * condition that quietly becomes no condition turns the one setting somebody
+ * added on purpose into a no-op, and it still looks set in the editor.
+ */
+function sanitizeWaitFor(raw) {
+  if (raw === undefined || raw === null || raw === '') return 'none';
+  const value = String(raw);
+  if (!launcher.WAIT_KINDS.includes(value)) throw new Error(`Unknown wait condition: ${value}`);
+  return value;
+}
+
 function sanitizeApp(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('App entry is required');
   return {
@@ -82,6 +97,12 @@ function sanitizeApp(raw) {
     name: requireString(raw.name, 'App name'),
     launch: sanitizeLaunch(raw.launch),
     delayMs: Number.isFinite(Number(raw.delayMs)) ? Math.max(0, Math.min(120000, Number(raw.delayMs))) : 0,
+    waitFor: sanitizeWaitFor(raw.waitFor),
+    // Zero means "use the default", which is the module's business, not the
+    // renderer's: a budget stored here would never follow a changed default.
+    waitTimeoutMs: Number.isFinite(Number(raw.waitTimeoutMs))
+      ? Math.max(0, Math.min(180000, Math.round(Number(raw.waitTimeoutMs))))
+      : 0,
     enabled: raw.enabled !== false,
     required: !!raw.required,
     processName: typeof raw.processName === 'string' && raw.processName.trim()
@@ -104,6 +125,7 @@ function sanitizeProfile(raw) {
     // Where this profile's windows belong. Validated by the module that will
     // have to act on it, so a stored position and an applied one cannot drift.
     layout: windowlayout.sanitizeLayout(raw.layout),
+    restoreDesktop: !!raw.restoreDesktop,
     alsoClose: Array.isArray(raw.alsoClose) ? raw.alsoClose.filter((x) => typeof x === 'string') : [],
     minimizeOnLaunch: raw.minimizeOnLaunch !== false,
     system: tweaks.sanitize(raw.system),
@@ -260,6 +282,16 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     triggers.refresh();
     // A key can appear, move or vanish with any edit, so they are all rebound.
     hotkeys.applyProfiles();
+    // Whoever just asked for a window feature will need the helper, and it is a
+    // compiler run. Started here so it happens while the editor closes, instead
+    // of in front of the boot sequence on the first launch — which is where it
+    // would land otherwise, since the startup warm-up only sees profiles that
+    // already wanted it.
+    if (profile.restoreDesktop
+      || profile.layout.length
+      || profile.apps.some((a) => a.waitFor === 'window')) {
+      windowlayout.ensureCompiled().catch(() => { /* reported where it is used */ });
+    }
     return profile;
   }, 'profiles:save'));
 

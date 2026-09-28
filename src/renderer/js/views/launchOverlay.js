@@ -42,7 +42,11 @@ export class LaunchOverlay {
       const node = el('div', { class: 'lo-step pending' }, [
         el('span', { class: 'lo-icon', text: '·' }),
         el('span', { text: step.name }),
-        el('span', { class: 'lo-note', text: step.delayMs ? `+${(step.delayMs / 1000).toFixed(1)}s` : '' })
+        el('span', { class: 'lo-note', text: [
+          step.delayMs ? `+${(step.delayMs / 1000).toFixed(1)}s` : '',
+          step.waitFor === 'process' ? 'wartet' : '',
+          step.waitFor === 'window' ? 'wartet auf Fenster' : ''
+        ].filter(Boolean).join(' · ') })
       ]);
       node.style.animationDelay = `${index * 45}ms`;
       this.stepNodes.set(index, node);
@@ -81,7 +85,10 @@ export class LaunchOverlay {
 
   handle(event) {
     const done = event.index != null ? event.index : 0;
-    if (this.total) this.bar.style.width = `${Math.min(100, ((done + (event.phase === 'done' ? 1 : 0)) / this.total) * 100)}%`;
+    // A step counts as done once it has been launched, so the phases that come
+    // after that for the same index must not walk the bar back to where it was.
+    const past = ['done', 'awaiting', 'ready'].includes(event.phase) ? 1 : 0;
+    if (this.total) this.bar.style.width = `${Math.min(100, ((done + past) / this.total) * 100)}%`;
 
     switch (event.phase) {
       case 'tweak':
@@ -106,9 +113,40 @@ export class LaunchOverlay {
       case 'priority':
         this.sub.textContent = `Priorität ${event.priority} für ${event.name} gesetzt`;
         break;
+      case 'desktop':
+        if (event.step === 'hold') {
+          this._prep('active', '>', 'Desktop merken', '');
+          this.sub.textContent = 'Merke, wo die Fenster liegen';
+        } else {
+          this._prep('done', '✓', 'Systemzustand',
+            event.count ? `${event.count} Fenster gemerkt` : (event.error || event.reason || ''));
+        }
+        break;
       case 'wait':
         this._setStep(event.index, 'active', '~', `warte ${(event.waitMs / 1000).toFixed(1)}s`);
         this.sub.textContent = `Warte auf Zeitfenster für ${event.step.name}`;
+        break;
+      // Waiting for the program itself, which is the one step whose length
+      // nobody chose: the note says what is being waited for, not a countdown,
+      // because a countdown would be the guess this replaces.
+      case 'awaiting':
+        this._setStep(event.index, 'active', '~',
+          event.kind === 'window' ? 'warte auf Fenster' : 'warte auf Prozess');
+        this.sub.textContent = event.kind === 'window'
+          ? `Warte auf das Fenster von ${event.step.name}`
+          : `Warte darauf, dass ${event.step.name} läuft`;
+        break;
+      case 'ready':
+        if (!event.waited) {
+          // Not an error: the entry simply has nothing the hub could watch for,
+          // and saying so beats a tick that claims a wait that never happened.
+          this._setStep(event.index, 'done', '✓', event.reason || 'ohne Warten');
+        } else if (event.ok) {
+          this._setStep(event.index, 'done', '✓', `da nach ${(event.ms / 1000).toFixed(1)}s`);
+        } else {
+          this._setStep(event.index, 'done', '✓', event.reason || 'nicht erkannt');
+          this.sub.textContent = `${event.step.name} war nicht rechtzeitig da, es geht weiter`;
+        }
         break;
       case 'launch':
         this._setStep(event.index, 'active', '>', 'startet');
