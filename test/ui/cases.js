@@ -930,13 +930,20 @@ module.exports = [
       await t.wait(300);
 
       await t.view('hub');
+      // Searched by what it says, not by where it sits. The feed is global and
+      // fed asynchronously: the library scan from an earlier case finishes
+      // whenever it finishes, and its own toast lands on top. Asserting on the
+      // first row passed locally and on one runner, and failed on another with
+      // the same commit -- which is the whole argument against position.
       const shown = await t.waitFor(
         `(function () {
           var panel = document.querySelector('.activity-panel');
-          var row = document.querySelector('.activity-row .activity-msg');
-          return (panel && !panel.classList.contains('hidden') && row) ? row.textContent : false;
+          if (!panel || panel.classList.contains('hidden')) return false;
+          var rows = [...document.querySelectorAll('.activity-row .activity-msg')]
+            .map(function (n) { return n.textContent; });
+          return rows.find(function (text) { return /Thema/.test(text); }) || false;
         })()`,
-        { label: 'Aktivitätszeile im Hub' }
+        { label: 'Themenwechsel im Aktivitätsverlauf' }
       ).catch(() => '');
       t.assert(/Thema/.test(shown || ''), 'Der Themenwechsel erscheint im Aktivitätsverlauf', JSON.stringify(shown));
 
