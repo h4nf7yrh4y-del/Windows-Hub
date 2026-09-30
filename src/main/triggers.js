@@ -34,6 +34,18 @@ const log = logger.scoped('triggers');
  *      back. Games restart their own process when they switch from launcher to
  *      engine, and a power plan that flips back and forth across a loading
  *      screen is worse than one that never changed.
+ *
+ * The watcher has a second job, and it was missing for a long time. Giving the
+ * system state back used to depend on this module having *applied* it: a
+ * profile started from the hub and then left by closing the game -- rather than
+ * by pressing Beenden -- kept the machine on its power plan and its background
+ * programs closed until the hub was restarted. Nothing said so, which is the
+ * expensive part: the one honest signal was a fan that would not calm down.
+ *
+ * So whoever holds the state is watched, however it came to hold it. The two
+ * jobs stay separate on purpose: a trigger decides whether something is
+ * *applied* and needs to be switched on per profile, while giving it back is
+ * not a feature anybody should have to enable.
  */
 
 const TICK_MS = 4000;
@@ -146,9 +158,14 @@ function list() {
 
 /* ---------------------------------------------------------------- acting */
 
+/** What is holding the system state right now, or null. */
+function holder() {
+  return tweaks.status().active || null;
+}
+
 /** Whether anything at all is holding the system state right now. */
 function heldBy() {
-  const active = tweaks.status().active;
+  const active = holder();
   return active ? active.profileId : null;
 }
 
@@ -197,6 +214,25 @@ async function deactivate(profile) {
   }
 }
 
+/**
+ * Gives back a state whose profile is no longer in the configuration.
+ *
+ * A deleted profile cannot have anything running on its behalf that this could
+ * still be waiting for, so there is nothing to weigh up: the power plan goes
+ * back. Without this the only way out was a restart of the hub, and deleting a
+ * profile is one click.
+ */
+async function releaseOrphan(active) {
+  const name = active.profileName || active.profileId;
+  log.warn(`„${name}" hält den Systemzustand, steht aber nicht mehr in der Konfiguration`);
+  try {
+    await tweaks.revert({ profileId: active.profileId });
+    notify({ kind: 'reverted', profileId: active.profileId, name: active.profileName || '' });
+  } catch (err) {
+    log.warn(`Zurücksetzen nach „${name}" fehlgeschlagen: ${err.message}`);
+  }
+}
+
 /* ------------------------------------------------------------------ tick */
 
 /**
@@ -208,10 +244,17 @@ async function deactivate(profile) {
 async function evaluate(runningNames) {
   const running = new Set((runningNames || []).map(norm).filter(Boolean));
   const profiles = store.state.profiles || [];
+  const active = holder();
+  let holderSeen = false;
 
   for (const profile of profiles) {
     const trigger = sanitize(profile.trigger);
-    if (!trigger.enabled) { seen.delete(profile.id); continue; }
+    // Two reasons to watch a profile, and only one of them is a setting: it
+    // asked to be watched, or it is holding the system state and somebody has
+    // to give that back.
+    const holding = !!active && active.profileId === profile.id;
+    if (!trigger.enabled && !holding) { seen.delete(profile.id); continue; }
+    if (holding) holderSeen = true;
 
     const names = watchNames(profile);
     if (!names.length) continue;
@@ -219,12 +262,24 @@ async function evaluate(runningNames) {
     const isRunning = names.some((name) => running.has(name));
     const state = seen.get(profile.id) || { running: false, missedTicks: 0, heldSince: null };
 
+    // The state exists but the memory of it does not: it was applied by a hub
+    // launch, not by this watcher. Adopted with the time the snapshot itself
+    // carries, so "held since" stays true across a restart of the watcher.
+    if (holding && !state.heldSince) state.heldSince = active.since || Date.now();
+
     if (isRunning) {
       state.missedTicks = 0;
       if (!state.running) {
         state.running = true;
         seen.set(profile.id, state);
-        await activate(profile, trigger);
+        // Only a trigger applies anything, and never to a profile that already
+        // holds the state. That second half was wrong before and silently so:
+        // start a profile from the hub, and when its game appeared the trigger
+        // applied the same tweaks again -- writing a fresh snapshot whose
+        // "previous power plan" was the plan the profile had just set. The undo
+        // then restored the profile's own setting instead of the one the machine
+        // came with, and nothing about that looks like a failure.
+        if (trigger.enabled && !holding) await activate(profile, trigger);
         continue;
       }
       seen.set(profile.id, state);
@@ -243,8 +298,15 @@ async function evaluate(runningNames) {
     state.running = false;
     state.missedTicks = 0;
     seen.set(profile.id, state);
-    if (trigger.revertOnExit) await deactivate(profile);
+
+    // `revertOnExit` belongs to the trigger, so it decides while the trigger is
+    // what is running. For a profile that merely holds the state, a disabled
+    // trigger's leftover setting is no reason to keep the machine changed.
+    if (trigger.enabled ? trigger.revertOnExit : holding) await deactivate(profile);
   }
+
+  // Held by something that is not in the configuration any more.
+  if (active && !holderSeen) await releaseOrphan(active);
 }
 
 async function tick() {
@@ -261,18 +323,25 @@ function anyEnabled() {
   return (store.state.profiles || []).some((p) => sanitize(p.trigger).enabled);
 }
 
+/** Whether there is anything for the watcher to do. */
+function shouldWatch() {
+  return anyEnabled() || !!heldBy();
+}
+
 /**
  * Starts or stops the watcher to match the configuration.
  *
- * Called again whenever a profile changes, so a hub with no triggers set up
- * never polls at all.
+ * Called whenever a profile changes and whenever the system state changes hands
+ * -- the second one matters, because a hub launch takes ownership without any
+ * trigger being involved, and the watcher is what hands it back. A hub with no
+ * triggers and nothing applied still never polls at all.
  */
 function refresh() {
-  const wanted = anyEnabled();
+  const wanted = shouldWatch();
   if (wanted && !timer) {
     timer = setInterval(tick, TICK_MS);
     if (timer.unref) timer.unref();
-    log.info('Profil-Auslöser aktiv');
+    log.info(anyEnabled() ? 'Profil-Auslöser aktiv' : 'Systemzustand wird überwacht');
   } else if (!wanted && timer) {
     clearInterval(timer);
     timer = null;
@@ -295,6 +364,7 @@ module.exports = {
   list,
   evaluate,
   refresh,
+  shouldWatch,
   stop,
   setNotifier,
   TICK_MS,

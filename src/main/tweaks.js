@@ -337,10 +337,31 @@ function snapshotStore() {
   return state;
 }
 
+let onOwnership = () => {};
+
+/**
+ * Told whenever the system state changes hands.
+ *
+ * The watcher in `triggers` is what gives the state back, and it only polls
+ * while something needs watching -- so it has to learn that something now does.
+ * A handler rather than a require, because that module already requires this
+ * one; wired in `ipc`, next to everything else that connects two modules.
+ */
+function setOwnershipHandler(handler) {
+  onOwnership = typeof handler === 'function' ? handler : () => {};
+}
+
 function saveSnapshot(snapshot) {
   const state = snapshotStore();
+  const before = state.tweakSnapshot ? state.tweakSnapshot.profileId : null;
   state.tweakSnapshot = snapshot;
   store.save();
+
+  const after = snapshot ? snapshot.profileId : null;
+  if (before === after) return;
+  // A listener must never be able to undo an apply that already happened.
+  try { onOwnership({ profileId: after, previous: before }); }
+  catch (err) { log.debug(`Besitzwechsel nicht gemeldet: ${err.message}`); }
 }
 
 /**
@@ -548,6 +569,7 @@ module.exports = {
   revert,
   restoreAfterCrash,
   status,
+  setOwnershipHandler,
   keepAwake,
   // Exported for the PowerShell syntax tests.
   PLANS_SCRIPT,

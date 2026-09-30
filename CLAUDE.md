@@ -10,7 +10,7 @@ Ein Hauptprozess, mehrere Fenster, kein Bundler.
 npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
 npm run lint        # Syntaxprüfung, die maschinell prüfbaren Regeln, die erzeugten Skripte
-npm test            # Logiktests, ~401 Zusicherungen
+npm test            # Logiktests, ~415 Zusicherungen
 npm run test:ui     # startet die echte App und bedient 34 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
@@ -171,6 +171,34 @@ nicht die Zeit abgewartet: eine Schleife mit Frist, wie in `windowlayout.apply` 
 endet. `delayMs` in der Startsequenz bleibt trotzdem, weil ein Programm, das der Hub
 nicht erkennen kann, anders nicht abwartbar ist — und genau das sagt der Editor auch,
 statt einen Wartepunkt anzubieten, der nur in seine Frist laufen kann.
+
+**Wer etwas am System ändert, muss es zurücknehmen können, ohne dass jemand die
+richtige Schaltfläche drückt.** Das Zurückgeben des Systemzustands hing daran, dass
+`triggers` ihn selbst angewendet hatte. Ein über den Hub gestartetes Profil, das man
+durch Schließen des Spiels beendet statt über „Beenden", hielt den Energieplan und die
+geschlossenen Hintergrundprogramme bis zum Neustart des Hubs — unbegrenzt lange, ohne
+eine Zeile irgendwo. Das Aufräumen ist deshalb kein Feature mehr, das an einer
+Einstellung hängt: überwacht wird, *wer* den Zustand hält, egal wodurch.
+
+Zwei Folgerungen, die beide Geld gekostet hätten:
+
+- Eine Bedingung, die den Besitz betrifft, wird an genau einer Stelle gemeldet —
+  `tweaks.saveSnapshot` ist die einzige, an der er wechselt, und ruft deshalb einen in
+  `ipc` verdrahteten Handler auf. Der Wächter an allen Aufrufstellen eines Profilstarts
+  anzuschalten hätte bedeutet, eine davon zu vergessen (Hub, Zeitplan, Tastenkürzel,
+  Auslöser sind vier).
+- Nichts wird zurückgenommen, bevor das Programm überhaupt einmal gelaufen ist. Ein
+  Spiel braucht eine halbe Minute, bis es in der Prozessliste steht; dort zurückzusetzen
+  wäre schlimmer als der Fehler. Und wo sich kein Prozessname herleiten lässt
+  (`steam://rungameid/…`), wird der Zustand *gehalten* und die Sammelkarte sagt es —
+  raten wäre ein Energieplanwechsel unter einem laufenden Spiel.
+
+Beim Testen fiel derselbe Fehler ein zweites Mal auf: der Auslöser wendete die Tweaks
+eines vom Hub gestarteten Profils erneut an, sobald dessen Spiel auftauchte. Der neue
+Schnappschuss merkte sich als „Energieplan vorher" den Plan, den das Profil selbst
+gerade gesetzt hatte — das Zurücknehmen stellte also die Profileinstellung wieder her
+statt des Zustands der Maschine. Anwenden und Zurücknehmen sind nicht symmetrisch: was
+schon gehalten wird, wird nicht noch einmal angewendet.
 
 **Eine Position zurückzusetzen ist nur für Fenster sinnvoll, die es danach noch gibt.**
 „Fensterlayout beim Beenden zurücksetzen" klingt nach der eigenen Fensterliste des

@@ -139,7 +139,8 @@ export const api = {
   tweaks: {
     status: call(bridge.tweaks.status),
     powerPlans: call(bridge.tweaks.powerPlans),
-    revert: call(bridge.tweaks.revert)
+    revert: call(bridge.tweaks.revert),
+    onOwner: bridge.tweaks.onOwner
   },
   features: {
     list: call(bridge.features.list),

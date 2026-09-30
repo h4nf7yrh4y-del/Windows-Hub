@@ -127,7 +127,10 @@ contextBridge.exposeInMainWorld('hub', {
   tweaks: {
     status: () => invoke('tweaks:status'),
     powerPlans: () => invoke('tweaks:powerPlans'),
-    revert: () => invoke('tweaks:revert')
+    revert: () => invoke('tweaks:revert'),
+    // Fires whenever the system state changes hands, so a panel showing it does
+    // not have to poll for a thing that changes twice an evening.
+    onOwner: (handler) => on('tweaks:owner', handler)
   },
   features: {
     list: () => invoke('features:list'),

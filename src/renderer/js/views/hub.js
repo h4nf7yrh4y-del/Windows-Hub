@@ -461,9 +461,36 @@ function steamAppId(apps) {
   return null;
 }
 
-function attentionItems({ expiringSoon, cold, collisions, steamActionable, wingetActionable }) {
+/** How long a system state has been held, in words. */
+function heldFor(sinceMs, nowMs) {
+  const minutes = Math.floor(Math.max(0, (nowMs - sinceMs)) / 60000);
+  if (minutes < 60) return `${Math.max(1, minutes)} Minuten`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'Stunde' : 'Stunden'}`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'Tag' : 'Tagen'}`;
+}
+
+function attentionItems({ expiringSoon, cold, collisions, steamActionable, wingetActionable, held, now }) {
   const items = [];
   const updateCount = steamActionable + (wingetActionable || 0);
+
+  // First, because it is the only entry that says the machine is not the way
+  // the person left it. A held power plan costs power and fan noise for as long
+  // as nobody notices, and the watcher only gives it back once it has seen the
+  // profile's program run and stop -- a game that was never recognised leaves
+  // this standing, and then this line is the only thing that says so.
+  if (held && held.profileId) {
+    const parts = [];
+    if (held.powerPlanChanged) parts.push('Energieplan');
+    if (held.closed) parts.push(`${held.closed} ${held.closed === 1 ? 'Programm' : 'Programme'}`);
+    const what = parts.length ? ` (${parts.join(', ')})` : '';
+    const age = held.since ? ` seit ${heldFor(held.since, now || Date.now())}` : '';
+    items.push({
+      key: 'held',
+      text: `„${held.profileName || 'Ein Profil'}" hält den Systemzustand${age}${what}`
+    });
+  }
 
   if (updateCount > 0) {
     items.push({ key: 'updates', text: `${updateCount} ${updateCount === 1 ? 'Update verfügbar' : 'Updates verfügbar'}` });
@@ -499,21 +526,41 @@ function attentionPanel() {
 
   // What each item's key does when clicked, kept apart from the pure
   // function that decides which keys appear at all.
+  //
+  // `held` is the one that acts instead of navigating. There is no view that
+  // shows a held system state, and sending someone to look at one would be
+  // worse than doing nothing: the useful move is to give it back.
   const ACTIONS = {
     updates: () => go('updates'),
     storage: () => go('storage'),
     trash: () => openTrash(),
-    hotkeys: () => go('settings')
+    hotkeys: () => go('settings'),
+    held: async () => {
+      try {
+        const result = await api.tweaks.revert();
+        const done = (result && result.reverted) || [];
+        if (done.length) notifyOk(done.join(', '));
+        else notifyOk('Es war nichts mehr zurückzusetzen');
+      } catch (err) {
+        notifyError(err.message);
+      }
+      facts.held = null;
+      paint();
+    }
   };
 
   // What is known so far. Kept across refreshes on purpose: a slow answer
   // that has not come back yet should leave the previous one standing rather
   // than blink the row away and back.
-  const facts = { expiringSoon: 0, cold: 0, collisions: 0, steamActionable: 0 };
+  const facts = { expiringSoon: 0, cold: 0, collisions: 0, steamActionable: 0, held: null };
 
   function paint() {
     const winget = wingetCache();
-    const items = attentionItems({ ...facts, wingetActionable: winget ? winget.actionable : 0 });
+    const items = attentionItems({
+      ...facts,
+      wingetActionable: winget ? winget.actionable : 0,
+      now: Date.now()
+    });
 
     panel.classList.toggle('hidden', !items.length);
     clear(rows);
@@ -542,6 +589,11 @@ function attentionPanel() {
   function refresh() {
     paint();
 
+    // In-memory in the main process, so it is back before the panel is drawn.
+    api.tweaks.status()
+      .then((status) => { facts.held = (status && status.active) || null; paint(); })
+      .catch(() => {});
+
     api.trash.list()
       .then((list) => {
         facts.expiringSoon = (list || []).filter((e) => e.expiresAt - Date.now() < 2 * ATTENTION_DAY_MS).length;
@@ -563,6 +615,13 @@ function attentionPanel() {
         paint();
       })
       .catch(() => {});
+  }
+
+  // Pushed rather than polled: the state changes twice an evening, and the row
+  // has to appear when a profile is launched and go when it is handed back --
+  // including when the watcher does that on its own, with nobody in the hub.
+  if (api.tweaks.onOwner) {
+    api.tweaks.onOwner((active) => { facts.held = active || null; paint(); });
   }
 
   refresh();

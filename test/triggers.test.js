@@ -202,12 +202,16 @@ add('another profile holding the system state is not overruled', async () => {
   const profile = seed({ enabled: true });
   profile.system = { ...tweaks.defaults(), keepAwake: true };
   // Somebody else owns the single power plan and the single list of closed
-  // programs. Taking it would leave their state unrecoverable.
-  store.state.tweakSnapshot = { profileId: 'someone-else', profileName: 'Anderes', at: Date.now(), closed: [] };
+  // programs. Taking it would leave their state unrecoverable. The other
+  // profile is put in the configuration too, or it would be an orphan and get
+  // cleaned up instead -- which is a different case, tested below.
+  store.state.profiles.push({ id: 'other', name: 'Anderes', apps: [], trigger: { enabled: false } });
+  store.state.tweakSnapshot = { profileId: 'other', profileName: 'Anderes', at: Date.now(), closed: [] };
 
   await triggers.evaluate(['game']);
   assert.strictEqual(memory().running, true, 'it still notices');
   assert.ok(!memory().heldSince, 'but it does not take the state');
+  assert.ok(store.state.tweakSnapshot, 'and it does not throw the other one away');
   store.state.tweakSnapshot = null;
 });
 
@@ -222,6 +226,105 @@ add('an unrelated process list changes nothing', async () => {
   await triggers.evaluate(['chrome', 'explorer', 'steam']);
   assert.strictEqual(memory().running, false);
   assert.strictEqual(memory().heldSince, null);
+});
+
+/* ------------------------------------------ giving the state back regardless */
+/*
+ * The hole this closes. Giving the system state back used to depend on this
+ * module having applied it, so a profile started from the hub and then left by
+ * closing the game -- rather than by pressing Beenden -- kept the machine on its
+ * power plan until the hub was restarted. Nothing said so.
+ *
+ * A hub launch is simulated the way it actually leaves things: a snapshot in the
+ * store naming the profile, and no memory in the watcher at all.
+ */
+
+const HUB_LAUNCH_AT = 1700000000000;
+
+function launchedFromHub(trigger) {
+  const profile = seed(trigger);
+  store.state.tweakSnapshot = {
+    profileId: 'p1',
+    profileName: 'Testprofil',
+    at: HUB_LAUNCH_AT,
+    previousPowerPlan: 'plan-vorher',
+    closed: []
+  };
+  return profile;
+}
+
+add('a profile holding the state is watched even without a trigger', async () => {
+  launchedFromHub({ enabled: false });
+  await triggers.evaluate(['game']);
+  assert.ok(memory(), 'it is remembered now, where a disabled trigger alone is not');
+  assert.strictEqual(memory().running, true);
+  assert.strictEqual(memory().heldSince, HUB_LAUNCH_AT,
+    'adopted from the snapshot, not stamped with the time it was noticed');
+});
+
+add('the state comes back when the program is gone, with no trigger involved', async () => {
+  launchedFromHub({ enabled: false });
+  await triggers.evaluate(['game']);
+  for (let i = 0; i < triggers.GONE_TICKS; i += 1) await triggers.evaluate([]);
+  assert.strictEqual(store.state.tweakSnapshot, null, 'the machine is put back');
+  assert.strictEqual(memory().heldSince, null);
+});
+
+add('nothing is given back before the program was ever seen', async () => {
+  // The regression that would be worse than the bug: a game takes half a minute
+  // to appear in the process list, and reverting during that would flip the
+  // power plan across its own loading screen.
+  launchedFromHub({ enabled: false });
+  for (let i = 0; i < triggers.GONE_TICKS + 4; i += 1) await triggers.evaluate([]);
+  assert.ok(store.state.tweakSnapshot, 'still held');
+  assert.strictEqual(memory().running, false);
+  store.state.tweakSnapshot = null;
+});
+
+add('a holder whose programs cannot be recognised keeps the state', async () => {
+  // Honest limit: for a steam:// entry there is no process name to watch, so
+  // "gone" is not a thing this can observe. Handing the state back on a guess
+  // would flip the power plan under a running game.
+  seed({ enabled: false });
+  store.state.profiles[0].apps = [{ enabled: true, launch: { type: 'uri', target: 'steam://rungameid/553850' } }];
+  store.state.tweakSnapshot = { profileId: 'p1', profileName: 'Testprofil', at: HUB_LAUNCH_AT, closed: [] };
+
+  for (let i = 0; i < triggers.GONE_TICKS + 2; i += 1) await triggers.evaluate([]);
+  assert.ok(store.state.tweakSnapshot, 'kept, because nothing here can tell');
+  store.state.tweakSnapshot = null;
+});
+
+add('a trigger does not re-apply what the profile already holds', async () => {
+  // The second bug in the same corner: the trigger used to notice the game of a
+  // profile launched from the hub and apply its tweaks again. The new snapshot's
+  // "previous power plan" was then the plan the profile had just set, so undoing
+  // it restored the profile's own setting rather than the machine's.
+  launchedFromHub({ enabled: true });
+  await triggers.evaluate(['game']);
+  assert.strictEqual(store.state.tweakSnapshot.at, HUB_LAUNCH_AT, 'the snapshot was not rewritten');
+  assert.strictEqual(store.state.tweakSnapshot.previousPowerPlan, 'plan-vorher',
+    'and the way back is still the machine, not the profile');
+  store.state.tweakSnapshot = null;
+});
+
+add('a state held by a profile that no longer exists is given back', async () => {
+  // Deleting a profile is one click, and it left the power plan behind.
+  seed({ enabled: false });
+  store.state.tweakSnapshot = { profileId: 'gelöscht', profileName: 'Weg', at: HUB_LAUNCH_AT, closed: [] };
+  await triggers.evaluate([]);
+  assert.strictEqual(store.state.tweakSnapshot, null);
+});
+
+add('watching runs for a held state, not only for a trigger', async () => {
+  seed({ enabled: false });
+  assert.strictEqual(triggers.shouldWatch(), false, 'nothing to do, so no polling');
+
+  store.state.tweakSnapshot = { profileId: 'p1', profileName: 'Testprofil', at: HUB_LAUNCH_AT, closed: [] };
+  assert.strictEqual(triggers.shouldWatch(), true, 'something is applied and has to come back');
+
+  store.state.tweakSnapshot = null;
+  seed({ enabled: true });
+  assert.strictEqual(triggers.shouldWatch(), true, 'a trigger alone is still reason enough');
 });
 
 /* ---------------------------------------------------------------- listing */

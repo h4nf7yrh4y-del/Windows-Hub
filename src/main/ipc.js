@@ -475,6 +475,14 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
       notify.show('Profil erkannt', `„${event.name}" — der Systemzustand wurde übernommen.`);
     }
   });
+
+  // The watcher only polls while there is something to watch, and a hub launch
+  // takes ownership of the system state without any trigger being involved. It
+  // is also what gives that state back, so it has to be told either way round.
+  tweaks.setOwnershipHandler(() => {
+    triggers.refresh();
+    send('tweaks:owner', tweaks.status().active);
+  });
   /* ------------------------------------------------------------- discord */
 
   ipcMain.handle('discord:state', wrap(async () => discord.state(), 'discord:state'));
