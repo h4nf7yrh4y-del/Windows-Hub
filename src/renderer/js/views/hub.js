@@ -123,6 +123,80 @@ async function stopProfile(profile) {
   }
 }
 
+/**
+ * One button for "close everything".
+ *
+ * Deliberately not a loop over the per-profile stop: that would kill a program
+ * named by two profiles twice, revert the system state once per profile when
+ * only one of them holds it, and put the desktop back several times over. The
+ * main process does it in one pass, and the dialog asks it what that will be.
+ */
+async function stopEverything() {
+  let plan = { names: [], unresolved: [], profiles: [] };
+  try {
+    plan = await api.profiles.stopAllPlan();
+  } catch (err) {
+    notifyError(err.message);
+    return;
+  }
+
+  const count = (plan.profiles || []).length;
+  const lines = [
+    plan.names.length
+      ? `Beendet werden: ${plan.names.join(', ')}.`
+      : 'Für keines deiner Profile ist ein Programm zuordenbar.',
+    `Das betrifft alle ${count} ${count === 1 ? 'Profil' : 'Profile'}, auch die, die gerade nicht laufen, `
+      + 'und geschieht unabhängig davon, ob ein Programm schon vor einem Profilstart lief. '
+      + 'Nicht gespeicherter Fortschritt geht verloren.'
+  ];
+
+  if ((plan.unresolved || []).length) {
+    // Named with their profile: "ein Eintrag lässt sich nicht zuordnen" is no
+    // help at all when there are five profiles to search through.
+    lines.push(
+      'Ohne hinterlegten Prozess und daher nicht zu beenden: '
+      + plan.unresolved.map((u) => `${u.name} (${u.profile})`).join(', ') + '.'
+    );
+  }
+
+  lines.push('Systemänderungen werden zurückgenommen und gemerkte Desktops wiederhergestellt.');
+
+  const sure = await confirmDialog({
+    title: 'Alles beenden',
+    message: lines.join('\n\n'),
+    confirmLabel: 'Alles beenden',
+    danger: true,
+    width: '560px'
+  });
+  if (!sure) return;
+
+  try {
+    const result = await api.profiles.stopAll();
+    const closed = (result.results || []).filter((r) => r.ok && r.matched);
+    const failed = (result.results || []).filter((r) => !r.ok);
+
+    if (failed.length) {
+      notifyError(`${failed.map((f) => f.name).join(', ')} konnte nicht beendet werden: ${failed[0].error}`);
+    } else if (closed.length) {
+      notifyOk(`${closed.length} Programm${closed.length === 1 ? '' : 'e'} beendet`);
+    } else {
+      // The old bug in this file was reporting "stopped" for nothing at all.
+      notifyOk('Es lief nichts mehr');
+    }
+
+    const reverted = (result.restored && result.restored.reverted) || [];
+    if (reverted.length) toast(reverted.join(', '));
+    const desktop = result.desktop;
+    if (desktop && (desktop.applied || []).length) {
+      toast(`${desktop.applied.length} Fenster zurückgesetzt`);
+    }
+
+    setTimeout(() => refreshRunning(), 1200);
+  } catch (err) {
+    notifyError(err.message);
+  }
+}
+
 const STATUS_LABELS = {
   running: 'läuft',
   partial: 'teilweise',
@@ -253,6 +327,9 @@ function render() {
 
   const counter = host.querySelector('[data-role="profile-count"]');
   if (counter) counter.textContent = `${state.profiles.length} Profile geladen`;
+
+  const stopAll = host.querySelector('[data-role="stop-all"]');
+  if (stopAll) stopAll.style.display = state.profiles.length ? '' : 'none';
 }
 
 /**
@@ -640,6 +717,15 @@ export function createHubView() {
         el('div', { class: 'view-sub', dataset: { role: 'profile-count' }, text: '' })
       ]),
       el('div', { class: 'view-actions' }, [
+        // Hidden while there is no profile: a button whose dialog can only say
+        // "there is nothing" is worse than one that is not there.
+        el('button', {
+          class: 'btn subtle danger',
+          dataset: { role: 'stop-all' },
+          text: 'Alles beenden',
+          title: 'Alle Programme aller Profile schließen und Systemänderungen zurücknehmen',
+          onClick: () => stopEverything()
+        }),
         el('button', { class: 'btn subtle', text: 'Papierkorb', title: 'Gelöschte Profile zurückholen', onClick: () => openTrash() }),
         el('button', { class: 'btn subtle', text: 'Spielzeit', title: 'Wie lange welches Profil lief', onClick: () => openStats() }),
         el('button', { class: 'btn subtle', text: 'Zeitplan', title: 'Profile zu festen Zeiten starten oder beenden', onClick: () => openScheduleManager() }),
@@ -684,4 +770,4 @@ async function stopProfileByName(profileId) {
   await stopProfile(profile);
 }
 
-export { render as renderHub, launchProfile, stopProfileByName };
+export { render as renderHub, launchProfile, stopProfileByName, stopEverything };

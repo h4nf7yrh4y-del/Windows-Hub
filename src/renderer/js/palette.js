@@ -114,6 +114,22 @@ function viewEntries(showView) {
 
 function profileEntries(showView) {
   const entries = [];
+
+  // Only with something to close: an entry that can only report "there is
+  // nothing" is clutter in a list people search by typing.
+  if (state.profiles.length) {
+    entries.push({
+      kind: 'profile',
+      title: 'Alles beenden',
+      hint: 'Alle Programme aller Profile schließen und Systemänderungen zurücknehmen',
+      run: async () => {
+        showView('hub');
+        const { stopEverything } = await import('./views/hub.js');
+        await stopEverything();
+      }
+    });
+  }
+
   for (const profile of state.profiles) {
     entries.push({
       kind: 'profile',

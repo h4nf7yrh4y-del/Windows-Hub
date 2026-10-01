@@ -242,5 +242,57 @@ test('nothing is remembered for a profile that never held a desktop', () => {
   assert.strictEqual(layout.forgetDesktop('kein-profil'), false);
 });
 
+/* --------------------------------------------- two profiles, one desktop */
+/*
+ * "Close everything" can meet two profiles that each remembered the desktop.
+ * The order they are merged in is the whole question, and getting it backwards
+ * is invisible: the windows go somewhere, just not where they started.
+ */
+
+const snap = (at, entries) => ({ at, entries: layout.sanitizeLayout(entries, layout.DESKTOP_MAX) });
+
+test('for a program both remember, the older snapshot wins', () => {
+  // The newer one already describes a desk the first profile had rearranged,
+  // so it is the wrong answer however reasonable it looks.
+  const merged = layout.mergeHeld([
+    snap(2000, [{ process: 'code', x: 900, y: 0, width: 1000, height: 900 }]),
+    snap(1000, [{ process: 'code', x: 100, y: 100, width: 1200, height: 800 }])
+  ]);
+  assert.strictEqual(merged.length, 1);
+  assert.strictEqual(merged[0].x, 100, 'the position from before anything was touched');
+});
+
+test('programs only one of them knows are kept', () => {
+  const merged = layout.mergeHeld([
+    snap(1000, [{ process: 'code', x: 0, y: 0, width: 800, height: 600 }]),
+    snap(2000, [{ process: 'firefox', x: 50, y: 50, width: 900, height: 700 }])
+  ]);
+  assert.deepStrictEqual(merged.map((e) => e.process).sort(), ['code', 'firefox']);
+});
+
+test('a snapshot without a time is treated as the oldest', () => {
+  // Missing rather than wrong: sorting it to the back would let a later
+  // snapshot overwrite it, which is the one outcome to avoid.
+  const merged = layout.mergeHeld([
+    snap(5000, [{ process: 'code', x: 900, y: 0, width: 800, height: 600 }]),
+    { entries: layout.sanitizeLayout([{ process: 'code', x: 10, y: 10, width: 800, height: 600 }]) }
+  ]);
+  assert.strictEqual(merged[0].x, 10);
+});
+
+test('merging nothing, or nonsense, yields an empty layout', () => {
+  assert.deepStrictEqual(layout.mergeHeld([]), []);
+  assert.deepStrictEqual(layout.mergeHeld(null), []);
+  assert.deepStrictEqual(layout.mergeHeld([null, {}, { entries: 'nope' }]), []);
+});
+
+test('the merge is bounded like every other layout here', () => {
+  const many = (offset) => Array.from({ length: 40 }, (_, i) => (
+    { process: `prog${i + offset}`, x: i, y: i, width: 800, height: 600 }
+  ));
+  const merged = layout.mergeHeld([snap(1000, many(0)), snap(2000, many(100))]);
+  assert.strictEqual(merged.length, layout.DESKTOP_MAX);
+});
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) { /* best effort */ }
 console.log(`\n${passed} assertions passed.`);

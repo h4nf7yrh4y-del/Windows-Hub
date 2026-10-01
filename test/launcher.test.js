@@ -124,6 +124,79 @@ test('an empty profile produces an empty plan rather than throwing', () => {
   assert.deepStrictEqual(launcher.stopPlan({}), { names: [], unresolved: [] });
 });
 
+/* ------------------------------------------------------------ stop them all */
+/*
+ * One button for "close everything". The plan is what the dialog shows, so the
+ * two mistakes worth pinning are both about the list: killing the same program
+ * once per profile that names it, and reporting an unresolved entry without
+ * saying which profile to go and fix.
+ */
+
+console.log('\nAlles beenden');
+
+const ALL = [
+  {
+    id: 'p1',
+    name: 'Zocken',
+    apps: [app('Spiel', 'exe', 'D:\\hd2.exe'), app('Discord', 'uri', 'discord://')],
+    alsoClose: ['chrome.exe']
+  },
+  {
+    id: 'p2',
+    name: 'Arbeit',
+    // Discord again, on purpose: the same program in two profiles.
+    apps: [app('Discord', 'uri', 'discord://'), app('Editor', 'exe', 'C:\\code.exe')]
+  },
+  {
+    id: 'p3',
+    name: 'Steam-Spiel',
+    apps: [app('Irgendwas', 'uri', 'steam://rungameid/553850')]
+  }
+];
+
+test('a program named by two profiles is listed once', () => {
+  const plan = launcher.stopAllPlan(ALL);
+  assert.strictEqual(plan.names.filter((n) => n === 'Discord').length, 1,
+    `Discord appears more than once: ${plan.names.join(', ')}`);
+  assert.ok(plan.names.includes('hd2'));
+  assert.ok(plan.names.includes('code'));
+  assert.ok(plan.names.includes('chrome'), 'alsoClose is part of it too');
+});
+
+test('an unresolved entry says which profile it came from', () => {
+  // Without the profile name this is useless advice: "one entry cannot be
+  // matched" leaves somebody searching five profiles for it.
+  const plan = launcher.stopAllPlan(ALL);
+  assert.strictEqual(plan.unresolved.length, 1);
+  assert.strictEqual(plan.unresolved[0].name, 'Irgendwas');
+  assert.strictEqual(plan.unresolved[0].profile, 'Steam-Spiel');
+});
+
+test('every profile is accounted for, running or not', () => {
+  const plan = launcher.stopAllPlan(ALL);
+  assert.deepStrictEqual(plan.profiles.map((p) => p.name), ['Zocken', 'Arbeit', 'Steam-Spiel']);
+});
+
+test('a disabled entry is left out here as well', () => {
+  const plan = launcher.stopAllPlan([
+    { id: 'x', name: 'P', apps: [app('Aus', 'exe', 'C:\\off.exe', { enabled: false }), app('An', 'exe', 'C:\\on.exe')] }
+  ]);
+  assert.deepStrictEqual(plan.names, ['on']);
+});
+
+test('nothing at all is an empty plan, not a throw', () => {
+  assert.deepStrictEqual(launcher.stopAllPlan([]), { names: [], unresolved: [], profiles: [] });
+  assert.deepStrictEqual(launcher.stopAllPlan(null), { names: [], unresolved: [], profiles: [] });
+  // A null in the list is skipped rather than turned into "Unbenannt".
+  assert.deepStrictEqual(launcher.stopAllPlan([null]).profiles, []);
+});
+
+test('a profile without a name still gets one in the plan', () => {
+  const plan = launcher.stopAllPlan([{ id: 'x', apps: [app('A', 'uri', 'steam://rungameid/1')] }]);
+  assert.strictEqual(plan.profiles[0].name, 'Unbenannt');
+  assert.strictEqual(plan.unresolved[0].profile, 'Unbenannt');
+});
+
 /* ------------------------------------------------------ waiting for a step */
 /*
  * The setting that replaces "wait two seconds and hope". What can go wrong here

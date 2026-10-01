@@ -366,6 +366,25 @@ function registerIpc({ getWindow, applyAutostart, revealWindow, openClaudeWindow
     return { ...result, session };
   }, 'profiles:stop'));
 
+  // No argument: it is every profile there is, read here rather than sent from
+  // the renderer. A list of ids coming in would be a list that could be stale,
+  // and "close everything" that quietly skipped a profile is the worst possible
+  // version of this.
+  ipcMain.handle('profiles:stopAllPlan', wrap(async () =>
+    launcher.stopAllPlan(store.state.profiles || []), 'profiles:stopAllPlan'));
+
+  ipcMain.handle('profiles:stopAll', wrap(async () => {
+    const profiles = store.state.profiles || [];
+    // Released before the kill, same as the single stop: the playtime of each
+    // profile ends now, not at whatever the next poll makes of a process list
+    // that is about to change underneath it.
+    const sessionsEnded = profiles
+      .map((profile) => sessions.release(profile.id))
+      .filter(Boolean);
+    const result = await launcher.stopAll(profiles);
+    return { ...result, sessions: sessionsEnded };
+  }, 'profiles:stopAll'));
+
   ipcMain.handle('sessions:stats', wrap(async () => sessions.stats(), 'sessions:stats'));
   ipcMain.handle('sessions:clear', wrap(async () => sessions.clear(), 'sessions:clear'));
 

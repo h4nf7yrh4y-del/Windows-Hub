@@ -471,8 +471,82 @@ async function stopProfile(profile) {
   return { ok: true, results, unresolved, restored, desktop };
 }
 
+/**
+ * What stopping everything will close.
+ *
+ * The union, deduplicated: a program three profiles name is killed once and
+ * listed once. An unresolved entry keeps the name of the profile it came from,
+ * because "one entry cannot be matched to a process" is useless advice when
+ * there are five profiles and somebody has to go and find which one.
+ *
+ * Same reasoning as `stopPlan`: the dialog asks for this rather than working it
+ * out, so what it promises and what happens cannot drift apart.
+ */
+function stopAllPlan(profiles) {
+  const names = new Set();
+  const unresolved = [];
+  const covered = [];
+
+  for (const profile of profiles || []) {
+    if (!profile) continue;
+    const plan = stopPlan(profile);
+    for (const name of plan.names) names.add(name);
+    for (const entry of plan.unresolved) {
+      unresolved.push({ ...entry, profile: profile.name || 'Unbenannt' });
+    }
+    covered.push({ id: profile.id, name: profile.name || 'Unbenannt' });
+  }
+
+  return { names: [...names], unresolved, profiles: covered };
+}
+
+/**
+ * Closes everything every profile is responsible for, in one pass.
+ *
+ * Not a loop over `stopProfile`, and the difference is not only speed. That
+ * would kill the same program once per profile that names it, revert the system
+ * state once per profile when only one of them can be holding it, and put the
+ * desktop back several times over -- each pass moving windows the previous one
+ * had just moved.
+ */
+async function stopAll(profiles) {
+  const { names, unresolved, profiles: covered } = stopAllPlan(profiles);
+
+  const results = [];
+  for (const name of names) {
+    try {
+      const outcome = await processes.killByName(name);
+      results.push({ name, ok: true, matched: outcome.matched !== false });
+    } catch (err) {
+      results.push({ name, ok: false, matched: false, error: err.message });
+    }
+  }
+
+  // Without a profile id on purpose: whatever is held goes back, whoever put it
+  // there. Asking per profile would be one call that does the work and the rest
+  // doing nothing -- and the one that matters could belong to a profile that is
+  // not in this list any more.
+  let restored = null;
+  try {
+    restored = await tweaks.revert();
+  } catch (err) {
+    restored = { reverted: [], failed: [err.message] };
+  }
+
+  let desktop = null;
+  try {
+    desktop = await windowlayout.restoreAllDesktops();
+  } catch (err) {
+    desktop = { applied: [], skipped: [], missing: [], held: 0, error: err.message };
+  }
+
+  log.info(`Alles beendet: ${results.filter((r) => r.ok && r.matched).length} von ${names.length} Namen liefen`);
+  return { ok: true, results, unresolved, restored, desktop, profiles: covered };
+}
+
 module.exports = {
-  launchItem, launchProfile, stopProfile, stopPlan, namesForApp, expand, URI_PROCESSES,
+  launchItem, launchProfile, stopProfile, stopPlan, stopAll, stopAllPlan,
+  namesForApp, expand, URI_PROCESSES,
   // Waiting: the pure decisions, plus the loop that needs a probe handed to it.
   readyPlan, isUp, readyTimeout, waitUntilUp,
   WAIT_KINDS, READY_MS

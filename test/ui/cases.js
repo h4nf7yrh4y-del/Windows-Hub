@@ -322,6 +322,54 @@ module.exports = [
   },
 
   {
+    /**
+     * The one button that closes everything.
+     *
+     * Only up to the dialog, and then Abbrechen. Confirming it would run
+     * `taskkill` against every name in every profile on the Windows runner --
+     * the rule in this project is that a test which calls an action performs
+     * it, so what gets checked here is the safeguard: that the dialog says
+     * what will happen, and that the list behind it comes from the main
+     * process rather than being guessed at in the renderer.
+     */
+    name: 'Alles beenden: ein Knopf, und der Dialog sagt was er trifft',
+    async run(t) {
+      await t.view('hub');
+      t.assert(await t.exists('[data-role="stop-all"]'), 'Der Knopf steht in der Kopfzeile');
+
+      // Two profiles that share a program, so the deduplication is visible.
+      await t.evalExpr(`window.hub.profiles.save({
+        name: 'Zweitprofil',
+        apps: [{ name: 'Spotify', launch: { type: 'uri', target: 'spotify:' } }]
+      }).then((r) => r.data)`);
+
+      const plan = await t.evalExpr(`window.hub.profiles.stopAllPlan().then((r) => r.data)`);
+      t.eq(plan.names.filter((n) => n === 'Spotify').length, 1,
+        'Ein Programm in zwei Profilen steht einmal in der Liste', JSON.stringify(plan.names));
+      t.atLeast(plan.profiles.length, 2, 'Alle Profile sind erfasst', JSON.stringify(plan.profiles));
+      t.assert(plan.unresolved.some((u) => u.profile),
+        'Ein unzuordenbarer Eintrag nennt sein Profil', JSON.stringify(plan.unresolved));
+
+      await t.view('hub');
+      await t.click('[data-role="stop-all"]');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Alles-beenden-Dialog' });
+      const text = (await t.text('.modal')) || '';
+      t.assert(/Spotify/.test(text), 'Der Dialog nennt die Programme');
+      t.assert(/Profile/.test(text), 'Und dass es alle Profile betrifft', text.slice(0, 200));
+      t.assert(/Systemänderungen/.test(text), 'Und dass Systemänderungen zurückgenommen werden');
+
+      await t.clickText('.modal .btn', 'Abbrechen');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
+
+      // Put the hub back the way the following cases expect to find it.
+      await t.evalExpr(`window.hub.profiles.list()
+        .then((r) => r.data.profiles.find((p) => p.name === 'Zweitprofil'))
+        .then((p) => (p ? window.hub.profiles.remove(p.id) : null))`);
+      await t.view('hub');
+    }
+  },
+
+  {
     name: 'Spielzeit: Dialog, Leerzustand, Zurücksetzen',
     async run(t) {
       await t.view('hub');

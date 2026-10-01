@@ -183,6 +183,8 @@ contextBridge.exposeInMainWorld('hub', {
     launch: (id) => invoke('profiles:launch', id),
     stop: (id) => invoke('profiles:stop', id),
     stopPlan: (id) => invoke('profiles:stopPlan', id),
+    stopAllPlan: () => invoke('profiles:stopAllPlan'),
+    stopAll: () => invoke('profiles:stopAll'),
     onProgress: (handler) => on('profile:progress', handler)
   },
   schedule: {

@@ -194,6 +194,8 @@ export const api = {
     launch: call(bridge.profiles.launch),
     stop: call(bridge.profiles.stop),
     stopPlan: call(bridge.profiles.stopPlan),
+    stopAllPlan: call(bridge.profiles.stopAllPlan),
+    stopAll: call(bridge.profiles.stopAll),
     onProgress: bridge.profiles.onProgress
   },
   library: {

@@ -266,6 +266,32 @@ function desktopFrom(windows) {
   );
 }
 
+/**
+ * One layout out of several remembered desktops.
+ *
+ * Two profiles can each remember the desktop, and then both want it back at
+ * once. For a program both of them hold, the *older* snapshot wins: it was
+ * taken before either profile had touched anything, while the newer one already
+ * describes a desk the first profile had rearranged. Applying them one after
+ * another would get this exactly backwards — and do it with several passes of
+ * windows visibly jumping.
+ */
+function mergeHeld(snapshots) {
+  const oldestFirst = (snapshots || [])
+    .filter((snapshot) => snapshot && Array.isArray(snapshot.entries))
+    .slice()
+    .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+
+  const merged = new Map();
+  for (const snapshot of oldestFirst) {
+    for (const entry of snapshot.entries) {
+      if (!entry || merged.has(entry.process)) continue;
+      merged.set(entry.process, entry);
+    }
+  }
+  return sanitizeLayout([...merged.values()], DESKTOP_MAX);
+}
+
 /* --------------------------------------------------------------- end pure */
 
 function parseJson(text) {
@@ -436,6 +462,8 @@ async function apply(layout, { timeoutMs = WAIT_MS, intervalMs = POLL_MS } = {})
  * windows that are gone, and storing them would mean offering to restore a
  * desktop nobody has any more.
  */
+// profileId -> { at, entries }. The time is kept because two profiles can each
+// remember the desktop, and then it decides which of them wins.
 const heldDesktops = new Map();
 
 async function holdDesktop(profileId) {
@@ -447,14 +475,15 @@ async function holdDesktop(profileId) {
     heldDesktops.delete(profileId);
     return { held: 0, reason: 'Keine Fenster gefunden' };
   }
-  heldDesktops.set(profileId, entries);
+  heldDesktops.set(profileId, { at: Date.now(), entries });
   log.info(`Desktop gemerkt: ${entries.length} Fenster`);
   return { held: entries.length };
 }
 
 /** How many windows are remembered for this profile right now. */
 function heldDesktop(profileId) {
-  return (heldDesktops.get(profileId) || []).slice();
+  const held = heldDesktops.get(profileId);
+  return held ? held.entries.slice() : [];
 }
 
 function forgetDesktop(profileId) {
@@ -469,12 +498,33 @@ function forgetDesktop(profileId) {
  * first attempt, which is how a window ends up somewhere nobody put it.
  */
 async function restoreDesktop(profileId, opts = {}) {
-  const entries = heldDesktops.get(profileId) || [];
+  const held = heldDesktops.get(profileId);
   heldDesktops.delete(profileId);
+  const entries = held ? held.entries : [];
   if (!entries.length) return { applied: [], skipped: [], missing: [], held: 0 };
 
   const outcome = await apply(entries, { timeoutMs: RESTORE_MS, intervalMs: POLL_MS, ...opts });
   return { ...outcome, held: entries.length };
+}
+
+/**
+ * Every remembered desktop at once, merged into a single pass.
+ *
+ * For "stop everything": going profile by profile would move the same windows
+ * two or three times and leave them where the newest snapshot wanted them,
+ * which is the one answer that is certainly wrong.
+ */
+async function restoreAllDesktops(opts = {}) {
+  const snapshots = [...heldDesktops.values()];
+  heldDesktops.clear();
+
+  const entries = mergeHeld(snapshots);
+  if (!entries.length) {
+    return { applied: [], skipped: [], missing: [], held: 0, snapshots: snapshots.length };
+  }
+
+  const outcome = await apply(entries, { timeoutMs: RESTORE_MS, intervalMs: POLL_MS, ...opts });
+  return { ...outcome, held: entries.length, snapshots: snapshots.length };
 }
 
 module.exports = {
@@ -485,6 +535,7 @@ module.exports = {
   ensureCompiled,
   holdDesktop,
   restoreDesktop,
+  restoreAllDesktops,
   heldDesktop,
   forgetDesktop,
   // Pure, and the part worth testing.
@@ -495,6 +546,7 @@ module.exports = {
   fitsAnyMonitor,
   snapshotFrom,
   desktopFrom,
+  mergeHeld,
   WAIT_MS,
   MAX_ENTRIES,
   DESKTOP_MAX,

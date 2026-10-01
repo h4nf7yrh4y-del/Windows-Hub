@@ -10,8 +10,8 @@ Ein Hauptprozess, mehrere Fenster, kein Bundler.
 npm install         # einmalig
 npm run dev         # startet mit geöffneten DevTools
 npm run lint        # Syntaxprüfung, die maschinell prüfbaren Regeln, die erzeugten Skripte
-npm test            # Logiktests, ~415 Zusicherungen
-npm run test:ui     # startet die echte App und bedient 34 Ansichten
+npm test            # Logiktests, ~426 Zusicherungen
+npm run test:ui     # startet die echte App und bedient 35 Ansichten
 npm run check       # alles zusammen
 npm run dist        # baut Installer und portable exe nach release/ (nur Windows)
 ```
