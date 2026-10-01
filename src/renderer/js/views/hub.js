@@ -130,6 +130,12 @@ async function stopProfile(profile) {
  * named by two profiles twice, revert the system state once per profile when
  * only one of them holds it, and put the desktop back several times over. The
  * main process does it in one pass, and the dialog asks it what that will be.
+ *
+ * Available whatever the state of anything. Nothing running is not nothing to
+ * do: a program is closed by name whether a profile started it or it was
+ * already there, and the system state and the remembered desktop outlive the
+ * programs -- a power plan held by a profile that has since been deleted is
+ * exactly the case somebody reaches for this button in.
  */
 async function stopEverything() {
   let plan = { names: [], unresolved: [], profiles: [] };
@@ -141,14 +147,20 @@ async function stopEverything() {
   }
 
   const count = (plan.profiles || []).length;
-  const lines = [
-    plan.names.length
-      ? `Beendet werden: ${plan.names.join(', ')}.`
-      : 'Für keines deiner Profile ist ein Programm zuordenbar.',
-    `Das betrifft alle ${count} ${count === 1 ? 'Profil' : 'Profile'}, auch die, die gerade nicht laufen, `
+  const lines = [];
+
+  if (plan.names.length) {
+    lines.push(`Beendet werden: ${plan.names.join(', ')}.`);
+    lines.push(
+      `Das betrifft alle ${count} ${count === 1 ? 'Profil' : 'Profile'}, auch die, die gerade nicht laufen, `
       + 'und geschieht unabhängig davon, ob ein Programm schon vor einem Profilstart lief. '
       + 'Nicht gespeicherter Fortschritt geht verloren.'
-  ];
+    );
+  } else if (count) {
+    lines.push('Für keines deiner Profile ist ein Programm zuordenbar, es wird also keines beendet.');
+  } else {
+    lines.push('Es ist kein Profil angelegt, es wird also kein Programm beendet.');
+  }
 
   if ((plan.unresolved || []).length) {
     // Named with their profile: "ein Eintrag lässt sich nicht zuordnen" is no
@@ -159,7 +171,9 @@ async function stopEverything() {
     );
   }
 
-  lines.push('Systemänderungen werden zurückgenommen und gemerkte Desktops wiederhergestellt.');
+  // Always worth doing, and the only thing left to do when there is no program
+  // to close. This is what makes the button useful with nothing running.
+  lines.push('Offene Systemänderungen werden zurückgenommen und gemerkte Desktops wiederhergestellt.');
 
   const sure = await confirmDialog({
     title: 'Alles beenden',
@@ -175,21 +189,25 @@ async function stopEverything() {
     const closed = (result.results || []).filter((r) => r.ok && r.matched);
     const failed = (result.results || []).filter((r) => !r.ok);
 
+    const reverted = (result.restored && result.restored.reverted) || [];
+    const desktop = result.desktop || {};
+    const moved = (desktop.applied || []).length;
+
     if (failed.length) {
       notifyError(`${failed.map((f) => f.name).join(', ')} konnte nicht beendet werden: ${failed[0].error}`);
     } else if (closed.length) {
       notifyOk(`${closed.length} Programm${closed.length === 1 ? '' : 'e'} beendet`);
+    } else if (reverted.length || moved) {
+      // Nothing was running and the button still did something. Saying "es lief
+      // nichts mehr" here would read as "nothing happened", which is false.
+      notifyOk('Kein Programm lief, aufgeräumt wurde trotzdem');
     } else {
       // The old bug in this file was reporting "stopped" for nothing at all.
-      notifyOk('Es lief nichts mehr');
+      notifyOk('Es gab nichts zu beenden');
     }
 
-    const reverted = (result.restored && result.restored.reverted) || [];
     if (reverted.length) toast(reverted.join(', '));
-    const desktop = result.desktop;
-    if (desktop && (desktop.applied || []).length) {
-      toast(`${desktop.applied.length} Fenster zurückgesetzt`);
-    }
+    if (moved) toast(`${moved} Fenster zurückgesetzt`);
 
     setTimeout(() => refreshRunning(), 1200);
   } catch (err) {
@@ -327,9 +345,6 @@ function render() {
 
   const counter = host.querySelector('[data-role="profile-count"]');
   if (counter) counter.textContent = `${state.profiles.length} Profile geladen`;
-
-  const stopAll = host.querySelector('[data-role="stop-all"]');
-  if (stopAll) stopAll.style.display = state.profiles.length ? '' : 'none';
 }
 
 /**
@@ -717,13 +732,16 @@ export function createHubView() {
         el('div', { class: 'view-sub', dataset: { role: 'profile-count' }, text: '' })
       ]),
       el('div', { class: 'view-actions' }, [
-        // Hidden while there is no profile: a button whose dialog can only say
-        // "there is nothing" is worse than one that is not there.
+        // Never hidden, never disabled. It was briefly tied to there being a
+        // profile, which also meant it was missing for the moment before the
+        // profiles had loaded -- and this is the button somebody reaches for
+        // when something is wrong, which is exactly when it must be there.
         el('button', {
           class: 'btn subtle danger',
           dataset: { role: 'stop-all' },
           text: 'Alles beenden',
-          title: 'Alle Programme aller Profile schließen und Systemänderungen zurücknehmen',
+          title: 'Alle Programme aller Profile schließen, Systemänderungen zurücknehmen '
+            + 'und gemerkte Desktops wiederherstellen',
           onClick: () => stopEverything()
         }),
         el('button', { class: 'btn subtle', text: 'Papierkorb', title: 'Gelöschte Profile zurückholen', onClick: () => openTrash() }),

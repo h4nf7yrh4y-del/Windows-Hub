@@ -115,20 +115,19 @@ function viewEntries(showView) {
 function profileEntries(showView) {
   const entries = [];
 
-  // Only with something to close: an entry that can only report "there is
-  // nothing" is clutter in a list people search by typing.
-  if (state.profiles.length) {
-    entries.push({
-      kind: 'profile',
-      title: 'Alles beenden',
-      hint: 'Alle Programme aller Profile schließen und Systemänderungen zurücknehmen',
-      run: async () => {
-        showView('hub');
-        const { stopEverything } = await import('./views/hub.js');
-        await stopEverything();
-      }
-    });
-  }
+  // Not tied to there being a profile, let alone a running one: the system
+  // state and a remembered desktop outlive the programs, and a power plan held
+  // by a profile that has since been deleted is exactly when this is wanted.
+  entries.push({
+    kind: 'profile',
+    title: 'Alles beenden',
+    hint: 'Alle Programme aller Profile schließen, Systemänderungen zurücknehmen',
+    run: async () => {
+      showView('hub');
+      const { stopEverything } = await import('./views/hub.js');
+      await stopEverything();
+    }
+  });
 
   for (const profile of state.profiles) {
     entries.push({

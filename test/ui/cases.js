@@ -361,11 +361,59 @@ module.exports = [
       await t.clickText('.modal .btn', 'Abbrechen');
       await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
 
-      // Put the hub back the way the following cases expect to find it.
-      await t.evalExpr(`window.hub.profiles.list()
-        .then((r) => r.data.profiles.find((p) => p.name === 'Zweitprofil'))
-        .then((p) => (p ? window.hub.profiles.remove(p.id) : null))`);
+      // The button was briefly tied to there being a profile, which also meant
+      // it was missing for the moment before the profiles had loaded. This is
+      // the button somebody reaches for when something is wrong, so it has to
+      // be there when the hub knows nothing -- and it still has work to do,
+      // because the system state and a remembered desktop outlive the profiles.
+      // Everything is put back afterwards, exactly as it was: earlier cases have
+      // already written system settings and a hotkey into these profiles, and
+      // the cases after this one read them.
+      const saved = await t.evalExpr(`(async () => {
+        const profiles = (await window.hub.profiles.list()).data.profiles;
+        window.__hubSaved = profiles;
+        for (const p of profiles) await window.hub.profiles.remove(p.id);
+        return profiles.length;
+      })()`);
+      await t.view('settings');
       await t.view('hub');
+      const button = await t.evalExpr(`(function () {
+        const el = document.querySelector('[data-role="stop-all"]');
+        if (!el) return 'fehlt';
+        const style = getComputedStyle(el);
+        return { shown: style.display !== 'none' && style.visibility !== 'hidden', disabled: !!el.disabled };
+      })()`);
+      t.assert(button && button.shown === true, 'Der Knopf bleibt ohne Profil sichtbar', JSON.stringify(button));
+      t.assert(button && button.disabled === false, 'Und bedienbar', JSON.stringify(button));
+
+      await t.click('[data-role="stop-all"]');
+      await t.waitFor(`!!document.querySelector('.modal')`, { label: 'Dialog ohne Profile' });
+      const empty = (await t.text('.modal')) || '';
+      t.assert(/kein Profil angelegt/.test(empty), 'Der Dialog sagt, dass kein Programm beendet wird', empty.slice(0, 200));
+      t.assert(/Systemänderungen/.test(empty), 'Und was er stattdessen tut', empty.slice(0, 200));
+      await t.clickText('.modal .btn', 'Abbrechen');
+      await t.waitFor(`!document.querySelector('.modal')`, { label: 'geschlossener Dialog' });
+
+      // Put them back, in order, with whatever earlier cases had written.
+      t.atLeast(saved, 2, 'Es waren Profile zum Entfernen da');
+      const back = await t.evalExpr(`(async () => {
+        for (const p of (window.__hubSaved || [])) await window.hub.profiles.save(p);
+        delete window.__hubSaved;
+        // The second profile was only ever a vehicle for the deduplication
+        // check above; the cases after this one expect it gone.
+        const list = (await window.hub.profiles.list()).data.profiles;
+        const extra = list.find((p) => p.name === 'Zweitprofil');
+        if (extra) await window.hub.profiles.remove(extra.id);
+        return (await window.hub.profiles.list()).data.profiles.length;
+      })()`);
+      t.eq(back, saved - 1, 'Die Profile sind unverändert zurück, ohne das Zweitprofil');
+
+      // The hub reads the profiles when it is entered, so a save behind its back
+      // needs a round trip before the grid agrees with the store.
+      await t.view('settings');
+      await t.view('hub');
+      await t.waitFor(`document.querySelectorAll('.profile-card:not(.add-card)').length === ${saved - 1}`,
+        { label: 'die Profile sind zurück' });
     }
   },
 
